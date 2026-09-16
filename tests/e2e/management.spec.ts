@@ -90,6 +90,16 @@ test('users create, edit, archive and restore their own accounts and cards with 
   form = page.getByRole('dialog');
   await form.getByLabel('용도', { exact: true }).fill('공동 생활비');
   await save(page);
+  const accountView = page
+    .locator('.payment-account')
+    .filter({ has: page.getByRole('heading', { name: '관리 검증 통장', exact: true }) });
+  const accountDetails = accountView
+    .locator('details')
+    .filter({ has: page.locator('summary').filter({ hasText: '통장 · 현금 상세' }) });
+  await accountDetails.locator('summary').click();
+  await expect(accountDetails.getByText('검증은행', { exact: true })).toBeVisible();
+  await expect(accountDetails.getByText('공동 생활비', { exact: true })).toBeVisible();
+  await expect(accountDetails.getByText('생활 통장', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '카드 추가', exact: true }).click();
   form = page.getByRole('dialog');
   await form.getByLabel('카드 이름', { exact: true }).fill('관리 검증 카드');
@@ -100,6 +110,8 @@ test('users create, edit, archive and restore their own accounts and cards with 
   await form.getByLabel('월 사용 예산 (원)', { exact: true }).fill('300000');
   await form.getByLabel('연회비 (원)', { exact: true }).fill('12000');
   await form.getByLabel('혜택 · 실적 제외 조건', { exact: true }).fill('대중교통 혜택 기록');
+  await mkdir('output/playwright', { recursive: true });
+  await form.screenshot({ path: 'output/playwright/payment-editor.png' });
   await save(page);
   const card = (await snapshot(page)).paymentMethods.find((p) => p.name === '관리 검증 카드')!;
   expect(card).toMatchObject({ linkedAccountId: account.id, annualFee: 12000 });
@@ -114,6 +126,18 @@ test('users create, edit, archive and restore their own accounts and cards with 
   await expect(cardView.locator('.bill-amount')).toHaveText('26,400원');
   await expect(cardView).toContainText('2026-10-15');
   await expect(cardView).toContainText('관리 검증 통장');
+  const cardDetails = cardView
+    .locator('details')
+    .filter({ has: page.locator('summary').filter({ hasText: '카드 상세 · 혜택' }) });
+  await cardDetails.locator('summary').click();
+  await expect(cardDetails.getByText('대중교통 혜택 기록', { exact: true })).toBeVisible();
+  await expect(cardDetails.getByText('12,000원', { exact: true })).toBeVisible();
+  await expect(cardDetails.getByText('2026-09-01 ~ 2026-09-30', { exact: true })).toBeVisible();
+  const cardUsage = cardView
+    .locator('details')
+    .filter({ has: page.locator('summary').filter({ hasText: '청구 기간 사용 내역' }) });
+  await cardUsage.locator('summary').click();
+  await expect(cardUsage.getByText('관리 검증 카드 사용', { exact: false })).toBeVisible();
   for (const name of ['관리 검증 카드', '관리 검증 통장']) {
     await page.getByRole('button', { name: `${name} 설정`, exact: true }).click();
     await page.getByRole('dialog').getByLabel('보관하기 (기존 거래와 연결은 유지)').check();
@@ -157,6 +181,16 @@ test('a purpose ledger supports monthly/category/weekly budgets, goals, payroll,
   let form = await newPlan(page, '예산', '검증 월 예산', '100000');
   await save(page, '계획 저장');
   await expect(planCard(page, '검증 월 예산')).toContainText('남은 예산 80,000원');
+  const budgetDetails = planCard(page, '검증 월 예산')
+    .locator('details')
+    .filter({ has: page.locator('summary').filter({ hasText: '주차별 사용액과 거래' }) });
+  await budgetDetails.locator('summary').click();
+  await expect(budgetDetails.getByText('20,000원', { exact: true })).toBeVisible();
+  const budgetTransactions = planCard(page, '검증 월 예산')
+    .locator('details')
+    .filter({ has: page.locator('summary').filter({ hasText: '집계한 원본 거래 보기' }) });
+  await budgetTransactions.locator('summary').click();
+  await expect(budgetTransactions.getByText('계획 검증 식비', { exact: false })).toBeVisible();
   form = await newPlan(page, '예산', '검증 주 예산', '30000');
   await form.getByRole('combobox', { name: '예산 기간', exact: true }).selectOption('week');
   await form.getByLabel('종료일', { exact: true }).fill('2026-09-07');
@@ -260,6 +294,8 @@ test('loan terms and date-based asset adjustments preserve historical month-end 
   await form.getByLabel('매월 납입일', { exact: true }).fill('15');
   await form.getByLabel('월 납입액', { exact: true }).fill('50000');
   await form.getByLabel('상환 방식', { exact: true }).fill('원금 균등');
+  await mkdir('output/playwright', { recursive: true });
+  await form.screenshot({ path: 'output/playwright/asset-editor.png' });
   await save(page);
   const created = (await snapshot(page)).assets.find((a) => a.name === '검증 대출')!;
   expect(created.details).toMatchObject({
@@ -272,6 +308,13 @@ test('loan terms and date-based asset adjustments preserve historical month-end 
   const card = page
     .locator('.asset-card')
     .filter({ has: page.getByRole('heading', { name: '검증 대출 부채' }) });
+  await card.locator('summary').filter({ hasText: '관리 정보 보기' }).click();
+  await expect(card.getByText('3.75% 고정', { exact: true })).toBeVisible();
+  await expect(card.getByText('원금 균등', { exact: true })).toBeVisible();
+  const monthDetails = page.locator('.asset-table-details');
+  await monthDetails.locator('summary').filter({ hasText: '월별 금액 자세히 보기' }).click();
+  await expect(monthDetails.getByRole('table')).toBeVisible();
+  await expect(monthDetails.getByRole('row').filter({ hasText: '2026-08' })).toHaveCount(1);
   await card.getByRole('button', { name: /잔액/ }).click();
   form = page.getByRole('dialog');
   await form.getByLabel('맞출 잔액', { exact: true }).fill('450000');

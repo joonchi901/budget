@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Download, History, Upload } from 'lucide-react';
+import { Archive, Download, FileSpreadsheet, History, Inbox, Upload } from 'lucide-react';
 import type { Bootstrap } from '../shared/types';
 import {
   backupTables,
@@ -25,6 +25,14 @@ interface Props {
   onNotice(message: string): void;
   excelImport?: ReactNode;
 }
+type DataTab = 'excel' | 'review' | 'backup' | 'csv' | 'history';
+const dataTabs = [
+  { id: 'excel', label: '엑셀 가져오기', icon: FileSpreadsheet },
+  { id: 'review', label: '원본 검토함', icon: Inbox },
+  { id: 'backup', label: '백업·복원', icon: Archive },
+  { id: 'csv', label: 'CSV 가져오기', icon: Upload },
+  { id: 'history', label: '변경 이력', icon: History },
+] as const;
 const tableNames: Record<string, string> = {
   ledgers: '가계부',
   tag_groups: '태그 유형',
@@ -50,6 +58,8 @@ function download(name: string, content: string, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export default function DataView({ data, onChanged, onNotice, excelImport }: Props) {
+  const [activeTab, setActiveTab] = useState<DataTab>(excelImport ? 'excel' : 'backup');
+  const tabs = dataTabs.filter((tab) => tab.id !== 'excel' || excelImport);
   const [backup, setBackup] = useState<BudgetBackup | null>(null),
     [fileName, setFileName] = useState(''),
     [memberMap, setMemberMap] = useState<Record<string, string>>({}),
@@ -253,6 +263,44 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
   const locked = busy || uncertain;
   return (
     <div className="data-workspace">
+      <div className="data-workspace-intro">
+        <p>자료 가져오기부터 백업까지, 필요한 작업을 선택해 주세요.</p>
+        <span>탭을 바꿔도 작성 중인 내용은 유지돼요.</span>
+      </div>
+      <div className="data-tabs" role="tablist" aria-label="데이터 관리 작업">
+        {tabs.map(({ id, label, icon: Icon }, index) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`data-tab-${id}`}
+            aria-controls={`data-panel-${id}`}
+            aria-selected={activeTab === id}
+            tabIndex={activeTab === id ? 0 : -1}
+            disabled={locked}
+            onClick={() => setActiveTab(id)}
+            onKeyDown={(event) => {
+              const next =
+                event.key === 'ArrowRight'
+                  ? (index + 1) % tabs.length
+                  : event.key === 'ArrowLeft'
+                    ? (index + tabs.length - 1) % tabs.length
+                    : event.key === 'Home'
+                      ? 0
+                      : event.key === 'End'
+                        ? tabs.length - 1
+                        : null;
+              if (next === null) return;
+              event.preventDefault();
+              setActiveTab(tabs[next].id);
+              document.getElementById(`data-tab-${tabs[next].id}`)?.focus();
+            }}
+          >
+            <Icon size={18} aria-hidden="true" />
+            {label}
+          </button>
+        ))}
+      </div>
       {error && (
         <div className="alert error" role="alert">
           {error}
@@ -272,341 +320,388 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
           </button>
         </div>
       )}
-      {excelImport}
-      <SourceInbox data={data} onChanged={onChanged} onNotice={onNotice} disabled={locked} />
-      <section className="panel data-panel">
-        <div className="section-heading">
-          <div>
-            <h2>백업 · 내보내기</h2>
-            <p className="muted small">
-              JSON은 전체 복원용, CSV는 현재 거래 목록을 확인하는 용도예요.
-            </p>
-          </div>
-          <Download size={20} />
-        </div>
-        <div className="data-actions">
-          <button className="primary" disabled={locked} onClick={() => void exportJson()}>
-            전체 JSON 백업
-          </button>
-          <button
-            className="secondary"
-            disabled={locked}
-            onClick={() =>
-              download('가계부-거래.csv', transactionsCsv(data), 'text/csv;charset=utf-8')
-            }
-          >
-            거래 CSV 내보내기
-          </button>
-        </div>
-        <p className="small muted">
-          보관·삭제 기록과 자산 반영 이력도 백업해요. 로그인 정보와 세션은 포함하지 않아요. 계좌번호
-          등 입력한 정보가 파일에 포함되므로 개인 저장 공간에 보관해 주세요.
-        </p>
-      </section>
-      <section className="panel data-panel">
-        <div className="section-heading">
-          <div>
-            <h2>JSON 백업 복원</h2>
-            <p className="muted small">
-              현재 가구의 모든 가계부 자료를 백업 내용으로 교체해요. 복원 전에 현재 자료를 백업할 수
-              있어요.
-            </p>
-          </div>
-          <Upload size={20} />
-        </div>
-        <fieldset disabled={locked}>
-          <label>
-            복원할 JSON 파일
-            <input
-              type="file"
-              accept=".json,application/json"
-              onChange={(e) => void loadBackup(e.target.files?.[0])}
-            />
-          </label>
-          {backup && (
-            <>
-              <p>{fileName}</p>
-              <div className="data-member-mapping">
-                {backup.members.map((member) => (
-                  <label key={member.id}>
-                    원본 {member.name} → 현재 구성원
-                    <select
-                      value={memberMap[member.id] ?? ''}
-                      onChange={(e) => {
-                        setMemberMap((old) => ({ ...old, [member.id]: e.target.value }));
-                        setRestore(null);
-                        setReplaceConfirmed(false);
-                      }}
-                    >
-                      <option value="">선택해 주세요</option>
-                      {data.users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-              </div>
-              <button type="button" className="secondary" onClick={() => void previewJson()}>
-                복원 내용 검사
-              </button>
-            </>
-          )}
-          {restore && (
-            <div className="data-preview">
-              <h3>교체될 자료</h3>
-              <div className="data-table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>항목</th>
-                      <th>현재</th>
-                      <th>복원 후</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {backupTables.map((table) => (
-                      <tr key={table}>
-                        <td>{tableNames[table]}</td>
-                        <td>{restore.currentCounts[table]}</td>
-                        <td>{restore.counts[table]}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {restore.issues.length > 0 ? (
-                <ul className="data-errors">
-                  {restore.issues.map((issue, index) => (
-                    <li key={index}>{issue}</li>
-                  ))}
-                </ul>
-              ) : (
-                <>
-                  <label className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={replaceConfirmed}
-                      onChange={(e) => setReplaceConfirmed(e.target.checked)}
-                    />{' '}
-                    구성원 연결과 교체 내용을 확인했으며 현재 가구의 자료 전체를 교체합니다.
-                  </label>
-                  <button
-                    type="button"
-                    className="primary"
-                    disabled={!replaceConfirmed || restore.revision !== data.revision}
-                    onClick={() => void apply('restore')}
-                  >
-                    확인한 백업으로 전체 복원
-                  </button>
-                </>
-              )}
-              {restore.revision !== data.revision && (
-                <p className="alert">다른 변경이 반영되었어요. 복원 내용을 다시 검사해 주세요.</p>
-              )}
+      <div
+        className="data-tab-panel"
+        id="data-panel-excel"
+        role="tabpanel"
+        aria-labelledby="data-tab-excel"
+        hidden={activeTab !== 'excel'}
+      >
+        {excelImport}
+        <button
+          className="data-review-shortcut"
+          type="button"
+          onClick={() => setActiveTab('review')}
+        >
+          <Inbox size={18} /> 가져온 원본 검토하기 <span>날짜·분류가 미확정인 자료를 확인해요</span>
+        </button>
+      </div>
+      <div
+        className="data-tab-panel"
+        id="data-panel-review"
+        role="tabpanel"
+        aria-labelledby="data-tab-review"
+        hidden={activeTab !== 'review'}
+      >
+        <SourceInbox data={data} onChanged={onChanged} onNotice={onNotice} disabled={locked} />
+      </div>
+      <div
+        className="data-tab-panel"
+        id="data-panel-backup"
+        role="tabpanel"
+        aria-labelledby="data-tab-backup"
+        hidden={activeTab !== 'backup'}
+      >
+        <section className="panel data-panel">
+          <div className="section-heading">
+            <div>
+              <h2>백업 · 내보내기</h2>
+              <p className="muted small">
+                JSON은 전체 복원용, CSV는 현재 거래 목록을 확인하는 용도예요.
+              </p>
             </div>
-          )}
-        </fieldset>
-      </section>
-      <section className="panel data-panel">
-        <div className="section-heading">
-          <div>
-            <h2>CSV 거래 가져오기</h2>
-            <p className="muted small">
-              기존 결제수단과 태그에 연결한 뒤, 오류와 합계를 확인하고 가져와요.
-            </p>
+            <Download size={20} />
           </div>
-          <Upload size={20} />
-        </div>
-        <fieldset disabled={locked}>
-          <label>
-            CSV 파일
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(e) => void loadCsv(e.target.files?.[0])}
-            />
-          </label>
-          {csv.length > 0 && (
-            <>
-              <div className="form-grid">
-                <label>
-                  원본 자료 ID
-                  <input
-                    required
-                    maxLength={240}
-                    value={sourceId}
-                    onChange={(e) => {
-                      setSourceId(e.target.value);
-                      setImportPreview(null);
-                    }}
-                  />
-                  <span className="small muted">
-                    같은 자료는 같은 ID를 사용해요. 원본 행 ID와 함께 중복을 구분해요.
-                  </span>
-                </label>
-                <label>
-                  가져올 가계부
-                  <select
-                    value={ledgerId}
-                    onChange={(e) => {
-                      setLedgerId(e.target.value);
-                      setImportPreview(null);
-                    }}
-                  >
-                    <option value="">선택해 주세요</option>
-                    {data.ledgers
-                      .filter((l) => !l.archived)
-                      .map((l) => (
-                        <option key={l.id} value={l.id}>
-                          {l.name}
-                        </option>
+          <div className="data-actions">
+            <button className="primary" disabled={locked} onClick={() => void exportJson()}>
+              전체 JSON 백업
+            </button>
+            <button
+              className="secondary"
+              disabled={locked}
+              onClick={() =>
+                download('가계부-거래.csv', transactionsCsv(data), 'text/csv;charset=utf-8')
+              }
+            >
+              거래 CSV 내보내기
+            </button>
+          </div>
+          <p className="small muted">
+            보관·삭제 기록과 자산 반영 이력도 백업해요. 로그인 정보와 세션은 포함하지 않아요.
+            계좌번호 등 입력한 정보가 파일에 포함되므로 개인 저장 공간에 보관해 주세요.
+          </p>
+        </section>
+        <section className="panel data-panel">
+          <div className="section-heading">
+            <div>
+              <h2>JSON 백업 복원</h2>
+              <p className="muted small">
+                현재 가구의 모든 가계부 자료를 백업 내용으로 교체해요. 복원 전에 현재 자료를 백업할
+                수 있어요.
+              </p>
+            </div>
+            <Upload size={20} />
+          </div>
+          <fieldset disabled={locked}>
+            <label>
+              복원할 JSON 파일
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={(e) => void loadBackup(e.target.files?.[0])}
+              />
+            </label>
+            {backup && (
+              <>
+                <p>{fileName}</p>
+                <div className="data-member-mapping">
+                  {backup.members.map((member) => (
+                    <label key={member.id}>
+                      원본 {member.name} → 현재 구성원
+                      <select
+                        value={memberMap[member.id] ?? ''}
+                        onChange={(e) => {
+                          setMemberMap((old) => ({ ...old, [member.id]: e.target.value }));
+                          setRestore(null);
+                          setReplaceConfirmed(false);
+                        }}
+                      >
+                        <option value="">선택해 주세요</option>
+                        {data.users.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+                <button type="button" className="secondary" onClick={() => void previewJson()}>
+                  복원 내용 검사
+                </button>
+              </>
+            )}
+            {restore && (
+              <div className="data-preview">
+                <h3>교체될 자료</h3>
+                <div className="data-table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>항목</th>
+                        <th>현재</th>
+                        <th>복원 후</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {backupTables.map((table) => (
+                        <tr key={table}>
+                          <td>{tableNames[table]}</td>
+                          <td>{restore.currentCounts[table]}</td>
+                          <td>{restore.counts[table]}</td>
+                        </tr>
                       ))}
-                  </select>
-                </label>
+                    </tbody>
+                  </table>
+                </div>
+                {restore.issues.length > 0 ? (
+                  <ul className="data-errors">
+                    {restore.issues.map((issue, index) => (
+                      <li key={index}>{issue}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <>
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        checked={replaceConfirmed}
+                        onChange={(e) => setReplaceConfirmed(e.target.checked)}
+                      />{' '}
+                      구성원 연결과 교체 내용을 확인했으며 현재 가구의 자료 전체를 교체합니다.
+                    </label>
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={!replaceConfirmed || restore.revision !== data.revision}
+                      onClick={() => void apply('restore')}
+                    >
+                      확인한 백업으로 전체 복원
+                    </button>
+                  </>
+                )}
+                {restore.revision !== data.revision && (
+                  <p className="alert">다른 변경이 반영되었어요. 복원 내용을 다시 검사해 주세요.</p>
+                )}
               </div>
-              <div className="data-column-mapping">
-                {(Object.keys(csvMappingLabels) as (keyof CsvMapping)[]).map((key) => (
-                  <label key={key}>
-                    {csvMappingLabels[key]}
-                    {key === 'tags' || key === 'owner' ? ' (선택)' : ''}
-                    <select
-                      value={mapping[key]}
+            )}
+          </fieldset>
+        </section>
+      </div>
+      <div
+        className="data-tab-panel"
+        id="data-panel-csv"
+        role="tabpanel"
+        aria-labelledby="data-tab-csv"
+        hidden={activeTab !== 'csv'}
+      >
+        <section className="panel data-panel">
+          <div className="section-heading">
+            <div>
+              <h2>CSV 거래 가져오기</h2>
+              <p className="muted small">
+                기존 결제수단과 태그에 연결한 뒤, 오류와 합계를 확인하고 가져와요.
+              </p>
+            </div>
+            <Upload size={20} />
+          </div>
+          <fieldset disabled={locked}>
+            <label>
+              CSV 파일
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(e) => void loadCsv(e.target.files?.[0])}
+              />
+            </label>
+            {csv.length > 0 && (
+              <>
+                <div className="form-grid">
+                  <label>
+                    원본 자료 ID
+                    <input
+                      required
+                      maxLength={240}
+                      value={sourceId}
                       onChange={(e) => {
-                        setMapping((old) => ({ ...old, [key]: e.target.value }));
+                        setSourceId(e.target.value);
+                        setImportPreview(null);
+                      }}
+                    />
+                    <span className="small muted">
+                      같은 자료는 같은 ID를 사용해요. 원본 행 ID와 함께 중복을 구분해요.
+                    </span>
+                  </label>
+                  <label>
+                    가져올 가계부
+                    <select
+                      value={ledgerId}
+                      onChange={(e) => {
+                        setLedgerId(e.target.value);
                         setImportPreview(null);
                       }}
                     >
-                      <option value="">연결 안 함</option>
-                      {csv[0].map((header, index) => (
-                        <option key={index} value={header}>
-                          {header}
-                        </option>
-                      ))}
+                      <option value="">선택해 주세요</option>
+                      {data.ledgers
+                        .filter((l) => !l.archived)
+                        .map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.name}
+                          </option>
+                        ))}
                     </select>
                   </label>
-                ))}
-              </div>
-              <p className="small muted">
-                원본 행 ID는 재수출해도 바뀌지 않는 고유 번호를 사용해요. 태그는 |로 구분하며,
-                이름이 겹치면 유형:옵션으로 입력해요. 이 화면은 수입·지출 거래를 가져오며 자산
-                배분은 거래 수정에서 지정할 수 있어요.
-              </p>
-              <button type="button" className="secondary" onClick={() => void previewCsv()}>
-                가져올 내역 검사
-              </button>
-            </>
-          )}
-          {csvErrors.length > 0 && (
-            <ul className="data-errors">
-              {csvErrors.map((issue, index) => (
-                <li key={index}>{issue}</li>
-              ))}
-            </ul>
-          )}
-          {importPreview && (
-            <div className="data-preview">
-              <h3>가져오기 미리보기</h3>
-              <p>
-                새 내역 {importPreview.ready}건 · 중복 {importPreview.duplicate}건 · 오류{' '}
-                {importPreview.errors}건
-              </p>
-              <p>
-                새 수입 {won(importPreview.income)}원 · 새 지출 {won(importPreview.expense)}원
-              </p>
-              <div className="data-table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>원본 행</th>
-                      <th>날짜</th>
-                      <th>내역</th>
-                      <th>금액</th>
-                      <th>검사 결과</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {importPreview.rows.map((row, index) => (
-                      <tr key={index}>
-                        <td>{row.rowId}</td>
-                        <td>{row.transaction.date}</td>
-                        <td>{row.transaction.description}</td>
-                        <td>{won(row.transaction.amount)}</td>
-                        <td>
-                          {row.errors.length
-                            ? row.errors.join(' ')
-                            : row.status === 'duplicate'
-                              ? '이미 가져옴'
-                              : '가져오기 가능'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={importConfirmed}
-                  onChange={(e) => setImportConfirmed(e.target.checked)}
-                />{' '}
-                원본 행, 거래 내용과 합계를 확인했습니다.
-              </label>
-              <button
-                type="button"
-                className="primary"
-                disabled={
-                  !importConfirmed ||
-                  importPreview.errors > 0 ||
-                  importPreview.revision !== data.revision
-                }
-                onClick={() => void apply('import')}
-              >
-                확인한 거래 가져오기
-              </button>
-              {importPreview.revision !== data.revision && (
-                <p className="alert">다른 변경이 반영되었어요. 내역을 다시 검사해 주세요.</p>
-              )}
-            </div>
-          )}
-        </fieldset>
-      </section>
-      <section className="panel data-panel">
-        <div className="section-heading">
-          <h2>
-            <History size={18} /> 최근 변경 이력
-          </h2>
-          <span className="small muted">최근 100건</span>
-        </div>
-        {historyError && <p role="alert">{historyError}</p>}
-        <div className="data-history">
-          {history.map((row) => (
-            <details key={row.id} className="history-entry">
-              <summary>
-                <span>{row.actorName}</span>
-                <span>
-                  {historyEntityLabel(row.entityType)} · {historyActionLabels[row.action]}
-                </span>
-                <time>{new Date(row.createdAt).toLocaleString('ko-KR')}</time>
-                <span className="muted small">#{row.revision}</span>
-              </summary>
-              {row.action === 'unknown' ? (
-                <p className="muted">
-                  이 기능이 적용되기 전 변경으로, 수정 전후 값은 미확인이에요.
+                </div>
+                <div className="data-column-mapping">
+                  {(Object.keys(csvMappingLabels) as (keyof CsvMapping)[]).map((key) => (
+                    <label key={key}>
+                      {csvMappingLabels[key]}
+                      {key === 'tags' || key === 'owner' ? ' (선택)' : ''}
+                      <select
+                        value={mapping[key]}
+                        onChange={(e) => {
+                          setMapping((old) => ({ ...old, [key]: e.target.value }));
+                          setImportPreview(null);
+                        }}
+                      >
+                        <option value="">연결 안 함</option>
+                        {csv[0].map((header, index) => (
+                          <option key={index} value={header}>
+                            {header}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+                <p className="small muted">
+                  원본 행 ID는 재수출해도 바뀌지 않는 고유 번호를 사용해요. 태그는 |로 구분하며,
+                  이름이 겹치면 유형:옵션으로 입력해요. 이 화면은 수입·지출 거래를 가져오며 자산
+                  배분은 거래 수정에서 지정할 수 있어요.
                 </p>
-              ) : (
-                <HistoryComparison row={row} data={data} />
-              )}
-            </details>
-          ))}
-          {!history.length && !historyError && <p className="muted">아직 변경 이력이 없어요.</p>}
-        </div>
-        <p className="small muted">
-          항목을 펼치면 저장 당시의 수정 전후 값을 비교할 수 있어요. 기존 자료의 최초 작성자와 과거
-          수정 값은 확인된 기록이 없으면 미확인으로 표시해요.
-        </p>
-      </section>
+                <button type="button" className="secondary" onClick={() => void previewCsv()}>
+                  가져올 내역 검사
+                </button>
+              </>
+            )}
+            {csvErrors.length > 0 && (
+              <ul className="data-errors">
+                {csvErrors.map((issue, index) => (
+                  <li key={index}>{issue}</li>
+                ))}
+              </ul>
+            )}
+            {importPreview && (
+              <div className="data-preview">
+                <h3>가져오기 미리보기</h3>
+                <p>
+                  새 내역 {importPreview.ready}건 · 중복 {importPreview.duplicate}건 · 오류{' '}
+                  {importPreview.errors}건
+                </p>
+                <p>
+                  새 수입 {won(importPreview.income)}원 · 새 지출 {won(importPreview.expense)}원
+                </p>
+                <div className="data-table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>원본 행</th>
+                        <th>날짜</th>
+                        <th>내역</th>
+                        <th>금액</th>
+                        <th>검사 결과</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreview.rows.map((row, index) => (
+                        <tr key={index}>
+                          <td>{row.rowId}</td>
+                          <td>{row.transaction.date}</td>
+                          <td>{row.transaction.description}</td>
+                          <td>{won(row.transaction.amount)}</td>
+                          <td>
+                            {row.errors.length
+                              ? row.errors.join(' ')
+                              : row.status === 'duplicate'
+                                ? '이미 가져옴'
+                                : '가져오기 가능'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={importConfirmed}
+                    onChange={(e) => setImportConfirmed(e.target.checked)}
+                  />{' '}
+                  원본 행, 거래 내용과 합계를 확인했습니다.
+                </label>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={
+                    !importConfirmed ||
+                    importPreview.errors > 0 ||
+                    importPreview.revision !== data.revision
+                  }
+                  onClick={() => void apply('import')}
+                >
+                  확인한 거래 가져오기
+                </button>
+                {importPreview.revision !== data.revision && (
+                  <p className="alert">다른 변경이 반영되었어요. 내역을 다시 검사해 주세요.</p>
+                )}
+              </div>
+            )}
+          </fieldset>
+        </section>
+      </div>
+      <div
+        className="data-tab-panel"
+        id="data-panel-history"
+        role="tabpanel"
+        aria-labelledby="data-tab-history"
+        hidden={activeTab !== 'history'}
+      >
+        <section className="panel data-panel">
+          <div className="section-heading">
+            <h2>
+              <History size={18} /> 최근 변경 이력
+            </h2>
+            <span className="small muted">최근 100건</span>
+          </div>
+          {historyError && <p role="alert">{historyError}</p>}
+          <div className="data-history">
+            {history.map((row) => (
+              <details key={row.id} className="history-entry">
+                <summary>
+                  <span>{row.actorName}</span>
+                  <span>
+                    {historyEntityLabel(row.entityType)} · {historyActionLabels[row.action]}
+                  </span>
+                  <time>{new Date(row.createdAt).toLocaleString('ko-KR')}</time>
+                  <span className="muted small">#{row.revision}</span>
+                </summary>
+                {row.action === 'unknown' ? (
+                  <p className="muted">
+                    이 기능이 적용되기 전 변경으로, 수정 전후 값은 미확인이에요.
+                  </p>
+                ) : (
+                  <HistoryComparison row={row} data={data} />
+                )}
+              </details>
+            ))}
+            {!history.length && !historyError && <p className="muted">아직 변경 이력이 없어요.</p>}
+          </div>
+          <p className="small muted">
+            항목을 펼치면 저장 당시의 수정 전후 값을 비교할 수 있어요. 기존 자료의 최초 작성자와
+            과거 수정 값은 확인된 기록이 없으면 미확인으로 표시해요.
+          </p>
+        </section>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { Archive, CreditCard, Plus, Settings2, Wallet } from 'lucide-react';
+import { Archive, CreditCard, Plus, Search, Settings2, Wallet } from 'lucide-react';
 import type { Bootstrap, OwnerId, PaymentMethod } from '../shared/types';
 import { cardStatement } from '../shared/selectors';
 import {
@@ -32,14 +32,52 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
+  const activeCards = data.paymentMethods.filter((p) => p.type === 'card' && !p.archived);
+  const billingCards = activeCards.filter((p) => p.cardKind !== 'debit' && !paymentSettingIssue(p));
+  const incompleteCards = activeCards.filter(
+    (p) => p.cardKind !== 'debit' && paymentSettingIssue(p),
+  );
+  const billTotal = billingCards.reduce(
+    (sum, p) => sum + cardStatement(data.transactions, p, month).amount,
+    0,
+  );
+  const useTotal = activeCards.reduce(
+    (sum, p) => sum + paymentUsage(data.transactions, p.id, month).expense,
+    0,
+  );
   const name = (id: OwnerId) =>
     id === 'shared' ? '공동' : (data.users.find((user) => user.id === id)?.name ?? id);
   return (
     <div className="payments-workspace">
+      <section className="payment-overview" aria-label="카드 사용 요약">
+        <div>
+          <span className="payment-overview-date">{monthLabel(month)}</span>
+          <h2>{incompleteCards.length ? '설정된 카드의 예상 대금' : '이번 달 납부 예정'}</h2>
+          <strong>
+            {billingCards.length === 0 && incompleteCards.length > 0 ? '—' : won(billTotal)}
+            {(billingCards.length > 0 || incompleteCards.length === 0) && <small>원</small>}
+          </strong>
+          <p>기록한 사용액 기준 · 지출로 다시 집계하지 않아요</p>
+        </div>
+        <div className="payment-overview-side">
+          <span className="payment-overview-icon">
+            <CreditCard size={26} />
+          </span>
+          <span>이번 달 카드 사용액</span>
+          <strong>
+            {won(useTotal)}
+            <small>원</small>
+          </strong>
+          <span className="small muted">
+            신용·체크카드 {activeCards.length}개
+            {incompleteCards.length ? ` · 납부일 설정 필요 ${incompleteCards.length}개` : ''}
+          </span>
+        </div>
+      </section>
       <div className="section-heading payment-toolbar">
         <div>
           <h2>카드 · 통장 관리</h2>
-          <p className="muted small">우리 결제수단과 납부 정보를 직접 관리해요.</p>
+          <p className="muted small">사용 내역부터 결제일, 혜택까지 한곳에서</p>
         </div>
         <div className="payment-actions">
           <button className="primary" onClick={() => setEditor({ type: 'card' })}>
@@ -54,12 +92,15 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
         </div>
       </div>
       <div className="payment-filters">
-        <input
-          aria-label="결제수단 검색"
-          placeholder="이름 · 기관 · 용도 검색"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="payment-search">
+          <Search size={19} aria-hidden="true" />
+          <input
+            aria-label="결제수단 검색"
+            placeholder="이름 · 기관 · 용도 검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
         <label className="checkbox">
           <input
             type="checkbox"
@@ -69,16 +110,10 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
           보관 항목 포함
         </label>
       </div>
-      <div className="inline-note top-note">
-        <p>
-          <strong>{monthLabel(month)} 사용 및 납부 예정</strong> · 카드 사용은 사용일의 지출로 한
-          번만 집계해요. 예상 대금은 별도 지출을 만들지 않아요.
-        </p>
-      </div>
       <div className="payment-grid">
         {methods
           .filter((p) => p.type === 'card')
-          .map((card: ManagedPayment, index) => {
+          .map((card: ManagedPayment) => {
             const usage = paymentUsage(data.transactions, card.id, month);
             const issue = paymentSettingIssue(card);
             const debit = card.cardKind === 'debit';
@@ -90,31 +125,31 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
                 key={card.id}
                 className={`panel payment-card ${card.archived ? 'payment-archived' : ''}`}
               >
-                <div className={`card-visual card-${index % 2}`}>
-                  <div>
-                    <span>
+                <div className="payment-card-heading">
+                  <span className="payment-method-icon">
+                    <CreditCard size={24} />
+                  </span>
+                  <div className="payment-card-identity">
+                    <h3>{card.name}</h3>
+                    <p>
                       {name(card.ownerId)} · {debit ? '체크카드' : '신용카드'}
                       {card.archived ? ' · 보관' : ''}
+                    </p>
+                    <span>
+                      {card.institution || '카드사 미등록'}
+                      {card.purpose ? ` · ${card.purpose}` : ''}
                     </span>
-                    <CreditCard size={24} />
                   </div>
-                  <strong>{card.name}</strong>
-                  <span>
-                    {card.institution || '카드사 미등록'}
-                    {card.purpose ? ` · ${card.purpose}` : ''}
-                  </span>
+                  <button
+                    className="secondary payment-settings"
+                    aria-label={`${card.name} 설정`}
+                    onClick={() => setEditor({ payment: card, type: 'card' })}
+                  >
+                    <Settings2 size={15} /> 설정
+                  </button>
                 </div>
                 <div className="payment-info">
-                  <div className="panel-title">
-                    <h2>{debit ? '이번 달 사용액' : '예상 카드 대금'}</h2>
-                    <button
-                      className="secondary"
-                      aria-label={`${card.name} 설정`}
-                      onClick={() => setEditor({ payment: card, type: 'card' })}
-                    >
-                      <Settings2 size={15} /> 설정
-                    </button>
-                  </div>
+                  <h2>{debit ? '이번 달 사용액' : '예상 카드 대금'}</h2>
                   {issue ? (
                     <p className="payment-setup-note">{issue}</p>
                   ) : (
@@ -123,15 +158,7 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
                       <small>원</small>
                     </strong>
                   )}
-                  {statement && (
-                    <>
-                      <Detail label="예상 납부일" value={statement.paymentDate} />
-                      <Detail
-                        label="사용 기간"
-                        value={`${statement.startDate} ~ ${statement.endDate}`}
-                      />
-                    </>
-                  )}
+                  {statement && <Detail label="예상 납부일" value={statement.paymentDate} />}
                   <Detail label="결제 통장" value={account?.name ?? '미연결'} />
                   <Detail label="이번 달 사용액" value={`${won(usage.expense)}원`} />
                   {card.monthlyBudget !== undefined && (
@@ -140,17 +167,24 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
                       value={`${won(card.monthlyBudget)}원 / ${won(card.monthlyBudget - usage.expense)}원`}
                     />
                   )}
-                  {card.performanceTarget !== undefined && (
-                    <Detail
-                      label="기록 사용액 / 실적 기준"
-                      value={`${won(usage.expense)}원 / ${won(card.performanceTarget)}원`}
-                    />
-                  )}
-                  {card.creditLimit !== undefined && (
-                    <Detail label="한도" value={`${won(card.creditLimit)}원`} />
-                  )}
                   <details className="payment-more">
                     <summary>카드 상세 · 혜택</summary>
+                    {statement && (
+                      <Detail
+                        label="사용 기간"
+                        value={`${statement.startDate} ~ ${statement.endDate}`}
+                      />
+                    )}
+                    {card.performanceTarget !== undefined && (
+                      <Detail
+                        label="기록 사용액 / 실적 기준"
+                        value={`${won(usage.expense)}원 / ${won(card.performanceTarget)}원`}
+                      />
+                    )}
+                    {card.creditLimit !== undefined && (
+                      <Detail label="한도" value={`${won(card.creditLimit)}원`} />
+                    )}
+
                     <Detail label="유효기간" value={card.expiry || '미등록'} />
                     <Detail
                       label="연회비"
@@ -219,25 +253,39 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
                     <Settings2 size={15} /> 설정
                   </button>
                 </div>
-                {payment.type === 'account' && (
-                  <>
-                    <Detail label="은행" value={payment.institution || '미등록'} />
-                    <Detail label="계좌번호" value={maskedAccountNumber(payment.accountNumber)} />
-                  </>
-                )}
-                <Detail label="용도" value={payment.purpose || '미등록'} />
-                <Detail label="연결 자산" value={asset?.name || '미연결'} />
-                {asset && (
-                  <Detail label="연결 자산의 현재 잔액" value={`${won(asset.balance)}원`} />
-                )}
-                <Detail
-                  label="이번 달 수입 / 지출"
-                  value={`${won(usage.income)}원 / ${won(usage.expense)}원`}
-                />
-                {cards.length > 0 && (
-                  <Detail label="연결 카드" value={cards.map((p) => p.name).join(', ')} />
-                )}
-                {payment.notes && <Detail label="비고" value={payment.notes} />}
+                <div className="payment-account-balance">
+                  <span>{asset ? '연결 자산의 현재 잔액' : '이번 달 사용액'}</span>
+                  <strong>
+                    {won(asset ? asset.balance : usage.expense)}
+                    <small>원</small>
+                  </strong>
+                  {asset && <span className="small muted">{asset.name}</span>}
+                </div>
+                <div className="payment-account-flows">
+                  <div>
+                    <span>이번 달 수입</span>
+                    <strong>{won(usage.income)}원</strong>
+                  </div>
+                  <div>
+                    <span>이번 달 지출</span>
+                    <strong>{won(usage.expense)}원</strong>
+                  </div>
+                </div>
+                <details className="payment-more">
+                  <summary>통장 · 현금 상세</summary>
+                  {payment.type === 'account' && (
+                    <>
+                      <Detail label="은행" value={payment.institution || '미등록'} />
+                      <Detail label="계좌번호" value={maskedAccountNumber(payment.accountNumber)} />
+                    </>
+                  )}
+                  <Detail label="용도" value={payment.purpose || '미등록'} />
+                  <Detail label="연결 자산" value={asset?.name || '미연결'} />
+                  {cards.length > 0 && (
+                    <Detail label="연결 카드" value={cards.map((p) => p.name).join(', ')} />
+                  )}
+                  {payment.notes && <Detail label="비고" value={payment.notes} />}
+                </details>
                 <UsageDetails
                   title="이번 달 사용 내역"
                   transactions={usage.transactions}
@@ -251,8 +299,7 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
         <Empty>통장이나 현금 항목을 등록해 주세요.</Empty>
       )}
       <p className="small muted">
-        통장 연결은 자산을 찾아보기 위한 정보예요. 자산 잔액은 거래의 자산 반영 설정이나 자산 관리의
-        이동·조정 기록으로 계산해요.
+        통장 연결은 잔액 조회용이에요. 실제 잔액은 거래의 자산 반영과 자산 이동·조정으로 바뀌어요.
       </p>
       {editor && (
         <PaymentEditor
@@ -452,7 +499,7 @@ function PaymentEditor({
       onClose={onClose}
       locked={locked}
     >
-      <form onSubmit={(e) => void save(e)}>
+      <form className="payment-editor" onSubmit={(e) => void save(e)}>
         <div className="form-body">
           {error && (
             <div className="alert error" role="alert">
@@ -479,119 +526,129 @@ function PaymentEditor({
             </div>
           )}
           <fieldset disabled={busy || uncertain || conflict}>
-            <label>
-              {title} 이름
-              <input
-                autoFocus
-                required
-                maxLength={80}
-                value={draft.name}
-                onChange={(e) => field('name', e.target.value)}
-              />
-            </label>
-            <div className="form-grid">
+            <section className="payment-form-section">
+              <h3>기본 정보</h3>
               <label>
-                명의
-                <select
-                  value={draft.ownerId}
-                  onChange={(e) => field('ownerId', e.target.value as OwnerId)}
-                >
-                  <option value="shared">공동</option>
-                  {data.users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                    </option>
-                  ))}
-                </select>
+                {title} 이름
+                <input
+                  autoFocus
+                  required
+                  maxLength={80}
+                  value={draft.name}
+                  onChange={(e) => field('name', e.target.value)}
+                />
               </label>
-              {textInput('purpose', '용도')}
-            </div>
-            {editor.type === 'card' ? (
-              <>
-                <div className="form-grid">
-                  {textInput('institution', '카드사')}
-                  <label>
-                    카드 종류
-                    <select
-                      value={draft.cardKind ?? 'credit'}
-                      onChange={(e) => field('cardKind', e.target.value as 'credit' | 'debit')}
-                    >
-                      <option value="credit">신용카드</option>
-                      <option value="debit">체크카드</option>
-                    </select>
-                  </label>
-                </div>
-                {(draft.cardKind ?? 'credit') === 'credit' && (
-                  <div className="form-grid">
-                    {(['closingDay', 'paymentDay'] as const).map((key) => (
-                      <label key={key}>
-                        {key === 'closingDay' ? '사용 마감일' : '대금 납부일'}
-                        <input
-                          type="number"
-                          min="1"
-                          max="31"
-                          step="1"
-                          placeholder="미설정"
-                          value={draft[key] ?? ''}
-                          onChange={(e) =>
-                            field(key, e.target.value === '' ? null : Number(e.target.value))
-                          }
-                        />
-                      </label>
-                    ))}
-                  </div>
-                )}
-                <p className="small muted">
-                  마감일 다음 날부터 다음 마감일까지의 사용액을 모아 납부일에 표시해요. 29~31일이
-                  없는 달은 말일로 계산해요.
-                </p>
+              <div className="form-grid">
                 <label>
-                  결제 통장
+                  명의
                   <select
-                    value={draft.linkedAccountId ?? ''}
-                    onChange={(e) => field('linkedAccountId', e.target.value || null)}
+                    value={draft.ownerId}
+                    onChange={(e) => field('ownerId', e.target.value as OwnerId)}
                   >
-                    <option value="">연결 안 함</option>
-                    {data.paymentMethods
-                      .filter(
-                        (p: ManagedPayment) =>
-                          p.type === 'account' && (!p.archived || p.id === draft.linkedAccountId),
-                      )
-                      .map((p: ManagedPayment) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                          {p.archived ? ' (보관)' : ''}
-                        </option>
-                      ))}
+                    <option value="shared">공동</option>
+                    {data.users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
                   </select>
                 </label>
-                <div className="form-grid">
-                  {moneyInput('monthlyBudget', '월 사용 예산 (원)')}
-                  {moneyInput('performanceTarget', '실적 기준 (원)')}
-                  {moneyInput('creditLimit', '이용 한도 (원)')}
-                  {moneyInput('annualFee', '연회비 (원)')}
+                {textInput('purpose', '용도')}
+              </div>
+            </section>
+            {editor.type === 'card' ? (
+              <>
+                <section className="payment-form-section">
+                  <h3>결제 설정</h3>
+                  <div className="form-grid">
+                    {textInput('institution', '카드사')}
+                    <label>
+                      카드 종류
+                      <select
+                        value={draft.cardKind ?? 'credit'}
+                        onChange={(e) => field('cardKind', e.target.value as 'credit' | 'debit')}
+                      >
+                        <option value="credit">신용카드</option>
+                        <option value="debit">체크카드</option>
+                      </select>
+                    </label>
+                  </div>
+                  {(draft.cardKind ?? 'credit') === 'credit' && (
+                    <div className="form-grid">
+                      {(['closingDay', 'paymentDay'] as const).map((key) => (
+                        <label key={key}>
+                          {key === 'closingDay' ? '사용 마감일' : '대금 납부일'}
+                          <input
+                            type="number"
+                            min="1"
+                            max="31"
+                            step="1"
+                            placeholder="미설정"
+                            value={draft[key] ?? ''}
+                            onChange={(e) =>
+                              field(key, e.target.value === '' ? null : Number(e.target.value))
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <p className="small muted">
+                    마감일 다음 날부터 다음 마감일까지의 사용액을 모아 납부일에 표시해요. 29~31일이
+                    없는 달은 말일로 계산해요.
+                  </p>
                   <label>
-                    유효기간
-                    <input
-                      type="month"
-                      value={draft.expiry ?? ''}
-                      onChange={(e) => field('expiry', e.target.value)}
+                    결제 통장
+                    <select
+                      value={draft.linkedAccountId ?? ''}
+                      onChange={(e) => field('linkedAccountId', e.target.value || null)}
+                    >
+                      <option value="">연결 안 함</option>
+                      {data.paymentMethods
+                        .filter(
+                          (p: ManagedPayment) =>
+                            p.type === 'account' && (!p.archived || p.id === draft.linkedAccountId),
+                        )
+                        .map((p: ManagedPayment) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                            {p.archived ? ' (보관)' : ''}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                </section>
+                <section className="payment-form-section">
+                  <h3>예산과 혜택</h3>
+                  <div className="form-grid">
+                    {moneyInput('monthlyBudget', '월 사용 예산 (원)')}
+                    {moneyInput('performanceTarget', '실적 기준 (원)')}
+                    {moneyInput('creditLimit', '이용 한도 (원)')}
+                    {moneyInput('annualFee', '연회비 (원)')}
+                    <label>
+                      유효기간
+                      <input
+                        type="month"
+                        value={draft.expiry ?? ''}
+                        onChange={(e) => field('expiry', e.target.value)}
+                      />
+                    </label>
+                    {textInput('usagePeriodNote', '사용 기간 메모')}
+                  </div>
+                  <label>
+                    혜택 · 실적 제외 조건
+                    <textarea
+                      rows={3}
+                      maxLength={3000}
+                      value={draft.benefits ?? ''}
+                      onChange={(e) => field('benefits', e.target.value)}
                     />
                   </label>
-                  {textInput('usagePeriodNote', '사용 기간 메모')}
-                </div>
-                <label>
-                  혜택 · 실적 제외 조건
-                  <textarea
-                    rows={3}
-                    maxLength={3000}
-                    value={draft.benefits ?? ''}
-                    onChange={(e) => field('benefits', e.target.value)}
-                  />
-                </label>
+                </section>
               </>
             ) : (
-              <>
+              <section className="payment-form-section">
+                <h3>계좌와 자산 연결</h3>
                 {editor.type === 'account' && (
                   <>
                     <div className="form-grid">
@@ -621,27 +678,30 @@ function PaymentEditor({
                   자산의 현재 잔액을 함께 표시해요. 연결만으로 잔액이나 수입·지출이 추가되지는
                   않아요.
                 </p>
-              </>
+              </section>
             )}
-            <label>
-              비고
-              <textarea
-                rows={3}
-                maxLength={3000}
-                value={draft.notes ?? ''}
-                onChange={(e) => field('notes', e.target.value)}
-              />
-            </label>
-            {initialPayment && (
-              <label className="checkbox payment-archive-control">
-                <input
-                  type="checkbox"
-                  checked={draft.archived ?? false}
-                  onChange={(e) => field('archived', e.target.checked)}
+            <section className="payment-form-section">
+              <h3>메모와 관리</h3>
+              <label>
+                비고
+                <textarea
+                  rows={3}
+                  maxLength={3000}
+                  value={draft.notes ?? ''}
+                  onChange={(e) => field('notes', e.target.value)}
                 />
-                <Archive size={16} /> 보관하기 (기존 거래와 연결은 유지)
               </label>
-            )}
+              {initialPayment && (
+                <label className="checkbox payment-archive-control">
+                  <input
+                    type="checkbox"
+                    checked={draft.archived ?? false}
+                    onChange={(e) => field('archived', e.target.checked)}
+                  />
+                  <Archive size={16} /> 보관하기 (기존 거래와 연결은 유지)
+                </label>
+              )}
+            </section>
           </fieldset>
         </div>
         <div className="form-footer">

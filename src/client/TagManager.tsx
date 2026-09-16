@@ -105,9 +105,10 @@ export default function TagManager({
     <section className="tag-manager" aria-label="태그 설정">
       <div className="tag-manager-heading">
         <div>
-          <span className="eyebrow">YOUR OWN LABELS</span>
-          <h2>우리에게 맞는 태그</h2>
-          <p>유형을 만들고, 그 안의 옵션을 자유롭게 늘려보세요.</p>
+          <p className="tag-manager-intro">분류부터 자산 용도까지, 원하는 기준으로 관리해요.</p>
+          <span className="tag-manager-helper">
+            태그 유형을 선택하면 옵션을 추가하거나 수정할 수 있어요.
+          </span>
         </div>
         <button
           type="button"
@@ -186,7 +187,8 @@ export default function TagManager({
                 </strong>
                 <small>
                   {group.appliesTo === 'transaction' ? '가계부' : '자산'} ·{' '}
-                  {group.selectionMode === 'single' ? '단일 선택' : '복수 선택'}
+                  {group.selectionMode === 'single' ? '단일 선택' : '복수 선택'} · 옵션{' '}
+                  {data.tags.filter((tag) => tag.groupId === group.id && !tag.archived).length}개
                 </small>
               </span>
               <ChevronRight size={15} />
@@ -206,16 +208,19 @@ export default function TagManager({
                     {active.archived && <span className="badge">보관됨</span>}
                   </div>
                   <p>{scope(active)}</p>
+                  <span className="tag-selection-badge">
+                    {active.selectionMode === 'single' ? '하나만 선택' : '여러 개 선택'}
+                  </span>
                 </div>
                 <div className="tag-detail-actions">
                   <button
                     type="button"
-                    className="icon-button"
+                    className="secondary tag-type-settings"
                     aria-label={`${active.name} 유형 수정`}
                     disabled={locked}
                     onClick={() => setEditor({ type: 'group', original: active })}
                   >
-                    <Pencil size={16} />
+                    <Pencil size={16} /> 유형 설정
                   </button>
                   <button
                     type="button"
@@ -230,11 +235,16 @@ export default function TagManager({
               </div>
               <div className="tag-option-heading">
                 <span>옵션 {options.length}개</span>
-                <span>
-                  {active.selectionMode === 'single'
-                    ? '한 번에 하나를 선택해요'
-                    : '여러 옵션을 함께 선택해요'}
-                </span>
+                {!active.archived && (
+                  <button
+                    type="button"
+                    className="secondary tag-add-option"
+                    disabled={locked}
+                    onClick={() => setEditor({ type: 'tag', group: active })}
+                  >
+                    <Plus size={17} /> 옵션 추가
+                  </button>
+                )}
               </div>
               <div className="tag-managed-options">
                 {options.map((tag, index) => (
@@ -249,6 +259,13 @@ export default function TagManager({
                       >
                         {tag.name}
                       </span>
+                      {tag.parentId && (
+                        <small className="tag-parent-label">
+                          상위 옵션 ·{' '}
+                          {data.tags.find((parent) => parent.id === tag.parentId)?.name ??
+                            '보관된 옵션'}
+                        </small>
+                      )}
                       {tag.archived && <small>보관됨</small>}
                     </div>
                     <div className="tag-option-actions">
@@ -303,17 +320,6 @@ export default function TagManager({
                   </p>
                 )}
               </div>
-              {!active.archived && (
-                <button
-                  type="button"
-                  className="tag-add-option"
-                  disabled={locked}
-                  onClick={() => setEditor({ type: 'tag', group: active })}
-                >
-                  <Plus size={17} />
-                  옵션 추가
-                </button>
-              )}
               <div className="tag-management-note">
                 <Archive size={16} />
                 <p>

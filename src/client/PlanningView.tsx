@@ -3,6 +3,7 @@ import { CalendarDays, Plus, Settings2 } from 'lucide-react';
 import type { Bootstrap } from '../shared/types';
 import {
   accountingPeriod,
+  budgetSummary,
   payrollSummary,
   planActual,
   planTransactions,
@@ -30,6 +31,13 @@ const names: Record<PlanKind, string> = {
   payroll: '월급 배분',
   event: '행사',
   schedule: '결제 일정',
+};
+const descriptions: Record<PlanKind, string> = {
+  budget: '월간·주간·항목별 예산을 실제 지출과 비교해요.',
+  goal: '수입·지출·저축 목표가 얼마나 이루어졌는지 확인해요.',
+  payroll: '월급을 어디에 얼마씩 배분할지 정하고, 남은 금액을 확인해요.',
+  event: '행사 예산과 실제 사용 금액을 함께 관리해요.',
+  schedule: '예정된 결제와 납부 여부를 확인해요.',
 };
 const roundingNames: Record<Rounding, string> = {
   none: '원 단위 유지',
@@ -98,16 +106,13 @@ export default function PlanningView({ data, month, ledgerId, onChanged, onNotic
         (allDates || (p.startDate <= period.endDate && p.endDate >= period.startDate)),
     )
     .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.title.localeCompare(b.title));
+  const budget = budgetSummary(data, ledger.id, month);
   return (
     <div className="planning-view">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">PLAN & REVIEW</span>
-          <h2>계획하고 돌아보기</h2>
-          <p className="muted small">
-            예산과 목표를 실제 기록과 비교해요. 계획을 저장해도 수입·지출이나 자산 잔액은 바뀌지
-            않아요.
-          </p>
+          <p className="planning-context-title">{Number(month.slice(5))}월 계획</p>
+          <p className="planning-context-description">{descriptions[kind]}</p>
         </div>
         <button
           className="primary"
@@ -149,6 +154,40 @@ export default function PlanningView({ data, month, ledgerId, onChanged, onNotic
           {allDates ? '모든 계획' : `${period.startDate} ~ ${period.endDate}`}
         </span>
       </div>
+      {kind === 'budget' && !allDates && (
+        <section className="planning-overview" aria-label="예산 요약">
+          <div>
+            <span>{budget.label}</span>
+            <strong>
+              {won(budget.amount)}
+              <small>원</small>
+            </strong>
+          </div>
+          <div>
+            <span>사용한 금액</span>
+            <strong>
+              {won(budget.expense)}
+              <small>원</small>
+            </strong>
+          </div>
+          <div
+            className={
+              budget.amount - budget.expense < 0 ? 'planning-negative' : 'planning-remaining'
+            }
+          >
+            <span>{budget.amount - budget.expense < 0 ? '초과한 금액' : '남은 금액'}</span>
+            <strong>
+              {won(Math.abs(budget.amount - budget.expense))}
+              <small>원</small>
+            </strong>
+          </div>
+          <p>
+            {budget.periodStart === '0001-01-01'
+              ? '가계부 전체 기록 기준'
+              : `${budget.periodStart} ~ ${budget.periodEnd} 기준`}
+          </p>
+        </section>
+      )}
       <div className="planning-tabs" aria-label="계획 종류">
         {(Object.keys(names) as PlanKind[]).map((value) => (
           <button
@@ -161,12 +200,16 @@ export default function PlanningView({ data, month, ledgerId, onChanged, onNotic
           </button>
         ))}
       </div>
-      {kind === 'budget' && (
-        <p className="small muted">
-          전체 예산과 항목·주간 예산은 각각 비교해요. 겹치는 태그의 항목 예산을 전체 예산에 중복
-          합산하지 않아요.
+      <div className="planning-list-heading">
+        <h2>
+          {names[kind]} <span>{plans.length}개</span>
+        </h2>
+        <p>
+          {kind === 'budget'
+            ? '전체·항목·주간 예산은 각각 비교해요.'
+            : '계획과 실적을 한눈에 확인해요.'}
         </p>
-      )}
+      </div>
       {!plans.length && (
         <Empty>
           등록된 {names[kind]}이 없어요. 원하는 기간과 항목으로 첫 계획을 만들어 보세요.
@@ -183,6 +226,7 @@ export default function PlanningView({ data, month, ledgerId, onChanged, onNotic
           />
         ))}
       </div>
+      <p className="planning-info">계획을 저장해도 실제 수입·지출과 자산 잔액은 바뀌지 않아요.</p>
       {editor && (
         <PlanEditor
           key={editor.id || `new-${editor.kind}`}
@@ -570,159 +614,166 @@ function PlanEditor({
             </div>
           )}
           <fieldset disabled={busy || uncertain || conflict}>
-            <label>
-              계획 이름
-              <input
-                required
-                autoFocus
-                maxLength={120}
-                value={draft.title}
-                onChange={(e) => update({ title: e.target.value })}
-                placeholder={
-                  draft.kind === 'payroll'
-                    ? '예: 9월 월급 배분'
-                    : draft.kind === 'budget'
-                      ? '예: 9월 생활비'
-                      : ''
-                }
-              />
-            </label>
-            <div className="form-grid">
+            <section className="planning-form-section">
+              <h3>기본 정보</h3>
               <label>
-                시작일
+                계획 이름
                 <input
                   required
-                  type="date"
-                  value={draft.startDate}
-                  onChange={(e) =>
-                    update({
-                      startDate: e.target.value,
-                      ...(draft.kind === 'schedule' && draft.repeat === 'once'
-                        ? { endDate: e.target.value }
-                        : {}),
-                    })
+                  autoFocus
+                  maxLength={120}
+                  value={draft.title}
+                  onChange={(e) => update({ title: e.target.value })}
+                  placeholder={
+                    draft.kind === 'payroll'
+                      ? '예: 9월 월급 배분'
+                      : draft.kind === 'budget'
+                        ? '예: 9월 생활비'
+                        : ''
                   }
                 />
               </label>
-              <label>
-                {draft.kind === 'schedule' ? '마지막 결제일' : '종료일'}
-                <input
-                  required
-                  type="date"
-                  min={draft.startDate}
-                  value={draft.endDate}
-                  disabled={draft.kind === 'schedule' && draft.repeat === 'once'}
-                  onChange={(e) => update({ endDate: e.target.value })}
-                />
-              </label>
-            </div>
-            {draft.kind === 'budget' && (
               <div className="form-grid">
                 <label>
-                  예산 기간
-                  <select
-                    value={draft.cadence}
-                    onChange={(e) =>
-                      update({ cadence: e.target.value as 'month' | 'week' | 'period' })
-                    }
-                  >
-                    <option value="month">월간</option>
-                    <option value="week">주간 (최대 7일)</option>
-                    <option value="period">전체 기간</option>
-                  </select>
-                </label>
-                <label>
-                  예산 범위
-                  <select
-                    value={draft.budgetScope}
+                  시작일
+                  <input
+                    required
+                    type="date"
+                    value={draft.startDate}
                     onChange={(e) =>
                       update({
-                        budgetScope: e.target.value as 'total' | 'category',
-                        ...(e.target.value === 'total' ? { tagIds: [] } : {}),
+                        startDate: e.target.value,
+                        ...(draft.kind === 'schedule' && draft.repeat === 'once'
+                          ? { endDate: e.target.value }
+                          : {}),
                       })
                     }
-                  >
-                    <option value="total">전체 예산</option>
-                    <option value="category">태그 항목별 예산</option>
-                  </select>
+                  />
+                </label>
+                <label>
+                  {draft.kind === 'schedule' ? '마지막 결제일' : '종료일'}
+                  <input
+                    required
+                    type="date"
+                    min={draft.startDate}
+                    value={draft.endDate}
+                    disabled={draft.kind === 'schedule' && draft.repeat === 'once'}
+                    onChange={(e) => update({ endDate: e.target.value })}
+                  />
                 </label>
               </div>
-            )}
-            {draft.kind === 'goal' && (
-              <>
+            </section>
+            <section className="planning-form-section">
+              <h3>금액과 기준</h3>
+              {draft.kind === 'budget' && (
                 <div className="form-grid">
                   <label>
-                    목표 대상
+                    예산 기간
                     <select
-                      value={draft.metric}
+                      value={draft.cadence}
+                      onChange={(e) =>
+                        update({ cadence: e.target.value as 'month' | 'week' | 'period' })
+                      }
+                    >
+                      <option value="month">월간</option>
+                      <option value="week">주간 (최대 7일)</option>
+                      <option value="period">전체 기간</option>
+                    </select>
+                  </label>
+                  <label>
+                    예산 범위
+                    <select
+                      value={draft.budgetScope}
                       onChange={(e) =>
                         update({
-                          metric: e.target.value as 'income' | 'expense' | 'savings',
-                          assetId: null,
-                          ...(e.target.value === 'savings'
-                            ? { tagIds: [], paymentMethodId: null, ownerId: null }
-                            : {}),
+                          budgetScope: e.target.value as 'total' | 'category',
+                          ...(e.target.value === 'total' ? { tagIds: [] } : {}),
                         })
                       }
                     >
-                      <option value="income">수입</option>
-                      <option value="expense">지출</option>
-                      {ledger?.kind === 'main' && <option value="savings">순저축</option>}
-                    </select>
-                  </label>
-                  <label>
-                    달성 기준
-                    <select
-                      value={draft.direction}
-                      onChange={(e) =>
-                        update({ direction: e.target.value as 'atLeast' | 'atMost' })
-                      }
-                    >
-                      <option value="atLeast">목표 금액 이상 달성</option>
-                      <option value="atMost">목표 금액 이하 유지</option>
+                      <option value="total">전체 예산</option>
+                      <option value="category">태그 항목별 예산</option>
                     </select>
                   </label>
                 </div>
-                {draft.metric === 'savings' && (
-                  <label>
-                    저축 자산
-                    <select
-                      value={draft.assetId ?? ''}
-                      onChange={(e) => update({ assetId: e.target.value || null })}
-                    >
-                      <option value="">가구 전체 순저축</option>
-                      {data.assets
-                        .filter(
-                          (a) =>
-                            a.kind === 'asset' &&
-                            (!a.archived || (draft.kind === 'goal' && draft.assetId === a.id)),
-                        )
-                        .map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name}
-                          </option>
-                        ))}
-                    </select>
-                    <small className="muted">실제 저축 유입에서 인출을 뺀 금액을 집계해요.</small>
-                  </label>
-                )}
-              </>
-            )}
-            <Amount
-              label={
-                draft.kind === 'payroll'
-                  ? '급여 원금액'
-                  : draft.kind === 'schedule'
-                    ? '회당 결제 예정액'
-                    : draft.kind === 'goal'
-                      ? '목표 금액'
-                      : '예산 금액'
-              }
-              value={draft.amount}
-              onChange={(amount) => update({ amount })}
-            />
+              )}
+              {draft.kind === 'goal' && (
+                <>
+                  <div className="form-grid">
+                    <label>
+                      목표 대상
+                      <select
+                        value={draft.metric}
+                        onChange={(e) =>
+                          update({
+                            metric: e.target.value as 'income' | 'expense' | 'savings',
+                            assetId: null,
+                            ...(e.target.value === 'savings'
+                              ? { tagIds: [], paymentMethodId: null, ownerId: null }
+                              : {}),
+                          })
+                        }
+                      >
+                        <option value="income">수입</option>
+                        <option value="expense">지출</option>
+                        {ledger?.kind === 'main' && <option value="savings">순저축</option>}
+                      </select>
+                    </label>
+                    <label>
+                      달성 기준
+                      <select
+                        value={draft.direction}
+                        onChange={(e) =>
+                          update({ direction: e.target.value as 'atLeast' | 'atMost' })
+                        }
+                      >
+                        <option value="atLeast">목표 금액 이상 달성</option>
+                        <option value="atMost">목표 금액 이하 유지</option>
+                      </select>
+                    </label>
+                  </div>
+                  {draft.metric === 'savings' && (
+                    <label>
+                      저축 자산
+                      <select
+                        value={draft.assetId ?? ''}
+                        onChange={(e) => update({ assetId: e.target.value || null })}
+                      >
+                        <option value="">가구 전체 순저축</option>
+                        {data.assets
+                          .filter(
+                            (a) =>
+                              a.kind === 'asset' &&
+                              (!a.archived || (draft.kind === 'goal' && draft.assetId === a.id)),
+                          )
+                          .map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.name}
+                            </option>
+                          ))}
+                      </select>
+                      <small className="muted">실제 저축 유입에서 인출을 뺀 금액을 집계해요.</small>
+                    </label>
+                  )}
+                </>
+              )}
+              <Amount
+                label={
+                  draft.kind === 'payroll'
+                    ? '급여 원금액'
+                    : draft.kind === 'schedule'
+                      ? '회당 결제 예정액'
+                      : draft.kind === 'goal'
+                        ? '목표 금액'
+                        : '예산 금액'
+                }
+                value={draft.amount}
+                onChange={(amount) => update({ amount })}
+              />
+            </section>
             {draft.kind === 'payroll' && (
-              <>
+              <section className="planning-form-section">
+                <h3>월급 배분</h3>
                 <RoundSelect
                   label="급여 계산 방식"
                   value={draft.rounding}
@@ -829,10 +880,11 @@ function PlanEditor({
                     <strong>잔여금 {won(payrollSummary(draft).remaining)}원</strong>
                   </span>
                 </div>
-              </>
+              </section>
             )}
             {draft.kind === 'event' && (
-              <>
+              <section className="planning-form-section">
+                <h3>행사 결산</h3>
                 <label>
                   실적 기록 방식
                   <select
@@ -870,10 +922,11 @@ function PlanEditor({
                     onChange={(e) => update({ evaluation: e.target.value })}
                   />
                 </label>
-              </>
+              </section>
             )}
             {draft.kind === 'schedule' && (
-              <>
+              <section className="planning-form-section">
+                <h3>결제와 납부</h3>
                 <label>
                   결제 반복
                   <select
@@ -983,10 +1036,10 @@ function PlanEditor({
                     </button>
                   </div>
                 ))}
-              </>
+              </section>
             )}
             {!noFilters && (
-              <>
+              <section className="planning-form-section">
                 <h3>{draft.kind === 'schedule' ? '일정 정보' : '실제 기록 집계 조건'}</h3>
                 <div className="form-grid">
                   <label>
@@ -1071,27 +1124,30 @@ function PlanEditor({
                       ))}
                     </>
                   )}
-              </>
+              </section>
             )}
-            <label>
-              메모
-              <textarea
-                rows={3}
-                maxLength={2000}
-                value={draft.notes}
-                onChange={(e) => update({ notes: e.target.value })}
-              />
-            </label>
-            {plan.id && (
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={draft.archived}
-                  onChange={(e) => update({ archived: e.target.checked })}
+            <section className="planning-form-section">
+              <h3>추가 정보</h3>
+              <label>
+                메모
+                <textarea
+                  rows={3}
+                  maxLength={2000}
+                  value={draft.notes}
+                  onChange={(e) => update({ notes: e.target.value })}
                 />
-                이 계획 보관하기 <small className="muted">해제하면 다시 표시돼요.</small>
               </label>
-            )}
+              {plan.id && (
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={draft.archived}
+                    onChange={(e) => update({ archived: e.target.checked })}
+                  />
+                  이 계획 보관하기 <small className="muted">해제하면 다시 표시돼요.</small>
+                </label>
+              )}
+            </section>
           </fieldset>
         </div>
         <div className="form-footer">

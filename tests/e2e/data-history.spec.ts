@@ -43,6 +43,7 @@ test('saved transaction history exposes before and after values including delete
   });
   expect(remove.status()).toBe(200);
   await page.getByRole('button', { name: '데이터 관리', exact: true }).click();
+  await page.getByRole('tab', { name: '변경 이력', exact: true }).click();
   await expect(page.getByRole('heading', { name: '최근 변경 이력', exact: true })).toBeVisible();
   const updateHistory = page
     .locator('.history-entry')

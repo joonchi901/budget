@@ -78,16 +78,16 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
     }),
   ].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   return (
-    <>
+    <div className="assets-workspace">
       <div className="asset-hero">
         <div>
-          <span className="eyebrow">OUR NET WORTH</span>
+          <span className="asset-as-of">{asOf} 기준</span>
           <h2>우리의 순자산</h2>
           <strong>
             {summary.net === null ? '—' : won(summary.net)}
             {summary.net !== null && <small>원</small>}
           </strong>
-          <p>{asOf} 기준 · 등록된 자산에서 부채를 뺀 금액이에요.</p>
+          <p>전체 자산에서 부채를 뺀 금액이에요.</p>
         </div>
         <div className="asset-hero-detail">
           <span>
@@ -113,9 +113,8 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
       </div>
       {summary.unknown.length > 0 && (
         <div className="alert">
-          선택한 월말의 잔액을 확인할 수 없는 자산이 {summary.unknown.length}개 있어 합계를 확정할
-          수 없어요. 기준일이 없거나 처음 확인한 잔액보다 앞선 기간이에요. 기준일과 잔액의 종류는 각
-          자산 설정에서 확인할 수 있어요.
+          자산 {summary.unknown.length}개의 과거 잔액이 미확인이에요. 기준일이 없거나 처음 확인한
+          잔액보다 앞선 기간이라 합계를 확정할 수 없어요. 각 자산 설정에서 기준일을 확인해 주세요.
         </div>
       )}
       <div className="section-heading">
@@ -154,24 +153,33 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
             return (
               <section className="panel asset-card" key={a.id}>
                 <div className="asset-card-heading">
-                  <span
-                    className="asset-icon"
-                    style={{ background: `${a.color}18`, color: a.color }}
-                  >
-                    <Wallet size={21} />
-                  </span>
+                  <div className="asset-card-identity">
+                    <span
+                      className="asset-icon"
+                      style={{ background: `${a.color}18`, color: a.color }}
+                    >
+                      <Wallet size={22} />
+                    </span>
+                    <div>
+                      <h3>
+                        {a.name} {a.kind === 'liability' && <span className="badge">부채</span>}
+                        {a.archived && <span className="badge">보관됨</span>}
+                      </h3>
+                      <p className="small muted">
+                        {ownerName(a.details?.ownerId ?? 'shared')}
+                        {a.details?.institution ? ` · ${a.details.institution}` : ''}
+                      </p>
+                    </div>
+                  </div>
                   <button
-                    className="icon-button"
+                    className="secondary asset-settings"
                     aria-label={`${a.name} 설정`}
                     onClick={() => setEditor({ type: 'asset', asset: a })}
                   >
-                    <Settings2 size={17} />
+                    <Settings2 size={16} />
+                    <span>설정</span>
                   </button>
                 </div>
-                <h3>
-                  {a.name} {a.kind === 'liability' && <span className="badge">부채</span>}
-                  {a.archived && <span className="badge">보관됨</span>}
-                </h3>
                 <strong className="asset-balance" data-testid={`asset-${a.id}`}>
                   {balance === null ? '—' : won(balance)}
                   {balance !== null && <small>원</small>}
@@ -190,38 +198,32 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
                     return t && <span key={id}>#{t.name}</span>;
                   })}
                 </div>
-                <div className="asset-detail">
-                  <span>소유자 · 기관</span>
-                  <span>
-                    {ownerName(a.details?.ownerId ?? 'shared')} ·{' '}
-                    {a.details?.institution || '미등록'}
-                  </span>
-                </div>
-                <div className="asset-detail">
-                  <span>
-                    {a.details?.openingKind === 'observation'
-                      ? '처음 확인한 잔액'
-                      : '최초 발생 잔액'}
-                  </span>
-                  <span>
-                    {won(a.openingBalance)}원<br />
-                    <small>{a.openingDate || '기준일 미확인'}</small>
-                  </span>
-                </div>
-                <div className="asset-detail">
-                  <span>선택 월말까지 변동</span>
-                  <span>
-                    {balance === null
-                      ? '—'
-                      : `${balance - (a.openingDate! <= asOf ? a.openingBalance : 0) > 0 ? '+' : ''}${won(balance - (a.openingDate! <= asOf ? a.openingBalance : 0))}원`}
-                  </span>
-                </div>
                 <details className="asset-details">
                   <summary>관리 정보 보기</summary>
+                  <div className="asset-detail">
+                    <span>
+                      {a.details?.openingKind === 'observation'
+                        ? '처음 확인한 잔액'
+                        : '최초 발생 잔액'}
+                    </span>
+                    <span>
+                      {won(a.openingBalance)}원<br />
+                      <small>{a.openingDate || '기준일 미확인'}</small>
+                    </span>
+                  </div>
+                  <div className="asset-detail">
+                    <span>선택 월말까지 변동</span>
+                    <span>
+                      {balance === null
+                        ? '—'
+                        : `${balance - (a.openingDate! <= asOf ? a.openingBalance : 0) > 0 ? '+' : ''}${won(balance - (a.openingDate! <= asOf ? a.openingBalance : 0))}원`}
+                    </span>
+                  </div>
+
                   <AssetDetailsList asset={a} />
                 </details>
                 <button
-                  className="text-button asset-adjust"
+                  className="secondary asset-adjust"
                   onClick={() => setEditor({ type: 'adjustment', asset: a })}
                   disabled={a.archived}
                 >
@@ -231,6 +233,22 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
             );
           })}
       </div>
+      {!data.assets.some((a) => showArchived || !a.archived) && (
+        <Empty>아직 등록된 자산이 없어요. 통장 잔액부터 추가해 보세요.</Empty>
+      )}
+      <div className="section-heading">
+        <h2>이번 달 저축</h2>
+        <span className="muted small">{month} · 저축 집계로 지정한 자산의 실제 변동</span>
+      </div>
+      <section className="stats-grid three">
+        <Stat label="저축 유입" amount={savings.inflow} hint="저축 자산에 새로 들어온 금액" />
+        <Stat label="저축 인출" amount={savings.outflow} hint="저축 자산에서 나간 금액" />
+        <Stat label="순저축" amount={savings.net} hint="유입 − 인출" accent />
+      </section>
+      <p className="small muted">
+        저축 자산끼리의 이동, 최초 잔액, 잔액 조정은 저축 실적에 포함하지 않아요. 저축 집계 설정을
+        바꾸면 이후 새 변동부터 적용돼요.
+      </p>
       <section className="panel asset-months">
         <div className="panel-title">
           <h2>{month.slice(0, 4)}년 월말 자산</h2>
@@ -262,28 +280,31 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
             </div>
           ))}
         </div>
-        <div className="table-scroll">
-          <table className="asset-summary-table">
-            <thead>
-              <tr>
-                <th>월말</th>
-                <th>총자산</th>
-                <th>총부채</th>
-                <th>순자산</th>
-              </tr>
-            </thead>
-            <tbody>
-              {yearHistory.map((row) => (
-                <tr key={row.month} className={row.month === month ? 'selected' : ''}>
-                  <th>{row.month}</th>
-                  <td>{displayMoney(row.assets)}</td>
-                  <td>{displayMoney(row.debt)}</td>
-                  <td>{displayMoney(row.net)}</td>
+        <details className="asset-table-details">
+          <summary>월별 금액 자세히 보기</summary>
+          <div className="table-scroll">
+            <table className="asset-summary-table">
+              <thead>
+                <tr>
+                  <th>월말</th>
+                  <th>총자산</th>
+                  <th>총부채</th>
+                  <th>순자산</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {yearHistory.map((row) => (
+                  <tr key={row.month} className={row.month === month ? 'selected' : ''}>
+                    <th>{row.month}</th>
+                    <td>{displayMoney(row.assets)}</td>
+                    <td>{displayMoney(row.debt)}</td>
+                    <td>{displayMoney(row.net)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
         <p className="small muted">
           기준일 잔액과 해당 월말까지의 유효한 변동을 합산해요. 미래 월은 등록된 내역만 반영한
           예상값이며, 과거 거래를 수정하면 해당 월 이후도 다시 계산해요. 처음 확인한 잔액의 기준일
@@ -345,19 +366,6 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
           <Empty>태그 설정에서 자산용 유형과 옵션을 만들면 분류별로 볼 수 있어요.</Empty>
         )}
       </section>
-      <div className="section-heading">
-        <h2>이번 달 저축</h2>
-        <span className="muted small">{month} · 저축 집계로 지정한 자산의 실제 변동</span>
-      </div>
-      <section className="stats-grid three">
-        <Stat label="저축 유입" amount={savings.inflow} hint="저축 자산에 새로 들어온 금액" />
-        <Stat label="저축 인출" amount={savings.outflow} hint="저축 자산에서 나간 금액" />
-        <Stat label="순저축" amount={savings.net} hint="유입 − 인출" accent />
-      </section>
-      <p className="small muted">
-        저축 자산끼리의 이동, 최초 잔액, 잔액 조정은 저축 실적에 포함하지 않아요. 저축 집계 설정을
-        바꾸면 이후 새 변동부터 적용돼요.
-      </p>
       <section className="panel asset-history">
         <div className="panel-title">
           <h2>
@@ -443,7 +451,7 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
           }}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -499,7 +507,7 @@ function AssetEditor({
   const asset = 'asset' in editor ? editor.asset : undefined;
   const [name, setName] = useState(asset?.name ?? '');
   const [kind, setKind] = useState<'asset' | 'liability'>(asset?.kind ?? 'asset');
-  const [color, setColor] = useState(asset?.color ?? '#31725f');
+  const [color, setColor] = useState(asset?.color ?? '#3182f6');
   const [tagIds, setTagIds] = useState(asset?.tagIds ?? []);
   const [tracking, setTracking] = useState(asset?.trackSavings ?? false);
   const [openingDate, setOpeningDate] = useState(asset ? (asset.openingDate ?? '') : localDate());
@@ -679,7 +687,7 @@ function AssetEditor({
   }
   return (
     <Dialog title={title} subtitle={asset?.name} onClose={onClose} locked={locked}>
-      <form onSubmit={(e) => void submit(e)}>
+      <form className="asset-editor" onSubmit={(e) => void submit(e)}>
         <div className="form-body">
           {error && (
             <div className="alert error" role="alert">
@@ -708,112 +716,125 @@ function AssetEditor({
           <fieldset disabled={busy || uncertain || conflict}>
             {editor.type === 'asset' ? (
               <>
-                <label>
-                  자산 이름
-                  <input
-                    required
-                    maxLength={80}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    autoFocus
-                  />
-                </label>
-                <div className="form-grid">
-                  {!asset && (
+                <section className="asset-form-section">
+                  <h3>기본 정보</h3>
+                  <label>
+                    자산 이름
+                    <input
+                      required
+                      maxLength={80}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      autoFocus
+                    />
+                  </label>
+                  <div className="form-grid">
+                    {!asset && (
+                      <label>
+                        종류
+                        <select
+                          value={kind}
+                          onChange={(e) => setKind(e.target.value as typeof kind)}
+                        >
+                          <option value="asset">자산</option>
+                          <option value="liability">부채</option>
+                        </select>
+                      </label>
+                    )}
                     <label>
-                      종류
-                      <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
-                        <option value="asset">자산</option>
-                        <option value="liability">부채</option>
+                      표시 색상
+                      <input
+                        type="color"
+                        value={color}
+                        onChange={(e) => setColor(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <div className="form-grid">
+                    <label>
+                      소유자
+                      <select
+                        value={details.ownerId ?? 'shared'}
+                        onChange={(e) =>
+                          setDetails({
+                            ...details,
+                            ownerId: e.target.value as AssetDetails['ownerId'],
+                          })
+                        }
+                      >
+                        <option value="shared">공동</option>
+                        <option value="u1">나</option>
+                        <option value="u2">와이프</option>
                       </select>
                     </label>
-                  )}
+                    <label>
+                      금융기관
+                      <input
+                        maxLength={2000}
+                        value={details.institution ?? ''}
+                        onChange={(e) => setDetails({ ...details, institution: e.target.value })}
+                        placeholder="은행·증권사 등"
+                      />
+                    </label>
+                  </div>
+                </section>
+                <section className="asset-form-section">
+                  <h3>기준 잔액</h3>
                   <label>
-                    표시 색상
-                    <input type="color" value={color} onChange={(e) => setColor(e.target.value)} />
-                  </label>
-                </div>
-                <div className="form-grid">
-                  <label>
-                    소유자
+                    기준 잔액 종류
                     <select
-                      value={details.ownerId ?? 'shared'}
+                      value={details.openingKind ?? 'initial'}
                       onChange={(e) =>
                         setDetails({
                           ...details,
-                          ownerId: e.target.value as AssetDetails['ownerId'],
+                          openingKind: e.target.value as AssetDetails['openingKind'],
                         })
                       }
                     >
-                      <option value="shared">공동</option>
-                      <option value="u1">나</option>
-                      <option value="u2">와이프</option>
+                      <option value="observation">처음 확인한 잔액</option>
+                      <option value="initial">자산·부채 최초 발생 잔액</option>
                     </select>
-                  </label>
-                  <label>
-                    금융기관
-                    <input
-                      maxLength={2000}
-                      value={details.institution ?? ''}
-                      onChange={(e) => setDetails({ ...details, institution: e.target.value })}
-                      placeholder="은행·증권사 등"
-                    />
-                  </label>
-                </div>
-                <label>
-                  기준 잔액 종류
-                  <select
-                    value={details.openingKind ?? 'initial'}
-                    onChange={(e) =>
-                      setDetails({
-                        ...details,
-                        openingKind: e.target.value as AssetDetails['openingKind'],
-                      })
-                    }
-                  >
-                    <option value="observation">처음 확인한 잔액</option>
-                    <option value="initial">자산·부채 최초 발생 잔액</option>
-                  </select>
-                  <span className="small muted">
-                    {details.openingKind === 'observation'
-                      ? '기존 통장이나 엑셀 월말 잔액처럼 그날 확인한 금액이에요. 앞선 기간의 잔액은 미확인으로 표시해요.'
-                      : '그날 자산이나 부채가 처음 생겼다는 뜻이에요. 앞선 기간의 잔액은 0원으로 표시해요.'}
-                    {asset && ' 종류를 바꾸면 기준일 이전의 통계도 다시 계산해요.'}
-                  </span>
-                </label>
-                <label>
-                  최초 잔액 기준일
-                  <input
-                    type="date"
-                    required
-                    value={openingDate}
-                    onChange={(e) => setOpeningDate(e.target.value)}
-                  />
-                  <span className="small muted">
-                    선택한 종류에 따라 자산이 발생한 날짜 또는 잔액을 처음 확인한 날짜예요. 이미
-                    기록한 변동보다 늦게 지정할 수 없어요.
-                  </span>
-                </label>
-                {!asset && (
-                  <label>
-                    최초 잔액
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={kind === 'liability' ? 0 : undefined}
-                      max="1000000000000"
-                      step="1"
-                      required
-                      value={amount}
-                      onChange={(e) => setAmount(Number(e.target.value))}
-                    />
                     <span className="small muted">
-                      최초 잔액은 수입이나 저축 실적에 포함하지 않아요.
+                      {details.openingKind === 'observation'
+                        ? '기존 통장이나 엑셀 월말 잔액처럼 그날 확인한 금액이에요. 앞선 기간의 잔액은 미확인으로 표시해요.'
+                        : '그날 자산이나 부채가 처음 생겼다는 뜻이에요. 앞선 기간의 잔액은 0원으로 표시해요.'}
+                      {asset && ' 종류를 바꾸면 기준일 이전의 통계도 다시 계산해요.'}
                     </span>
                   </label>
-                )}
+                  <label>
+                    최초 잔액 기준일
+                    <input
+                      type="date"
+                      required
+                      value={openingDate}
+                      onChange={(e) => setOpeningDate(e.target.value)}
+                    />
+                    <span className="small muted">
+                      선택한 종류에 따라 자산이 발생한 날짜 또는 잔액을 처음 확인한 날짜예요. 이미
+                      기록한 변동보다 늦게 지정할 수 없어요.
+                    </span>
+                  </label>
+                  {!asset && (
+                    <label>
+                      최초 잔액
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={kind === 'liability' ? 0 : undefined}
+                        max="1000000000000"
+                        step="1"
+                        required
+                        value={amount}
+                        onChange={(e) => setAmount(Number(e.target.value))}
+                      />
+                      <span className="small muted">
+                        최초 잔액은 수입이나 저축 실적에 포함하지 않아요.
+                      </span>
+                    </label>
+                  )}
+                </section>
                 {kind === 'liability' && (
-                  <section className="asset-debt-fields">
+                  <section className="asset-debt-fields asset-form-section">
                     <h3>대출 상세 정보</h3>
                     <div className="form-grid">
                       <label>
@@ -938,53 +959,55 @@ function AssetEditor({
                       </label>
                     ))}
                     <p className="small muted">
-                      대출 조건은 관리용 기록이에요. 실제 부채가 줄거나 평가액이 바뀌면 날짜를
-                      지정해 잔액을 맞춰 주세요.
+                      실제 부채가 바뀌면 ‘현재 잔액 맞추기’에서 반영해 주세요.
                     </p>
                   </section>
                 )}
-                <label>
-                  관리 메모
-                  <textarea
-                    maxLength={2000}
-                    rows={3}
-                    value={details.notes ?? ''}
-                    onChange={(e) => setDetails({ ...details, notes: e.target.value })}
+                <section className="asset-form-section">
+                  <h3>분류와 관리</h3>
+                  <label>
+                    관리 메모
+                    <textarea
+                      maxLength={2000}
+                      rows={3}
+                      value={details.notes ?? ''}
+                      onChange={(e) => setDetails({ ...details, notes: e.target.value })}
+                    />
+                  </label>
+                  {kind === 'asset' && (
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        checked={tracking}
+                        onChange={(e) => setTracking(e.target.checked)}
+                      />
+                      이 자산의 유입·인출을 저축으로 집계
+                    </label>
+                  )}
+                  <p className="small muted">
+                    저축 집계 설정은 이후 새 변동부터 적용해요. 자산 이름이나 태그를 바꿔도 과거
+                    집계는 바뀌지 않아요.
+                  </p>
+                  <TagFields
+                    data={data}
+                    value={tagIds}
+                    onChange={setTagIds}
+                    appliesTo="asset"
+                    onChanged={onChanged}
+                    onPendingChange={setTagPending}
+                    disabled={busy || uncertain}
                   />
-                </label>
-                {kind === 'asset' && (
-                  <label className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={tracking}
-                      onChange={(e) => setTracking(e.target.checked)}
-                    />
-                    이 자산의 유입·인출을 저축으로 집계
-                  </label>
-                )}
-                <p className="small muted">
-                  저축 집계 설정은 이후 새 변동부터 적용해요. 자산 이름이나 태그를 바꿔도 과거
-                  집계는 바뀌지 않아요.
-                </p>
-                <TagFields
-                  data={data}
-                  value={tagIds}
-                  onChange={setTagIds}
-                  appliesTo="asset"
-                  onChanged={onChanged}
-                  onPendingChange={setTagPending}
-                  disabled={busy || uncertain}
-                />
-                {asset && (
-                  <label className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={archived}
-                      onChange={(e) => setArchived(e.target.checked)}
-                    />
-                    보관하기 · 과거 기록과 잔액은 유지돼요
-                  </label>
-                )}
+                  {asset && (
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        checked={archived}
+                        onChange={(e) => setArchived(e.target.checked)}
+                      />
+                      보관하기 · 과거 기록과 잔액은 유지돼요
+                    </label>
+                  )}
+                </section>
               </>
             ) : editor.type === 'void' ? (
               <div className="effect-preview">

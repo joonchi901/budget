@@ -8,9 +8,12 @@ import {
   ChevronRight,
   CircleHelp,
   CreditCard,
+  CalendarDays,
+  Database,
   Home,
   Link2,
   LogOut,
+  Menu,
   Plus,
   Search,
   Sparkles,
@@ -40,11 +43,21 @@ const currentMonth = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
-const colors = ['#31725f', '#97b5a4', '#cfac6c', '#839bb7', '#b2a5c4', '#c58d7e'];
+const colors = ['#3182f6', '#64a8ff', '#20c997', '#9270e8', '#ffb331', '#f66570'];
+const navigation = [
+  { id: 'ledger', label: '가계부', icon: Home },
+  { id: 'assets', label: '자산', icon: Wallet },
+  { id: 'payments', label: '카드 · 통장', icon: CreditCard },
+  { id: 'analytics', label: '통계', icon: BarChart3 },
+  { id: 'planning', label: '계획 · 일정', icon: CalendarDays },
+  { id: 'tags', label: '태그 설정', icon: Tags },
+  { id: 'data', label: '데이터 관리', icon: Database },
+] as const;
 
 export default function App() {
   const [ledgerId, setLedgerId] = useState('main');
   const [page, setPage] = useState<Page>('ledger');
+  const [mobileMenu, setMobileMenu] = useState(false);
   const [month, setMonth] = useState(currentMonth);
   const state = useBudget(ledgerId);
   const [edit, setEdit] = useState<{ original?: Transaction } | null>(null);
@@ -78,6 +91,13 @@ export default function App() {
     setLedgerId(id);
     setPage('ledger');
     setActionError('');
+    setMobileMenu(false);
+  }
+  function changePage(next: Page) {
+    setPage(next);
+    setMobileMenu(false);
+    state.presence(null, null);
+    window.scrollTo({ top: 0, behavior: 'instant' });
   }
   async function login(userId: 'u1' | 'u2') {
     setLoginBusy(true);
@@ -213,6 +233,7 @@ export default function App() {
   }[page];
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">본문으로 바로가기</a>
       <aside className="sidebar">
         <a
           className="brand"
@@ -225,41 +246,28 @@ export default function App() {
           <div className="brand-mark">
             <BookOpen size={22} />
           </div>
-          <strong>
-            우리의 가계부<span>OUR LITTLE LEDGER</span>
-          </strong>
+          <strong>우리의 가계부</strong>
         </a>
         <div className="household">
-          <div className="household-icon">🌿</div>
+          <div className="household-icon">
+            <Wallet size={21} />
+          </div>
           <div>
             <strong>우리 집</strong>
-            <span>함께 기록하는 공간</span>
+            <span>함께 쓰는 가계부</span>
           </div>
           <span className="household-count">2</span>
         </div>
         <nav className="main-nav" aria-label="주 메뉴">
-          {(
-            [
-              { id: 'ledger', label: '가계부', icon: Home },
-              { id: 'assets', label: '자산', icon: Wallet },
-              { id: 'payments', label: '카드 · 통장', icon: CreditCard },
-              { id: 'analytics', label: '통계', icon: BarChart3 },
-              { id: 'tags', label: '태그 설정', icon: Tags },
-              { id: 'planning', label: '계획 · 일정', icon: BookOpen },
-              { id: 'data', label: '데이터 관리', icon: BookOpen },
-            ] as const
-          ).map((item) => (
+          {navigation.map((item) => (
             <button
               key={item.id}
               className={page === item.id ? 'active' : ''}
-              onClick={() => {
-                setPage(item.id);
-                state.presence(null, null);
-              }}
+              aria-current={page === item.id ? 'page' : undefined}
+              onClick={() => changePage(item.id)}
             >
               <item.icon size={19} />
               {item.label}
-              {page === item.id && <span className="nav-dot" />}
             </button>
           ))}
         </nav>
@@ -352,16 +360,9 @@ export default function App() {
             {data.mode === 'demo' && <span className="demo-chip">로컬 환경</span>}
           </div>
         </header>
-        <main className="main-content">
+        <main className={`main-content page-${page}`} id="main-content" tabIndex={-1}>
           <div className="page-heading">
             <div>
-              <div className="eyebrow">
-                {page === 'ledger'
-                  ? ledger.kind === 'main'
-                    ? 'EVERYDAY, TOGETHER'
-                    : 'A CHAPTER OF OUR DAYS'
-                  : 'OUR MONEY, AT A GLANCE'}
-              </div>
               <h1>
                 {page === 'ledger' && <span className="heading-emoji">{ledger.icon}</span>}
                 {pageTitle}
@@ -369,7 +370,7 @@ export default function App() {
               <p>
                 {page === 'ledger'
                   ? ledger.kind === 'main'
-                    ? '일상의 기록부터 특별한 순간까지, 한눈에 살펴보세요.'
+                    ? '함께 기록하고, 한눈에 확인해요.'
                     : '이 가계부의 기록과 예산을 독립적으로 관리해요.'
                   : page === 'assets'
                     ? '어디에 얼마가 있는지, 우리의 자산을 함께 살펴보세요.'
@@ -511,11 +512,91 @@ export default function App() {
             />
           )}
           <footer className="page-footer">
-            <span>작은 기록이 쌓여, 우리의 생활이 보여요.</span>
-            <span>로컬 미리보기 · 가상 데이터</span>
+            <span>우리의 가계부</span>
+            <span>{data.mode === 'demo' ? '로컬 미리보기 · 가상 데이터' : '우리 둘만의 기록'}</span>
           </footer>
         </main>
       </div>
+      <nav
+        className="mobile-navigation"
+        aria-label="모바일 주 메뉴"
+        aria-hidden={mobileMenu || undefined}
+      >
+        {navigation.slice(0, 4).map((item) => (
+          <button
+            key={item.id}
+            className={page === item.id ? 'active' : ''}
+            aria-current={page === item.id ? 'page' : undefined}
+            onClick={() => changePage(item.id)}
+          >
+            <item.icon size={22} />
+            <span>{item.label}</span>
+          </button>
+        ))}
+        <button onClick={() => setMobileMenu(true)} aria-expanded={mobileMenu}>
+          <Menu size={22} />
+          <span>더보기</span>
+        </button>
+      </nav>
+      {mobileMenu && (
+        <Dialog title="전체 메뉴" onClose={() => setMobileMenu(false)}>
+          <div className="form-body mobile-menu-content">
+            <div className="mobile-menu-grid">
+              {navigation.map((item) => (
+                <button key={item.id} onClick={() => changePage(item.id)}>
+                  <item.icon size={24} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="section-heading">
+              <h3>내 가계부</h3>
+              <button
+                className="text-button"
+                onClick={() => {
+                  setMobileMenu(false);
+                  setNewLedger(true);
+                }}
+              >
+                <Plus size={16} />
+                목적 가계부 추가
+              </button>
+            </div>
+            <div className="mobile-ledger-list">
+              {data.ledgers.map((item) => (
+                <button key={item.id} onClick={() => navigate(item.id)}>
+                  <span>{item.icon}</span>
+                  <strong>
+                    {item.name}
+                    {item.archived ? ' (보관)' : ''}
+                  </strong>
+                  <ChevronRight size={18} />
+                </button>
+              ))}
+            </div>
+            <button
+              className="help-button"
+              onClick={() => {
+                setMobileMenu(false);
+                setHelp(true);
+              }}
+            >
+              <CircleHelp size={18} />
+              기록 가이드
+            </button>
+            <button
+              className="help-button"
+              onClick={() => {
+                setMobileMenu(false);
+                void state.logout().catch((e) => setActionError(e.message));
+              }}
+            >
+              <LogOut size={18} />
+              로그아웃
+            </button>
+          </div>
+        </Dialog>
+      )}
       {toast && (
         <div className="toast" role="status">
           <Check size={17} />
@@ -708,278 +789,286 @@ function LedgerView({
           </button>
         </div>
       )}
-      <p className="small muted">
+      <p className="ledger-period small muted">
         집계 기간 {accountingPeriod(month, ledger.periodStartDay ?? 1).startDate} ~{' '}
         {accountingPeriod(month, ledger.periodStartDay ?? 1).endDate}
       </p>
       <section className="stats-grid" aria-label="월 요약">
-        <Stat label="이번 달 수입" amount={sum.income} hint={`${monthLabel(month)} 기록 기준`} />
         <Stat
           label="이번 달 지출"
           amount={sum.expense}
           hint={ledger.kind === 'main' ? '연결된 가계부 포함' : '이 가계부의 월 지출'}
+          accent
         />
+        <Stat label="이번 달 수입" amount={sum.income} hint={`${monthLabel(month)} 기록 기준`} />
         <Stat
           label="수입 − 지출"
           amount={sum.income - sum.expense}
           hint="자산 이동·잔액 조정은 포함하지 않아요"
         />
         <Stat
-          label={`${budgetState.label} 남은 금액`}
+          label="남은 예산"
           amount={remaining}
           hint={`예산 ${won(budget)}원 · ${budgetState.periodStart === '0001-01-01' && budgetState.periodEnd === '9999-12-31' ? '전체 기간' : `${budgetState.periodStart ?? '전체'} ~ ${budgetState.periodEnd ?? '전체'}`}`}
-          accent
         />
       </section>
-      <div className="overview-grid">
-        <section className="panel budget-panel">
-          <div className="panel-title">
-            <h2>{ledger.kind === 'main' ? '이번 달, 잘 쓰고 있나요?' : '목적 가계부 예산'}</h2>
-            <span className="pill">
-              {ledger.kind === 'main' ? `${Number(month.slice(5))}월` : '전체 기간'}
-            </span>
-          </div>
-          <div className="budget-summary">
+      <div className="ledger-body-grid">
+        <section className="panel transactions-panel">
+          <div className="transactions-heading">
             <div>
-              <span className="muted small">예산 대비 지출</span>
-              <strong>
-                {ledger.budget ? percent : '—'}
-                <small>{ledger.budget ? '%' : ''}</small>
-              </strong>
+              <h2>
+                거래 내역 <span className="count">{filtered.length}</span>
+              </h2>
+              <p>
+                {ledger.kind === 'main'
+                  ? '연결된 목적 가계부의 내역도 함께 보여요.'
+                  : '이 가계부에서 작성한 내역이에요.'}
+              </p>
             </div>
-            <span className={`budget-message ${remaining < 0 ? 'over' : ''}`}>
-              {ledger.budget === 0
-                ? '예산이 설정되지 않았어요'
-                : remaining < 0
-                  ? `${won(-remaining)}원 초과했어요`
-                  : `${won(remaining)}원 더 사용할 수 있어요`}
+            <label className="search">
+              <Search size={16} />
+              <input
+                aria-label="내역 검색"
+                placeholder="내용, 분류, 태그 검색"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </label>
+          </div>
+          {ledger.kind === 'main' && (
+            <label className="ledger-scope-select small muted">
+              거래 목록의 가계부 범위
+              <select
+                aria-label="거래 목록의 가계부 범위"
+                value={sourceScope}
+                onChange={(e) => setSourceScope(e.target.value)}
+              >
+                <option value="all">메인과 연결된 가계부 전체</option>
+                <option value={ledger.id}>메인에 직접 기록한 내역</option>
+                {data.ledgers
+                  .filter((l) => l.parentId === ledger.id)
+                  .map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
+          <div className="transaction-tabs" role="group" aria-label="내역 종류 필터">
+            {(['all', ...Object.keys(labels)] as const).map((t) => (
+              <button
+                key={t}
+                aria-pressed={type === t}
+                className={type === t ? 'active' : ''}
+                onClick={() => setType(t)}
+              >
+                {t === 'all' ? '전체' : labels[t as TransactionType]}
+              </button>
+            ))}
+          </div>
+          <div className="table-scroll">
+            <table className="transactions">
+              <thead>
+                <tr>
+                  <th>날짜</th>
+                  <th>내용</th>
+                  <th>분류 · 태그</th>
+                  <th>결제수단</th>
+                  <th>귀속</th>
+                  <th className="money-cell">금액</th>
+                  <th>
+                    <span className="sr-only">관리</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((tx) => {
+                  const source = data.ledgers.find((l) => l.id === tx.ledgerId);
+                  const indirect = tx.ledgerId !== ledger.id;
+                  const editing = peers.find((p) => p.transactionId === tx.id);
+                  return (
+                    <tr
+                      key={tx.id}
+                      data-testid={`transaction-${tx.id}`}
+                      className={editing ? 'peer-editing' : ''}
+                    >
+                      <td className="date-cell">
+                        {Number(tx.date.slice(5, 7))}.{tx.date.slice(8)}
+                      </td>
+                      <td className="description-cell">
+                        <strong className="transaction-name">{tx.description}</strong>
+                        <div className="transaction-sub">
+                          {indirect && (
+                            <span className="source-label">
+                              {source?.icon} {source?.name}
+                            </span>
+                          )}
+                          {editing && (
+                            <span className="peer-label">
+                              {editing.name} · {fieldName(editing.field)} 편집 중
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="tags-cell">
+                        <span className="category-name">
+                          {categoryNames(data, tx).join(' · ') || '미분류'}
+                        </span>
+                        <div className="row-tags">
+                          {tx.tagIds.map((id) => {
+                            const tag = data.tags.find((t) => t.id === id);
+                            return (
+                              tag &&
+                              data.tagGroups.find((g) => g.id === tag.groupId)?.role !==
+                                'category' && (
+                                <span
+                                  key={id}
+                                  title={data.tagGroups.find((g) => g.id === tag.groupId)?.name}
+                                >
+                                  #{tag.name}
+                                </span>
+                              )
+                            );
+                          })}
+                        </div>
+                      </td>
+                      <td className="payment-cell">
+                        {data.paymentMethods.find((p) => p.id === tx.paymentMethodId)?.name}
+                      </td>
+                      <td className="owner-cell">
+                        <span className={`owner-badge ${tx.ownerId}`}>{ownerName(tx.ownerId)}</span>
+                      </td>
+                      <td className={`money-cell ${tx.type}`}>
+                        <strong>
+                          {tx.type === 'income' ? '+' : tx.type === 'expense' ? '−' : ''}
+                          {won(tx.amount)}
+                        </strong>
+                        <small>{labels[tx.type]}</small>
+                      </td>
+                      <td className="action-cell">
+                        {indirect ? (
+                          <button
+                            className="row-action"
+                            aria-label={`${tx.description} 원본 가계부 열기`}
+                            onClick={() => onNavigate(tx.ledgerId)}
+                          >
+                            원본
+                            <ArrowUpRight size={14} />
+                          </button>
+                        ) : (
+                          <button
+                            className="row-action"
+                            aria-label={`${tx.description} 수정`}
+                            onClick={() => onEdit(tx)}
+                          >
+                            수정
+                            <ChevronRight size={14} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {!filtered.length && (
+            <Empty>
+              {entries.length
+                ? '조건에 맞는 내역이 없어요. 검색어나 필터를 바꿔보세요.'
+                : '아직 내역이 없어요. 첫 기록을 남겨보세요.'}
+            </Empty>
+          )}
+          <div className="table-summary">
+            <span>현재 목록 기준</span>
+            <span>
+              수입 <b>{won(totals(filtered).income)}원</b>
+              <i />
+              지출 <b>{won(totals(filtered).expense)}원</b>
             </span>
           </div>
-          <div className="progress-track">
-            <div style={{ width: `${Math.min(percent, 100)}%` }} />
-          </div>
-          <div className="progress-labels">
-            <span>사용 {won(budgetExpense)}원</span>
-            <span>예산 {won(budget)}원</span>
-          </div>
-          {ledger.kind === 'main' ? (
-            <div className="linked-ledgers">
-              {data.ledgers
-                .filter((l) => l.parentId === ledger.id)
-                .map((l) => (
-                  <button key={l.id} onClick={() => onNavigate(l.id)}>
-                    <span>{l.icon}</span>
-                    <span>{l.name}</span>
-                    <span className="muted">연결됨</span>
-                    <ChevronRight size={15} />
-                  </button>
-                ))}
-              {!data.ledgers.some((l) => l.parentId === ledger.id) && (
-                <p className="small muted">목적 가계부를 연결하면 이곳에 함께 보여요.</p>
-              )}
-            </div>
-          ) : (
-            <div className="budget-note">
-              <Sparkles size={16} />
-              <span>이 예산은 가계부의 소비 기준이에요. 자산과 독립적으로 관리돼요.</span>
-            </div>
-          )}
         </section>
-        <section className="panel categories-panel">
-          <div className="panel-title">
-            <h2>어디에 썼을까요?</h2>
-            <span className="muted small">이번 달 지출</span>
-          </div>
-          <label className="small muted">
-            요약할 태그 유형
-            <select
-              aria-label="요약할 태그 유형"
-              value={categoryGroup?.id ?? ''}
-              onChange={(e) => setSummaryGroupId(e.target.value)}
-            >
-              {summaryGroups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <CategoryBars groups={groups} total={sum.expense} />
-          {categoryGroup?.selectionMode === 'multiple' && (
-            <p className="small muted">한 내역에 여러 옵션이 있으면 각 옵션에 포함돼요.</p>
-          )}
-        </section>
-      </div>
-      <section className="panel transactions-panel">
-        <div className="transactions-heading">
-          <div>
-            <h2>
-              거래 내역 <span className="count">{filtered.length}</span>
-            </h2>
-            <p>
-              {ledger.kind === 'main'
-                ? '연결된 목적 가계부의 내역도 함께 보여요.'
-                : '이 가계부에서 작성한 내역이에요.'}
-            </p>
-          </div>
-          <label className="search">
-            <Search size={16} />
-            <input
-              aria-label="내역 검색"
-              placeholder="내용, 분류, 태그 검색"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </label>
-        </div>
-        {ledger.kind === 'main' && (
-          <label className="small muted">
-            거래 목록의 가계부 범위
-            <select
-              aria-label="거래 목록의 가계부 범위"
-              value={sourceScope}
-              onChange={(e) => setSourceScope(e.target.value)}
-            >
-              <option value="all">메인과 연결된 가계부 전체</option>
-              <option value={ledger.id}>메인에 직접 기록한 내역</option>
-              {data.ledgers
-                .filter((l) => l.parentId === ledger.id)
-                .map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
+        <div className="overview-grid">
+          <section className="panel budget-panel">
+            <div className="panel-title">
+              <h2>{ledger.kind === 'main' ? '예산 현황' : '목적 가계부 예산'}</h2>
+              <span className="pill">
+                {ledger.kind === 'main' ? `${Number(month.slice(5))}월` : '전체 기간'}
+              </span>
+            </div>
+            <div className="budget-summary">
+              <div>
+                <span className="muted small">예산 대비 지출</span>
+                <strong>
+                  {budget ? percent : '—'}
+                  <small>{budget ? '%' : ''}</small>
+                </strong>
+              </div>
+              <span className={`budget-message ${remaining < 0 ? 'over' : ''}`}>
+                {budget === 0
+                  ? '예산이 설정되지 않았어요'
+                  : remaining < 0
+                    ? `${won(-remaining)}원 초과했어요`
+                    : `${won(remaining)}원 더 사용할 수 있어요`}
+              </span>
+            </div>
+            <div className="progress-track">
+              <div style={{ width: `${Math.min(percent, 100)}%` }} />
+            </div>
+            <div className="progress-labels">
+              <span>사용 {won(budgetExpense)}원</span>
+              <span>예산 {won(budget)}원</span>
+            </div>
+            {ledger.kind === 'main' ? (
+              <div className="linked-ledgers">
+                {data.ledgers
+                  .filter((l) => l.parentId === ledger.id)
+                  .map((l) => (
+                    <button key={l.id} onClick={() => onNavigate(l.id)}>
+                      <span>{l.icon}</span>
+                      <span>{l.name}</span>
+                      <span className="muted">연결됨</span>
+                      <ChevronRight size={15} />
+                    </button>
+                  ))}
+                {!data.ledgers.some((l) => l.parentId === ledger.id) && (
+                  <p className="small muted">목적 가계부를 연결하면 이곳에 함께 보여요.</p>
+                )}
+              </div>
+            ) : (
+              <div className="budget-note">
+                <Sparkles size={16} />
+                <span>이 예산은 가계부의 소비 기준이에요. 자산과 독립적으로 관리돼요.</span>
+              </div>
+            )}
+          </section>
+          <section className="panel categories-panel">
+            <div className="panel-title">
+              <h2>많이 쓴 곳</h2>
+              <span className="muted small">이번 달 지출</span>
+            </div>
+            <label className="ledger-category-select small muted">
+              요약할 태그 유형
+              <select
+                aria-label="요약할 태그 유형"
+                value={categoryGroup?.id ?? ''}
+                onChange={(e) => setSummaryGroupId(e.target.value)}
+              >
+                {summaryGroups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
                   </option>
                 ))}
-            </select>
-          </label>
-        )}
-        <div className="transaction-tabs" role="group" aria-label="내역 종류 필터">
-          {(['all', ...Object.keys(labels)] as const).map((t) => (
-            <button
-              key={t}
-              aria-pressed={type === t}
-              className={type === t ? 'active' : ''}
-              onClick={() => setType(t)}
-            >
-              {t === 'all' ? '전체' : labels[t as TransactionType]}
-            </button>
-          ))}
+              </select>
+            </label>
+            <CategoryBars groups={groups} total={sum.expense} />
+            {categoryGroup?.selectionMode === 'multiple' && (
+              <p className="small muted">한 내역에 여러 옵션이 있으면 각 옵션에 포함돼요.</p>
+            )}
+          </section>
         </div>
-        <div className="table-scroll">
-          <table className="transactions">
-            <thead>
-              <tr>
-                <th>날짜</th>
-                <th>내용</th>
-                <th>분류 · 태그</th>
-                <th>결제수단</th>
-                <th>귀속</th>
-                <th className="money-cell">금액</th>
-                <th>
-                  <span className="sr-only">관리</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((tx) => {
-                const source = data.ledgers.find((l) => l.id === tx.ledgerId);
-                const indirect = tx.ledgerId !== ledger.id;
-                const editing = peers.find((p) => p.transactionId === tx.id);
-                return (
-                  <tr
-                    key={tx.id}
-                    data-testid={`transaction-${tx.id}`}
-                    className={editing ? 'peer-editing' : ''}
-                  >
-                    <td className="date-cell">
-                      {Number(tx.date.slice(5, 7))}.{tx.date.slice(8)}
-                    </td>
-                    <td>
-                      <strong className="transaction-name">{tx.description}</strong>
-                      <div className="transaction-sub">
-                        {indirect && (
-                          <span className="source-label">
-                            {source?.icon} {source?.name}
-                          </span>
-                        )}
-                        {editing && (
-                          <span className="peer-label">
-                            {editing.name} · {fieldName(editing.field)} 편집 중
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <span className="category-name">
-                        {categoryNames(data, tx).join(' · ') || '미분류'}
-                      </span>
-                      <div className="row-tags">
-                        {tx.tagIds.map((id) => {
-                          const tag = data.tags.find((t) => t.id === id);
-                          return (
-                            tag &&
-                            data.tagGroups.find((g) => g.id === tag.groupId)?.role !==
-                              'category' && (
-                              <span
-                                key={id}
-                                title={data.tagGroups.find((g) => g.id === tag.groupId)?.name}
-                              >
-                                #{tag.name}
-                              </span>
-                            )
-                          );
-                        })}
-                      </div>
-                    </td>
-                    <td className="payment-cell">
-                      {data.paymentMethods.find((p) => p.id === tx.paymentMethodId)?.name}
-                    </td>
-                    <td>
-                      <span className={`owner-badge ${tx.ownerId}`}>{ownerName(tx.ownerId)}</span>
-                    </td>
-                    <td className={`money-cell ${tx.type}`}>
-                      <strong>
-                        {tx.type === 'income' ? '+' : tx.type === 'expense' ? '−' : ''}
-                        {won(tx.amount)}
-                      </strong>
-                      <small>{labels[tx.type]}</small>
-                    </td>
-                    <td>
-                      {indirect ? (
-                        <button
-                          className="row-action"
-                          aria-label={`${tx.description} 원본 가계부 열기`}
-                          onClick={() => onNavigate(tx.ledgerId)}
-                        >
-                          원본
-                          <ArrowUpRight size={14} />
-                        </button>
-                      ) : (
-                        <button
-                          className="row-action"
-                          aria-label={`${tx.description} 수정`}
-                          onClick={() => onEdit(tx)}
-                        >
-                          수정
-                          <ChevronRight size={14} />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {!filtered.length && <Empty>아직 내역이 없어요. 첫 기록을 남겨보세요.</Empty>}
-        <div className="table-summary">
-          <span>현재 목록 기준</span>
-          <span>
-            수입 <b>{won(totals(filtered).income)}원</b>
-            <i />
-            지출 <b>{won(totals(filtered).expense)}원</b>
-          </span>
-        </div>
-      </section>
+      </div>
     </>
   );
 }

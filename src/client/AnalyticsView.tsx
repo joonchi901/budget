@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { ArrowRight, ChevronDown, Download, SlidersHorizontal, X } from 'lucide-react';
 import type { Bootstrap, Transaction } from '../shared/types';
 import { accountingPeriod } from '../shared/planning';
 import {
@@ -40,6 +41,7 @@ export default function AnalyticsView({
   onEdit?(tx: Transaction): void;
 }) {
   const flowCaptionId = useId();
+  const [section, setSection] = useState<'flow' | 'category' | 'sources' | 'transactions'>('flow');
   const [mode, setMode] = useState('month');
   const [start, setStart] = useState(`${month.slice(0, 4)}-01-01`);
   const [end, setEnd] = useState(`${month.slice(0, 4)}-12-31`);
@@ -114,6 +116,54 @@ export default function AnalyticsView({
   const householdIncome = totals(
     data.transactions.filter((t) => t.date >= period.startDate && t.date <= period.endDate),
   ).income;
+  const activeFilters: Array<{ id: string; label: string; remove(): void }> = [
+    ...(sourceId
+      ? [
+          {
+            id: 'source',
+            label: `출처 ${sourceLedgers.find((item) => item.id === sourceId)?.name ?? sourceId}`,
+            remove: () => setSourceLedgerId(''),
+          },
+        ]
+      : []),
+    ...(owner
+      ? [{ id: 'owner', label: `귀속 ${ownerName(owner)}`, remove: () => setOwner('') }]
+      : []),
+    ...(payment
+      ? [
+          {
+            id: 'payment',
+            label: data.paymentMethods.find((item) => item.id === payment)?.name ?? '결제수단',
+            remove: () => setPayment(''),
+          },
+        ]
+      : []),
+    ...(asset
+      ? [
+          {
+            id: 'asset',
+            label: data.assets.find((item) => item.id === asset)?.name ?? '연결 자산',
+            remove: () => setAsset(''),
+          },
+        ]
+      : []),
+    ...(type
+      ? [{ id: 'type', label: type === 'income' ? '수입만' : '지출만', remove: () => setType('') }]
+      : []),
+    ...selected.map((id) => ({
+      id: `tag:${id}`,
+      label: `# ${analysisTagName(data, id)}`,
+      remove: () => setSelected((current) => current.filter((value) => value !== id)),
+    })),
+  ];
+  function resetFilters() {
+    setSourceLedgerId('');
+    setOwner('');
+    setPayment('');
+    setAsset('');
+    setType('');
+    setSelected([]);
+  }
   function amountButton(value: number, title: string, transactions: Transaction[]) {
     return (
       <button
@@ -207,10 +257,81 @@ export default function AnalyticsView({
     );
   }
   return (
-    <div className="management-stack">
-      <section className="panel management-panel">
-        <h2>보고 싶은 기록을 골라보세요</h2>
-        <div className="management-filters">
+    <div className="management-stack analysis-page">
+      <section className="analysis-overview" aria-label="선택 기간 요약">
+        <div className="analysis-overview-heading">
+          <div>
+            <p className="analysis-eyebrow">
+              {ledger?.name} ·{' '}
+              {mode === 'month' ? month : mode === 'year' ? `${year}년` : '선택 기간'}
+            </p>
+            <h2>우리의 돈은 어디로 갔을까요?</h2>
+            <p className="analysis-period">
+              {period.startDate} ~ {period.endDate}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="analysis-export"
+            aria-label="CSV 내보내기"
+            onClick={() =>
+              downloadFile(
+                `가계부_${period.startDate}_${period.endDate}.csv`,
+                transactionsCsv(data, rows),
+              )
+            }
+          >
+            <Download size={17} aria-hidden="true" />
+            CSV 내보내기
+          </button>
+        </div>
+        <div className={`analysis-summary-cards${asset ? ' has-asset' : ''}`}>
+          <Stat
+            label="선택한 기록의 지출"
+            amount={sum.expense}
+            hint="복수 태그도 한 번만 합산"
+            accent
+          />
+          <Stat
+            label="선택한 기록의 수입"
+            amount={sum.income}
+            hint={`${rows.length}건의 고유 기록`}
+          />
+          <Stat label="기간 순저축" amount={savings} hint="가구 전체 자산 변동 기준" />
+          {asset && (
+            <Stat
+              label="연결 자산 반영액"
+              amount={
+                asset
+                  ? rows.reduce(
+                      (s, t) =>
+                        s +
+                        t.allocations
+                          .filter((a) => a.assetId === asset)
+                          .reduce((n, a) => n + (t.type === 'income' ? a.amount : -a.amount), 0),
+                      0,
+                    )
+                  : 0
+              }
+              hint={asset ? '해당 자산 배분액만 합산' : '자산을 선택하면 표시'}
+            />
+          )}
+        </div>
+        <div className="analysis-overview-foot">
+          <span>
+            가구 저축률{' '}
+            <strong>
+              {householdIncome ? `${((savings / householdIncome) * 100).toFixed(1)}%` : '수입 없음'}
+            </strong>
+            <span className="analysis-foot-separator">·</span>거래 필터와 별도로 집계해요
+          </span>
+          <button type="button" onClick={() => setSection('transactions')}>
+            선택한 거래 {rows.length}건<ArrowRight size={16} aria-hidden="true" />
+          </button>
+        </div>
+      </section>
+      <section className="panel management-panel analysis-controls" aria-label="분석 조회 조건">
+        <div className="management-filters analysis-basic-filters">
           <label>
             가계부
             <select
@@ -228,21 +349,6 @@ export default function AnalyticsView({
               ))}
             </select>
           </label>
-          {ledger?.kind === 'main' && (
-            <label>
-              거래 출처
-              <select value={sourceId} onChange={(event) => setSourceLedgerId(event.target.value)}>
-                <option value="">메인과 연결 가계부 전체</option>
-                {sourceLedgers.map((source) => (
-                  <option key={source.id} value={source.id}>
-                    {source.name}
-                    {source.id === ledgerId ? ' · 직접 기록' : ''}
-                    {source.archived ? ' (보관)' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           <label>
             조회 범위
             <select value={mode} onChange={(e) => setMode(e.target.value)}>
@@ -263,559 +369,622 @@ export default function AnalyticsView({
               </label>
             </>
           )}
-          <label>
-            귀속
-            <select value={owner} onChange={(e) => setOwner(e.target.value)}>
-              <option value="">전체</option>
-              {['u1', 'u2', 'shared'].map((id) => (
-                <option key={id} value={id}>
-                  {ownerName(id)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            결제수단
-            <select value={payment} onChange={(e) => setPayment(e.target.value)}>
-              <option value="">전체</option>
-              {data.paymentMethods.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            연결 자산
-            <select value={asset} onChange={(e) => setAsset(e.target.value)}>
-              <option value="">전체</option>
-              {data.assets.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            거래 종류
-            <select value={type} onChange={(e) => setType(e.target.value)}>
-              <option value="">수입과 지출</option>
-              <option value="income">수입</option>
-              <option value="expense">지출</option>
-            </select>
-          </label>
         </div>
-        <p className="small muted">
-          {period.startDate} ~ {period.endDate} · 같은 유형은 OR, 서로 다른 유형은 AND로 조회해요.
-        </p>
         {!valid && (
-          <p role="alert">시작일과 종료일을 확인해 주세요. 최대 조회 기간은 10년이에요.</p>
+          <p className="analysis-filter-error" role="alert">
+            시작일과 종료일을 확인해 주세요. 최대 조회 기간은 10년이에요.
+          </p>
         )}
-        <div className="management-tags">
-          {groups.map((g) => (
-            <fieldset key={g.id}>
-              <legend>{g.name}</legend>
-              {data.tags
-                .filter((t) => t.groupId === g.id)
-                .map((t) => (
-                  <button
-                    type="button"
-                    key={t.id}
-                    className={`tag-filter ${selected.includes(t.id) ? 'active' : ''}`}
-                    aria-pressed={selected.includes(t.id)}
-                    onClick={() =>
-                      setSelected((prev) =>
-                        prev.includes(t.id) ? prev.filter((id) => id !== t.id) : [...prev, t.id],
-                      )
-                    }
-                  >
-                    # {t.name}
-                    {t.archived ? ' (보관)' : ''}
-                  </button>
+        <details className="analysis-extra-filters">
+          <summary>
+            <span>
+              <SlidersHorizontal size={18} aria-hidden="true" />
+              추가 필터{activeFilters.length > 0 && <b>{activeFilters.length}</b>}
+            </span>
+            <ChevronDown size={18} aria-hidden="true" />
+          </summary>
+          <div className="management-filters">
+            {ledger?.kind === 'main' && (
+              <label>
+                거래 출처
+                <select
+                  value={sourceId}
+                  onChange={(event) => setSourceLedgerId(event.target.value)}
+                >
+                  <option value="">메인과 연결 가계부 전체</option>
+                  {sourceLedgers.map((source) => (
+                    <option key={source.id} value={source.id}>
+                      {source.name}
+                      {source.id === ledgerId ? ' · 직접 기록' : ''}
+                      {source.archived ? ' (보관)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label>
+              귀속
+              <select value={owner} onChange={(e) => setOwner(e.target.value)}>
+                <option value="">전체</option>
+                {['u1', 'u2', 'shared'].map((id) => (
+                  <option key={id} value={id}>
+                    {ownerName(id)}
+                  </option>
                 ))}
-            </fieldset>
-          ))}
-        </div>
-        <button className="text-button" onClick={() => setSelected([])}>
-          태그 선택 초기화
-        </button>
-      </section>
-      <section className="stats-grid">
-        <Stat
-          label="선택한 기록의 수입"
-          amount={sum.income}
-          hint={`${rows.length}건의 고유 기록`}
-        />
-        <Stat
-          label="선택한 기록의 지출"
-          amount={sum.expense}
-          hint="복수 태그도 한 번만 합산"
-          accent
-        />
-        <Stat label="기간 순저축" amount={savings} hint="가구 전체 자산 변동 기준" />
-        <Stat
-          label="연결 자산 반영액"
-          amount={
-            asset
-              ? rows.reduce(
-                  (s, t) =>
-                    s +
-                    t.allocations
-                      .filter((a) => a.assetId === asset)
-                      .reduce((n, a) => n + (t.type === 'income' ? a.amount : -a.amount), 0),
-                  0,
-                )
-              : 0
-          }
-          hint={asset ? '해당 자산 배분액만 합산' : '자산을 선택하면 표시'}
-        />
-      </section>
-      <p className="small muted">
-        가구 전체 저축률:{' '}
-        {householdIncome
-          ? `${((savings / householdIncome) * 100).toFixed(1)}%`
-          : '수입이 없어 계산하지 않음'}{' '}
-        · 저축 통계는 거래 필터와 별도로 가구 전체를 집계해요.
-      </p>
-      <section className="panel management-panel">
-        <div className="section-heading">
-          <h2>유형별 전체 내역</h2>
-          <label>
-            집계할 태그 유형
-            <select value={groupId} onChange={(e) => setGroup(e.target.value)}>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <p className="small muted">
-          복수 옵션의 행별 합은 고유 거래 합계보다 클 수 있어요. 금액을 누르면 거래를 확인할 수
-          있어요.
-        </p>
-        <div className="management-table">
-          <table>
-            <thead>
-              <tr>
-                <th>항목</th>
-                <th>건수</th>
-                <th>수입</th>
-                <th>지출</th>
-              </tr>
-            </thead>
-            <tbody>
-              {breakdown.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.name}</td>
-                  <td>{r.count}</td>
-                  <td>
-                    <button
-                      className="text-button"
-                      onClick={() =>
-                        setDetail({
-                          title: `${r.name} 수입`,
-                          rows: rows.filter(
-                            (t) =>
-                              t.type === 'income' &&
-                              (r.id
-                                ? t.tagIds.includes(r.id)
-                                : !data.tags.some(
-                                    (tag) => tag.groupId === groupId && t.tagIds.includes(tag.id),
-                                  )),
-                          ),
-                        })
-                      }
-                    >
-                      {won(r.income)}
-                    </button>
-                  </td>
-                  <td>
-                    <button
-                      className="text-button"
-                      onClick={() =>
-                        setDetail({
-                          title: `${r.name} 지출`,
-                          rows: rows.filter(
-                            (t) =>
-                              t.type === 'expense' &&
-                              (r.id
-                                ? t.tagIds.includes(r.id)
-                                : !data.tags.some(
-                                    (tag) => tag.groupId === groupId && t.tagIds.includes(tag.id),
-                                  )),
-                          ),
-                        })
-                      }
-                    >
-                      {won(r.expense)}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      <section className="panel management-panel">
-        <h2>가계부별 사용액과 비중</h2>
-        <p className="small muted">
-          {period.startDate} ~ {period.endDate} · 선택한 기록의 원본 가계부별 지출 비중이에요.
-          연결된 보관 가계부도 포함해요.
-        </p>
-        <div className="management-table analysis-ledgers">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">원본 가계부</th>
-                <th scope="col">건수</th>
-                <th scope="col">수입</th>
-                <th scope="col">지출</th>
-                <th scope="col">지출 비중</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ledgerBreakdown.map((item) => {
-                const matching = rows.filter((tx) => tx.ledgerId === item.id);
-                return (
-                  <tr key={item.id}>
-                    <th scope="row">{item.name}</th>
-                    <td>{item.count}건</td>
-                    <td>
-                      {amountButton(
-                        item.income,
-                        `${item.name} 수입`,
-                        matching.filter((tx) => tx.type === 'income'),
-                      )}
-                    </td>
-                    <td>
-                      {amountButton(
-                        item.expense,
-                        `${item.name} 지출`,
-                        matching.filter((tx) => tx.type === 'expense'),
-                      )}
-                    </td>
-                    <td>
-                      {item.expenseShare === null ? (
-                        '—'
-                      ) : (
-                        <>
-                          <span>{(item.expenseShare * 100).toFixed(1)}%</span>
-                          <span className="analysis-share-track" aria-hidden="true">
-                            <span style={{ width: `${item.expenseShare * 100}%` }} />
-                          </span>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr>
-                <th scope="row">전체 고유 거래</th>
-                <td>{rows.length}건</td>
-                <td>{won(sum.income)}</td>
-                <td>{won(sum.expense)}</td>
-                <td>{sum.expense ? '100.0%' : '—'}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </section>
-      <section className="panel management-panel">
-        <h2>결제수단별 내역</h2>
-        <p className="small muted">
-          {period.startDate} ~ {period.endDate} · 선택한 조회 조건을 적용해요. 금액과 건수를 누르면
-          거래를 확인할 수 있어요.
-        </p>
-        <div className="management-table analysis-payments">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">결제수단</th>
-                <th scope="col">건수</th>
-                <th scope="col">수입</th>
-                <th scope="col">지출</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.map((paymentRow) => {
-                const matching = rows.filter((tx) => tx.paymentMethodId === paymentRow.id);
-                return (
-                  <tr key={paymentRow.id}>
-                    <th scope="row">{paymentRow.name}</th>
-                    <td>
+              </select>
+            </label>
+            <label>
+              결제수단
+              <select value={payment} onChange={(e) => setPayment(e.target.value)}>
+                <option value="">전체</option>
+                {data.paymentMethods.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              연결 자산
+              <select value={asset} onChange={(e) => setAsset(e.target.value)}>
+                <option value="">전체</option>
+                {data.assets.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              거래 종류
+              <select value={type} onChange={(e) => setType(e.target.value)}>
+                <option value="">수입과 지출</option>
+                <option value="income">수입</option>
+                <option value="expense">지출</option>
+              </select>
+            </label>
+          </div>
+          <div className="management-tags">
+            {groups.map((g) => (
+              <fieldset key={g.id}>
+                <legend>{g.name}</legend>
+                <div>
+                  {data.tags
+                    .filter((t) => t.groupId === g.id)
+                    .map((t) => (
                       <button
                         type="button"
-                        className="text-button analysis-amount"
-                        aria-label={`${paymentRow.name} ${paymentRow.count}건 거래 보기`}
+                        key={t.id}
+                        className={`tag-filter ${selected.includes(t.id) ? 'active' : ''}`}
+                        aria-pressed={selected.includes(t.id)}
                         onClick={() =>
-                          setDetail({ title: `${paymentRow.name} 전체 거래`, rows: matching })
+                          setSelected((prev) =>
+                            prev.includes(t.id)
+                              ? prev.filter((id) => id !== t.id)
+                              : [...prev, t.id],
+                          )
                         }
                       >
-                        {paymentRow.count}건
+                        # {analysisTagName(data, t.id)}
+                        {t.archived ? ' (보관)' : ''}
                       </button>
-                    </td>
-                    <td>
-                      {amountButton(
-                        paymentRow.income,
-                        `${paymentRow.name} 수입`,
-                        matching.filter((tx) => tx.type === 'income'),
-                      )}
-                    </td>
-                    <td>
-                      {amountButton(
-                        paymentRow.expense,
-                        `${paymentRow.name} 지출`,
-                        matching.filter((tx) => tx.type === 'expense'),
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr>
-                <th scope="row">전체 고유 거래</th>
-                <td>{rows.length}건</td>
-                <td>{won(sum.income)}</td>
-                <td>{won(sum.expense)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </section>
-      <section className="panel management-panel">
-        <div className="section-heading">
-          <h2>{year}년 분류별 월간 상세</h2>
-          <label>
-            연간 상세 금액
-            <select
-              value={metric}
-              disabled={Boolean(type)}
-              onChange={(event) => setAnnualMetric(event.target.value as 'income' | 'expense')}
-            >
-              <option value="expense">지출</option>
-              <option value="income">수입</option>
-            </select>
-          </label>
-        </div>
-        <p className="small muted">
-          {groups.find((item) => item.id === groupId)?.name || '미분류'} ·{' '}
-          {matrix.periods[0].startDate} ~ {matrix.periods[11].endDate}. 위의 조회 범위와 별도로 선택
-          연도 전체를 비교하며 나머지 조회 조건은 동일하게 적용해요.
-        </p>
-        <p className="small muted">
-          한 거래에 복수 옵션이 있으면 각 옵션에 표시해요. 마지막 전체 합계에서는 한 번만 계산해요.
-          경과월 평균은 {today}까지의 금액을 시작한 {matrix.elapsedPeriods}개 회계기간으로 나누며
-          진행 중인 기간도 포함해요.
-        </p>
-        <div
-          className="management-table analysis-matrix"
-          tabIndex={0}
-          role="region"
-          aria-label={`${year}년 분류별 ${metricName} 월간 상세표`}
-        >
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">항목 · {metricName}</th>
-                {matrix.periods.map((column) => (
-                  <th
-                    scope="col"
-                    key={column.month}
-                    title={`${column.startDate} ~ ${column.endDate}`}
-                  >
-                    {Number(column.month.slice(5))}월
-                  </th>
-                ))}
-                <th scope="col">연간 합계</th>
-                <th scope="col">경과월 평균</th>
-              </tr>
-            </thead>
-            <tbody>
-              {matrix.groups.map((row) => (
-                <tr key={row.id}>
-                  <th scope="row">{row.name}</th>
-                  {annualCells(row.id, row.name, row)}
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <th scope="row">전체 고유 거래</th>
-                {annualCells(null, '전체', matrix.overall)}
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        <p className="small muted">
-          표를 가로로 움직이면 12개월 전체와 연간 합계·경과월 평균을 볼 수 있어요.
-        </p>
-      </section>
-      <section className="panel management-panel">
-        <h2>{year}년 월별 흐름</h2>
-        <p className="small muted">
-          {matrix.periods[0].startDate} ~ {matrix.periods[11].endDate} · 현재까지 시작한{' '}
-          {matrix.elapsedPeriods}개 집계 기간의 월평균 지출:{' '}
-          {matrix.overall.average.expense === null
-            ? '—'
-            : `${won(Math.round(matrix.overall.average.expense))}원`}
-        </p>
-        <figure className="analysis-flow" aria-labelledby={flowCaptionId}>
-          <figcaption id={flowCaptionId} className="small muted">
-            수입·지출은 선택한 가계부와 조회 조건을 적용해요. 가구 순저축은 거래 필터와 별도로 공동
-            자산 전체를 집계하며 인출이 더 많으면 0선 아래에 표시해요. 같은 높이는 같은 금액이에요.
-            월을 누르면 해당 기간의 수입·지출 거래가 열려요.
-          </figcaption>
-          <ul className="analysis-flow-legend" aria-label="차트 범례">
-            {flowMetrics.map((item) => (
-              <li key={item.key}>
-                <span className={`analysis-flow-swatch ${item.key}`} aria-hidden="true" />
-                {item.label}
-              </li>
+                    ))}
+                </div>
+              </fieldset>
             ))}
-          </ul>
-          <div
-            className="analysis-flow-scroll"
-            role="group"
-            aria-label={`${year}년 수입 지출 가구 순저축 추이`}
-          >
-            <div className="analysis-flow-grid">
-              {annual.map((row) => {
-                const summary = `${row.month} 수입 ${won(row.income)}원, 지출 ${won(row.expense)}원, 가구 순저축 ${won(row.savings)}원`;
-                return (
-                  <button
-                    type="button"
-                    key={row.month}
-                    className="analysis-flow-month"
-                    aria-label={`${summary}. 이 기간 거래 보기`}
-                    title={summary}
-                    onClick={() =>
-                      setDetail({
-                        title: row.month,
-                        rows: analysisTransactions(data, {
-                          ...filter,
-                          startDate: row.startDate,
-                          endDate: row.endDate,
-                        }),
-                      })
-                    }
-                  >
-                    <span
-                      className="analysis-flow-bars"
-                      style={{ height: flowHeight }}
-                      aria-hidden="true"
-                    >
-                      <span className="analysis-flow-axis" style={{ top: flowBand }} />
-                      {flowMetrics.map((item, index) => {
-                        const value = row[item.key],
-                          height = (Math.abs(value) / flowMax) * flowBand;
-                        return (
-                          <span
-                            key={item.key}
-                            className={`analysis-flow-bar ${item.key}${value < 0 ? ' negative' : ''}`}
-                            data-metric={item.key}
-                            data-value={value}
-                            style={{
-                              height,
-                              top: value < 0 ? flowBand : flowBand - height,
-                              left: `${10 + index * 28}%`,
-                            }}
-                          />
-                        );
-                      })}
-                    </span>
-                    <small>{Number(row.month.slice(5))}월</small>
-                  </button>
-                );
-              })}
-            </div>
           </div>
-          <p className="small muted">
-            각 월의 정확한 금액은 아래 표에서 확인할 수 있어요. 좁은 화면에서는 차트를 가로로 움직여
-            보세요.
-          </p>
-        </figure>
-        <div className="management-table">
-          <table>
-            <thead>
-              <tr>
-                <th>월</th>
-                <th>수입</th>
-                <th>지출</th>
-                <th>수입−지출</th>
-                <th>가구 순저축</th>
-                <th>가구 저축률</th>
-              </tr>
-            </thead>
-            <tbody>
-              {annual.map((r) => (
-                <tr key={r.month}>
-                  <td>
-                    {r.month}
-                    <small>
-                      {r.startDate} ~ {r.endDate}
-                    </small>
-                  </td>
-                  <td>{won(r.income)}</td>
-                  <td>{won(r.expense)}</td>
-                  <td>{won(r.income - r.expense)}</td>
-                  <td>{won(r.savings)}</td>
-                  <td>{r.savingsRate === null ? '—' : `${(r.savingsRate * 100).toFixed(1)}%`}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      <section className="panel management-panel">
-        <h2>일별 지출과 무지출 기록</h2>
-        <p className="small muted">
-          가계부 설정의 고정지출 기준 태그를 제외해요. 미래 날짜는 무지출로 세지 않아요. 조회 조건
-          적용 후 {daily.filter((d) => d.date <= today && d.variableExpense === 0).length}일 무지출.
-        </p>
-        {daily.length <= 62 ? (
-          <div className="management-calendar">
-            {daily.map((d) => (
+          <div className="analysis-filter-footer">
+            <span>같은 유형은 하나라도, 다른 유형은 모두 일치하는 기록을 찾아요.</span>
+            <button type="button" className="text-button" onClick={() => setSelected([])}>
+              태그 선택 초기화
+            </button>
+          </div>
+        </details>
+        {activeFilters.length > 0 && (
+          <div className="analysis-active-filters" aria-label="적용 중인 필터">
+            {activeFilters.map((item) => (
               <button
-                className={d.variableExpense === 0 && d.date <= today ? 'no-spend' : ''}
-                key={d.date}
-                onClick={() =>
-                  setDetail({ title: d.date, rows: rows.filter((t) => t.date === d.date) })
-                }
+                type="button"
+                key={item.id}
+                onClick={item.remove}
+                aria-label={`${item.label} 필터 해제`}
               >
-                <strong>{d.date.slice(5)}</strong>
-                <span>
-                  {d.expense ? `${won(d.expense)}원` : d.date > today ? '예정' : '무지출'}
-                </span>
-                <small>누적 {won(d.cumulative)}</small>
+                {item.label}
+                <X size={13} aria-hidden="true" />
               </button>
             ))}
+            <button type="button" className="analysis-reset" onClick={resetFilters}>
+              모두 초기화
+            </button>
           </div>
-        ) : (
-          <p>월별로 조회하면 일별 달력이 보여요.</p>
         )}
       </section>
-      <section className="panel management-panel">
-        <div className="section-heading">
-          <h2>선택한 거래 {rows.length}건</h2>
+      <div className="analysis-section-nav" role="group" aria-label="분석 보기">
+        {(
+          [
+            { id: 'flow', label: '소비 흐름' },
+            { id: 'category', label: '분류별' },
+            { id: 'sources', label: '가계부·결제수단' },
+            { id: 'transactions', label: '거래 내역' },
+          ] as const
+        ).map((item) => (
           <button
-            className="secondary"
-            onClick={() =>
-              downloadFile(
-                `가계부_${period.startDate}_${period.endDate}.csv`,
-                transactionsCsv(data, rows),
-              )
-            }
+            type="button"
+            key={item.id}
+            aria-pressed={section === item.id}
+            onClick={() => setSection(item.id)}
           >
-            CSV 내보내기
+            {item.label}
           </button>
-        </div>
-        {table(rows)}
-      </section>
+        ))}
+      </div>
+      {section === 'flow' && (
+        <>
+          <section className="panel management-panel">
+            <h2>{year}년 월별 흐름</h2>
+            <p className="small muted">
+              {matrix.periods[0].startDate} ~ {matrix.periods[11].endDate} · 현재까지 시작한{' '}
+              {matrix.elapsedPeriods}개 집계 기간의 월평균 지출:{' '}
+              {matrix.overall.average.expense === null
+                ? '—'
+                : `${won(Math.round(matrix.overall.average.expense))}원`}
+            </p>
+            <figure className="analysis-flow" aria-labelledby={flowCaptionId}>
+              <figcaption id={flowCaptionId} className="small muted">
+                수입·지출은 조회 조건을, 순저축은 가구 전체를 기준으로 해요. 음수는 0선 아래에
+                표시해요.
+              </figcaption>
+              <ul className="analysis-flow-legend" aria-label="차트 범례">
+                {flowMetrics.map((item) => (
+                  <li key={item.key}>
+                    <span className={`analysis-flow-swatch ${item.key}`} aria-hidden="true" />
+                    {item.label}
+                  </li>
+                ))}
+              </ul>
+              <div
+                className="analysis-flow-scroll"
+                role="group"
+                aria-label={`${year}년 수입 지출 가구 순저축 추이`}
+              >
+                <div className="analysis-flow-grid">
+                  {annual.map((row) => {
+                    const summary = `${row.month} 수입 ${won(row.income)}원, 지출 ${won(row.expense)}원, 가구 순저축 ${won(row.savings)}원`;
+                    return (
+                      <button
+                        type="button"
+                        key={row.month}
+                        className="analysis-flow-month"
+                        aria-label={`${summary}. 이 기간 거래 보기`}
+                        title={summary}
+                        onClick={() =>
+                          setDetail({
+                            title: row.month,
+                            rows: analysisTransactions(data, {
+                              ...filter,
+                              startDate: row.startDate,
+                              endDate: row.endDate,
+                            }),
+                          })
+                        }
+                      >
+                        <span
+                          className="analysis-flow-bars"
+                          style={{ height: flowHeight }}
+                          aria-hidden="true"
+                        >
+                          <span className="analysis-flow-axis" style={{ top: flowBand }} />
+                          {flowMetrics.map((item, index) => {
+                            const value = row[item.key],
+                              height = (Math.abs(value) / flowMax) * flowBand;
+                            return (
+                              <span
+                                key={item.key}
+                                className={`analysis-flow-bar ${item.key}${value < 0 ? ' negative' : ''}`}
+                                data-metric={item.key}
+                                data-value={value}
+                                style={{
+                                  height,
+                                  top: value < 0 ? flowBand : flowBand - height,
+                                  left: `${10 + index * 28}%`,
+                                }}
+                              />
+                            );
+                          })}
+                        </span>
+                        <small>{Number(row.month.slice(5))}월</small>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <p className="small muted">
+                월을 누르면 거래를 볼 수 있어요. 좁은 화면에서는 옆으로 움직여 보세요.
+              </p>
+            </figure>
+            <details className="analysis-expander-inline">
+              <summary>
+                월별 금액 자세히 보기
+                <ChevronDown size={18} aria-hidden="true" />
+              </summary>
+              <div className="management-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>월</th>
+                      <th>수입</th>
+                      <th>지출</th>
+                      <th>수입−지출</th>
+                      <th>가구 순저축</th>
+                      <th>가구 저축률</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {annual.map((r) => (
+                      <tr key={r.month}>
+                        <td>
+                          {r.month}
+                          <small>
+                            {r.startDate} ~ {r.endDate}
+                          </small>
+                        </td>
+                        <td>{won(r.income)}</td>
+                        <td>{won(r.expense)}</td>
+                        <td>{won(r.income - r.expense)}</td>
+                        <td>{won(r.savings)}</td>
+                        <td>
+                          {r.savingsRate === null ? '—' : `${(r.savingsRate * 100).toFixed(1)}%`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          </section>
+          <section className="panel management-panel">
+            <h2>하루하루 소비 기록</h2>
+            <p className="small muted">
+              가계부 설정의 고정지출 기준 태그를 제외해요. 미래 날짜는 무지출로 세지 않아요. 조회
+              조건 적용 후 {daily.filter((d) => d.date <= today && d.variableExpense === 0).length}
+              일 무지출.
+            </p>
+            {daily.length <= 62 ? (
+              <div className="management-calendar">
+                {daily.map((d) => (
+                  <button
+                    className={d.variableExpense === 0 && d.date <= today ? 'no-spend' : ''}
+                    key={d.date}
+                    onClick={() =>
+                      setDetail({ title: d.date, rows: rows.filter((t) => t.date === d.date) })
+                    }
+                  >
+                    <strong>{d.date.slice(5)}</strong>
+                    <span>
+                      {d.expense ? `${won(d.expense)}원` : d.date > today ? '예정' : '무지출'}
+                    </span>
+                    <small>누적 {won(d.cumulative)}</small>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p>월별로 조회하면 일별 달력이 보여요.</p>
+            )}
+          </section>
+        </>
+      )}
+      {section === 'category' && (
+        <>
+          <section className="panel management-panel">
+            <div className="section-heading">
+              <div>
+                <span className="analysis-eyebrow">선택한 기간</span>
+                <h2>어디에 얼마나 썼을까요?</h2>
+              </div>
+              <label>
+                집계할 태그 유형
+                <select value={groupId} onChange={(e) => setGroup(e.target.value)}>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p className="small muted">
+              금액을 누르면 해당 거래를 볼 수 있어요. 여러 옵션이 붙은 거래는 각 항목에 표시해요.
+            </p>
+            <div className="management-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>항목</th>
+                    <th>건수</th>
+                    <th>수입</th>
+                    <th>지출</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {breakdown.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.name}</td>
+                      <td>{r.count}</td>
+                      <td>
+                        <button
+                          className="text-button"
+                          onClick={() =>
+                            setDetail({
+                              title: `${r.name} 수입`,
+                              rows: rows.filter(
+                                (t) =>
+                                  t.type === 'income' &&
+                                  (r.id
+                                    ? t.tagIds.includes(r.id)
+                                    : !data.tags.some(
+                                        (tag) =>
+                                          tag.groupId === groupId && t.tagIds.includes(tag.id),
+                                      )),
+                              ),
+                            })
+                          }
+                        >
+                          {won(r.income)}
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          className="text-button"
+                          onClick={() =>
+                            setDetail({
+                              title: `${r.name} 지출`,
+                              rows: rows.filter(
+                                (t) =>
+                                  t.type === 'expense' &&
+                                  (r.id
+                                    ? t.tagIds.includes(r.id)
+                                    : !data.tags.some(
+                                        (tag) =>
+                                          tag.groupId === groupId && t.tagIds.includes(tag.id),
+                                      )),
+                              ),
+                            })
+                          }
+                        >
+                          {won(r.expense)}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <details className="panel management-panel analysis-expander">
+            <summary>
+              <span>
+                <strong>{year}년 월별 상세표</strong>
+                <small>12개월 합계와 경과월 평균을 한눈에</small>
+              </span>
+              <ChevronDown size={20} aria-hidden="true" />
+            </summary>
+            <div className="analysis-expander-content">
+              <div className="section-heading">
+                <h3>{year}년 분류별 월간 상세</h3>
+                <label>
+                  연간 상세 금액
+                  <select
+                    value={metric}
+                    disabled={Boolean(type)}
+                    onChange={(event) =>
+                      setAnnualMetric(event.target.value as 'income' | 'expense')
+                    }
+                  >
+                    <option value="expense">지출</option>
+                    <option value="income">수입</option>
+                  </select>
+                </label>
+              </div>
+              <p className="small muted">
+                {groups.find((item) => item.id === groupId)?.name || '미분류'} ·{' '}
+                {matrix.periods[0].startDate} ~ {matrix.periods[11].endDate}. 위의 조회 범위와
+                별도로 선택 연도 전체를 비교하며 나머지 조회 조건은 동일하게 적용해요.
+              </p>
+              <p className="small muted">
+                한 거래에 복수 옵션이 있으면 각 옵션에 표시해요. 마지막 전체 합계에서는 한 번만
+                계산해요. 경과월 평균은 {today}까지의 금액을 시작한 {matrix.elapsedPeriods}개
+                회계기간으로 나누며 진행 중인 기간도 포함해요.
+              </p>
+              <div
+                className="management-table analysis-matrix"
+                tabIndex={0}
+                role="region"
+                aria-label={`${year}년 분류별 ${metricName} 월간 상세표`}
+              >
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">항목 · {metricName}</th>
+                      {matrix.periods.map((column) => (
+                        <th
+                          scope="col"
+                          key={column.month}
+                          title={`${column.startDate} ~ ${column.endDate}`}
+                        >
+                          {Number(column.month.slice(5))}월
+                        </th>
+                      ))}
+                      <th scope="col">연간 합계</th>
+                      <th scope="col">경과월 평균</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matrix.groups.map((row) => (
+                      <tr key={row.id}>
+                        <th scope="row">{row.name}</th>
+                        {annualCells(row.id, row.name, row)}
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <th scope="row">전체 고유 거래</th>
+                      {annualCells(null, '전체', matrix.overall)}
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="small muted">
+                표를 가로로 움직이면 12개월 전체와 연간 합계·경과월 평균을 볼 수 있어요.
+              </p>
+            </div>
+          </details>
+        </>
+      )}
+      {section === 'sources' && (
+        <>
+          <section className="panel management-panel">
+            <h2>가계부별 사용액과 비중</h2>
+            <p className="small muted">
+              {period.startDate} ~ {period.endDate} · 선택한 기록의 원본 가계부별 지출 비중이에요.
+              연결된 보관 가계부도 포함해요.
+            </p>
+            <div className="management-table analysis-ledgers">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">원본 가계부</th>
+                    <th scope="col">건수</th>
+                    <th scope="col">수입</th>
+                    <th scope="col">지출</th>
+                    <th scope="col">지출 비중</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledgerBreakdown.map((item) => {
+                    const matching = rows.filter((tx) => tx.ledgerId === item.id);
+                    return (
+                      <tr key={item.id}>
+                        <th scope="row">{item.name}</th>
+                        <td>{item.count}건</td>
+                        <td>
+                          {amountButton(
+                            item.income,
+                            `${item.name} 수입`,
+                            matching.filter((tx) => tx.type === 'income'),
+                          )}
+                        </td>
+                        <td>
+                          {amountButton(
+                            item.expense,
+                            `${item.name} 지출`,
+                            matching.filter((tx) => tx.type === 'expense'),
+                          )}
+                        </td>
+                        <td>
+                          {item.expenseShare === null ? (
+                            '—'
+                          ) : (
+                            <>
+                              <span>{(item.expenseShare * 100).toFixed(1)}%</span>
+                              <span className="analysis-share-track" aria-hidden="true">
+                                <span style={{ width: `${item.expenseShare * 100}%` }} />
+                              </span>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th scope="row">전체 고유 거래</th>
+                    <td>{rows.length}건</td>
+                    <td>{won(sum.income)}</td>
+                    <td>{won(sum.expense)}</td>
+                    <td>{sum.expense ? '100.0%' : '—'}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </section>
+          <section className="panel management-panel">
+            <h2>결제수단별 내역</h2>
+            <p className="small muted">
+              {period.startDate} ~ {period.endDate} · 선택한 조회 조건을 적용해요. 금액과 건수를
+              누르면 거래를 확인할 수 있어요.
+            </p>
+            <div className="management-table analysis-payments">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">결제수단</th>
+                    <th scope="col">건수</th>
+                    <th scope="col">수입</th>
+                    <th scope="col">지출</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((paymentRow) => {
+                    const matching = rows.filter((tx) => tx.paymentMethodId === paymentRow.id);
+                    return (
+                      <tr key={paymentRow.id}>
+                        <th scope="row">{paymentRow.name}</th>
+                        <td>
+                          <button
+                            type="button"
+                            className="text-button analysis-amount"
+                            aria-label={`${paymentRow.name} ${paymentRow.count}건 거래 보기`}
+                            onClick={() =>
+                              setDetail({ title: `${paymentRow.name} 전체 거래`, rows: matching })
+                            }
+                          >
+                            {paymentRow.count}건
+                          </button>
+                        </td>
+                        <td>
+                          {amountButton(
+                            paymentRow.income,
+                            `${paymentRow.name} 수입`,
+                            matching.filter((tx) => tx.type === 'income'),
+                          )}
+                        </td>
+                        <td>
+                          {amountButton(
+                            paymentRow.expense,
+                            `${paymentRow.name} 지출`,
+                            matching.filter((tx) => tx.type === 'expense'),
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th scope="row">전체 고유 거래</th>
+                    <td>{rows.length}건</td>
+                    <td>{won(sum.income)}</td>
+                    <td>{won(sum.expense)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+      {section === 'transactions' && (
+        <section className="panel management-panel">
+          <div className="section-heading">
+            <h2>선택한 거래 {rows.length}건</h2>
+            <span className="analysis-eyebrow">
+              {period.startDate} ~ {period.endDate}
+            </span>
+          </div>
+          {table(rows)}
+        </section>
+      )}
       {detail && (
         <Dialog title={detail.title} onClose={() => setDetail(null)}>
           <div className="form-body">{table(detail.rows)}</div>

@@ -408,60 +408,6 @@ export default function TransactionForm({
         }
       >
         <div className="form-body">
-          {original &&
-            (() => {
-              const record = data.transactions.find((t) => t.id === original.id) ?? original;
-              const who = (id?: string | null) =>
-                id ? (data.users.find((u) => u.id === id)?.name ?? id) : '미확인';
-              const when = (value?: string | null) =>
-                value && Number.isFinite(Date.parse(value))
-                  ? new Date(value).toLocaleString('ko-KR')
-                  : '미확인';
-              return (
-                <p className="small muted">
-                  최초 작성: {who(record.createdBy)} · {when(record.createdAt)}
-                  <br />
-                  마지막 수정: {who(record.updatedBy)} · {when(record.updatedAt)}
-                </p>
-              );
-            })()}
-          <div className="effect-preview">
-            <Info size={16} />
-            <div>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={autoSave}
-                  disabled={locked || Boolean(conflict) || deleted}
-                  onChange={(e) => {
-                    cancelAutoSave();
-                    setAutoSave(e.target.checked);
-                  }}
-                />
-                {original ? '수정 내용 자동 저장' : '입력 완료 후 자동 저장'}
-              </label>
-              {!original && (
-                <p className="small">
-                  {autoSave
-                    ? '필수 항목을 채우고 입력 칸을 나가면 잠시 후 저장하고 창을 닫아요.'
-                    : '작성 중인 내용은 이 기기에 초안으로 보관해요. 저장을 눌러 가계부에 반영해 주세요.'}
-                </p>
-              )}
-              <span className="small" data-testid="transaction-save-status">
-                {uncertain
-                  ? '저장 결과 확인 필요'
-                  : autoPaused
-                    ? '자동 저장 멈춤 · 확인 후 저장을 눌러 주세요'
-                    : busy
-                      ? saveStatus
-                      : dirty
-                        ? autoSave
-                          ? '입력 중 · 필드를 나가면 자동 저장해요'
-                          : '이 기기에 초안 보관 중'
-                        : saveStatus || (original ? '저장된 내역' : '새 내역 작성')}
-              </span>
-            </div>
-          </div>
           {!localAvailable && (
             <div className="alert">
               이 브라우저에서 기기 초안을 보관하지 못했어요. 창을 닫기 전에 저장해 주세요.
@@ -745,6 +691,64 @@ export default function TransactionForm({
               </p>
             </div>
           </fieldset>
+          <div className="transaction-save-options">
+            <div>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={autoSave}
+                  disabled={locked || Boolean(conflict) || deleted}
+                  onChange={(e) => {
+                    cancelAutoSave();
+                    setAutoSave(e.target.checked);
+                  }}
+                />
+                {original ? '수정 내용 자동 저장' : '입력 완료 후 자동 저장'}
+              </label>
+              {!original && (
+                <p className="small">
+                  {autoSave
+                    ? '필수 항목을 채우고 입력 칸을 나가면 잠시 후 저장하고 창을 닫아요.'
+                    : '작성 중인 내용은 이 기기에 초안으로 보관해요. 저장을 눌러 가계부에 반영해 주세요.'}
+                </p>
+              )}
+              <span className="small" data-testid="transaction-save-status">
+                {uncertain
+                  ? '저장 결과 확인 필요'
+                  : autoPaused
+                    ? '자동 저장 멈춤 · 확인 후 저장을 눌러 주세요'
+                    : busy
+                      ? saveStatus
+                      : dirty
+                        ? autoSave
+                          ? '입력 중 · 필드를 나가면 자동 저장해요'
+                          : '이 기기에 초안 보관 중'
+                        : saveStatus || (original ? '저장된 내역' : '새 내역 작성')}
+              </span>
+            </div>
+          </div>
+          {original && (
+            <details className="record-meta">
+              <summary>작성 정보</summary>
+              {original &&
+                (() => {
+                  const record = data.transactions.find((t) => t.id === original.id) ?? original;
+                  const who = (id?: string | null) =>
+                    id ? (data.users.find((u) => u.id === id)?.name ?? id) : '미확인';
+                  const when = (value?: string | null) =>
+                    value && Number.isFinite(Date.parse(value))
+                      ? new Date(value).toLocaleString('ko-KR')
+                      : '미확인';
+                  return (
+                    <p className="small muted">
+                      최초 작성: {who(record.createdBy)} · {when(record.createdAt)}
+                      <br />
+                      마지막 수정: {who(record.updatedBy)} · {when(record.updatedAt)}
+                    </p>
+                  );
+                })()}
+            </details>
+          )}
         </div>
         <div className="form-footer">
           {original && !uncertain && (

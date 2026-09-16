@@ -150,9 +150,13 @@ test('desktop and mobile screens render without page overflow or runtime errors'
   await page.screenshot({ path: 'output/playwright/assets-desktop.png', fullPage: true });
   await page.getByRole('button', { name: '카드 · 통장', exact: true }).click();
   await page.getByLabel('조회 월').fill('2026-10');
-  await expect(page.getByText('2026년 10월 사용 및 납부 예정')).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: '카드 사용 요약' }).getByText('2026년 10월'),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: '이번 달 납부 예정', exact: true })).toBeVisible();
   await page.screenshot({ path: 'output/playwright/cards-desktop.png', fullPage: true });
   await page.getByRole('button', { name: '통계', exact: true }).click();
+  await page.locator('.analysis-extra-filters summary').click();
   await page.getByRole('button', { name: '# 함께', exact: true }).click();
   await expect(page.getByText('선택한 기록의 지출')).toBeVisible();
   await page.getByRole('button', { name: '태그 설정', exact: true }).click();
@@ -179,6 +183,9 @@ test('desktop and mobile screens render without page overflow or runtime errors'
       ['데이터 관리', '데이터 관리'],
       ['가계부', '우리의 일상'],
     ]) {
+      if (['태그 설정', '계획 · 일정', '데이터 관리'].includes(menu)) {
+        await page.getByRole('button', { name: '더보기', exact: true }).click();
+      }
       await page.getByRole('button', { name: menu, exact: true }).click();
       await expect(page.getByRole('heading', { name: heading })).toBeVisible();
       expect(
@@ -255,13 +262,15 @@ test('custom tag types, inline options and archived history are shared', async (
     await form.getByRole('button', { name: '저장', exact: true }).click();
     await expect(form).toHaveCount(0);
     await second.getByRole('button', { name: '통계', exact: true }).click();
+    await second.locator('.analysis-extra-filters summary').click();
     await second.getByRole('button', { name: '# 고속열차 (보관)', exact: true }).click();
     await expect(second.locator('.stat').filter({ hasText: '선택한 기록의 지출' })).toContainText(
       '18,000',
     );
+    await second.getByRole('button', { name: '분류별', exact: true }).click();
     await second.getByLabel('집계할 태그 유형').selectOption({ label: '이동수단' });
     const tagSummary = second.locator('section').filter({
-      has: second.getByRole('heading', { name: '유형별 전체 내역', exact: true }),
+      has: second.getByRole('heading', { name: '어디에 얼마나 썼을까요?', exact: true }),
     });
     const trainSummary = tagSummary.getByRole('row').filter({
       has: second.getByRole('cell', { name: '고속열차', exact: true }),

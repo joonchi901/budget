@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 export const won = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
@@ -42,9 +42,10 @@ export function Dialog({
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current!;
     el.showModal();
+    // Close before React removes the node so the browser restores the opener's focus.
     return () => el.close();
   }, []);
   return (
