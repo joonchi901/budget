@@ -1,0 +1,214 @@
+.planning-view {
+  display: grid;
+  gap: 20px;
+}
+.planning-view .section-heading {
+  margin: 0;
+}
+.planning-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.planning-toolbar > label:first-child {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.planning-toolbar select {
+  min-width: 180px;
+}
+.planning-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 14px;
+  background: var(--surface, #f0f3ed);
+  flex-wrap: wrap;
+}
+.planning-tabs button {
+  min-height: 42px;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+}
+.planning-tabs button.selected {
+  background: var(--paper, #fff);
+  color: var(--green, #31725f);
+  box-shadow: 0 1px 5px #1c322c15;
+  font-weight: 650;
+}
+.planning-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.planning-card {
+  padding: 24px;
+  min-width: 0;
+}
+.planning-card.archived {
+  opacity: 0.75;
+}
+.planning-card h3 {
+  margin: 5px 0 0;
+  font-size: 18px;
+  text-wrap: balance;
+}
+.planning-card > .small svg {
+  vertical-align: -2px;
+}
+.planning-condition {
+  font-size: 12px;
+  color: var(--green, #31725f);
+  line-height: 1.7;
+}
+.planning-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin: 20px 0;
+}
+.planning-metrics > div {
+  display: grid;
+  gap: 6px;
+}
+.planning-metrics span {
+  font-size: 12px;
+  color: var(--muted, #69716c);
+}
+.planning-metrics strong,
+.planning-amount {
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.planning-amount {
+  display: block;
+  margin-top: 20px;
+}
+.planning-amount small {
+  font-size: 13px;
+  margin-left: 4px;
+}
+.planning-progress {
+  height: 7px;
+  border-radius: 9px;
+  background: #e8ede8;
+  overflow: hidden;
+}
+.planning-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green, #31725f);
+}
+.planning-negative {
+  color: #af433e;
+}
+.planning-list {
+  display: grid;
+}
+.planning-list > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 11px 0;
+  border-bottom: 1px solid #e7ebe5;
+  font-size: 13px;
+}
+.planning-list small {
+  display: block;
+  color: var(--muted, #69716c);
+  margin-top: 4px;
+}
+.planning-list strong {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.planning-note {
+  padding: 12px;
+  background: #f6f7f3;
+  border-radius: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.planning-card details {
+  margin-top: 16px;
+  font-size: 13px;
+}
+.planning-card summary {
+  cursor: pointer;
+  min-height: 40px;
+  display: list-item;
+  padding: 10px 0;
+}
+.planning-form h3 {
+  font-size: 15px;
+  margin: 22px 0 12px;
+}
+.planning-form textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid #d8dfd7;
+  border-radius: 9px;
+  font: inherit;
+  line-height: 1.5;
+}
+.planning-editor-row {
+  border-radius: 14px;
+  background: #f5f7f2;
+  padding: 16px;
+  margin: 12px 0;
+}
+.planning-tag-group {
+  padding: 12px 0;
+  border-bottom: 1px solid #e7ebe5;
+  font-size: 13px;
+}
+.planning-tag-group > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 7px;
+}
+.planning-tag-group .checkbox {
+  min-height: 40px;
+  margin: 0;
+}
+.planning-add-payment {
+  align-self: end;
+  margin-bottom: 16px;
+}
+@media (max-width: 600px) {
+  .planning-card {
+    padding: 18px;
+  }
+  .planning-toolbar {
+    align-items: start;
+    gap: 10px;
+  }
+  .planning-tabs button {
+    padding-inline: 12px;
+  }
+  .planning-metrics strong {
+    font-size: 18px;
+  }
+}
+.planning-toolbar select {
+  min-height: 42px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d8dfd7;
+  border-radius: 9px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}

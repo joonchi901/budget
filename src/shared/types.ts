@@ -1,3 +1,6 @@
+import type { PaymentDetails } from './payments';
+import type { Plan } from './planning';
+import type { AssetDetails } from './assets';
 export type TransactionType = 'expense' | 'income';
 export type OwnerId = 'u1' | 'u2' | 'shared';
 export interface User {
@@ -16,6 +19,9 @@ export interface Ledger {
   endDate: string | null;
   archived: boolean;
   version: number;
+  periodStartDay?: number;
+  fixedExpenseTagIds?: string[];
+  tagMappings?: Record<string, string>;
 }
 export interface Allocation {
   assetId: string;
@@ -35,6 +41,8 @@ export interface Transaction {
   version: number;
   updatedAt: string;
   updatedBy: string;
+  createdBy?: string | null;
+  createdAt?: string | null;
 }
 export interface TagGroup {
   id: string;
@@ -55,6 +63,7 @@ export interface Tag {
   sortOrder: number;
   archived: boolean;
   version: number;
+  parentId?: string | null;
 }
 export interface Asset {
   id: string;
@@ -66,6 +75,9 @@ export interface Asset {
   tagIds: string[];
   trackSavings: boolean;
   version: number;
+  openingDate?: string | null;
+  archived?: boolean;
+  details?: AssetDetails;
 }
 export interface AssetOperation {
   id: string;
@@ -93,7 +105,7 @@ export interface AssetMovement {
   savingsAmount: number;
   actorId: string;
 }
-export interface PaymentMethod {
+export interface PaymentMethod extends PaymentDetails {
   id: string;
   name: string;
   type: 'card' | 'account' | 'cash';
@@ -102,6 +114,7 @@ export interface PaymentMethod {
   paymentDay: number | null;
 }
 export interface Bootstrap {
+  householdId?: string;
   user: User;
   users: User[];
   ledgers: Ledger[];
@@ -114,8 +127,12 @@ export interface Bootstrap {
   assetMovements: AssetMovement[];
   revision: number;
   mode: 'demo' | 'production';
+  plans?: Plan[];
 }
-export type TransactionInput = Omit<Transaction, 'version' | 'updatedAt' | 'updatedBy' | 'id'> & {
+export type TransactionInput = Omit<
+  Transaction,
+  'version' | 'updatedAt' | 'updatedBy' | 'createdBy' | 'createdAt' | 'id'
+> & {
   id?: string;
 };
 export interface TransactionMutation {
@@ -131,6 +148,8 @@ export interface MutationResult {
   tagGroup?: TagGroup;
   tag?: Tag;
   assetOperation?: AssetOperation;
+  paymentMethod?: PaymentMethod;
+  plan?: Plan;
   replayed?: boolean;
 }
 export interface Presence {

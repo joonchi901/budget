@@ -1,0 +1,134 @@
+.payments-workspace {
+  min-width: 0;
+}
+.payment-toolbar {
+  gap: 16px;
+  align-items: flex-start;
+}
+.payment-toolbar p {
+  margin: 6px 0 0;
+}
+.payment-actions,
+.payment-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.payment-actions button,
+.payments-workspace .secondary {
+  min-height: 40px;
+}
+.payment-filters {
+  margin-bottom: 18px;
+}
+.payment-filters > input {
+  flex: 1 1 220px;
+  max-width: 420px;
+}
+.payment-filters > label {
+  margin: 0;
+}
+.payment-account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.payment-account {
+  padding: 24px;
+  min-width: 0;
+}
+.payment-account h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.payment-account .panel-title {
+  align-items: flex-start;
+  gap: 12px;
+}
+.payment-account .panel-title p {
+  margin: 7px 0 0;
+}
+.payment-account .panel-title button,
+.payment-info .panel-title button {
+  flex-shrink: 0;
+}
+.payment-detail {
+  align-items: baseline;
+  gap: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.payment-detail > :last-child {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.payment-detail > :first-child {
+  flex-shrink: 0;
+}
+.payment-more {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #e8e9ed);
+}
+.payment-more > summary {
+  min-height: 40px;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 8px 0;
+}
+.payment-more > summary:focus-visible {
+  outline: 2px solid var(--primary, #6b5ce7);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.payment-more .statement-list {
+  max-height: 340px;
+  overflow-y: auto;
+}
+.payment-more .statement-list > div {
+  gap: 12px;
+  align-items: baseline;
+}
+.payment-more .statement-list > div > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.payment-more .statement-list strong {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.payment-archived .card-visual {
+  filter: saturate(0.35);
+}
+.payment-setup-note {
+  padding: 16px 0;
+  color: var(--muted, #697386);
+  line-height: 1.6;
+}
+.payment-archive-control {
+  padding-top: 16px;
+}
+@media (max-width: 850px) {
+  .payment-account-grid {
+    grid-template-columns: 1fr;
+  }
+  .payment-toolbar {
+    flex-direction: column;
+  }
+}
+@media (max-width: 480px) {
+  .payment-account {
+    padding: 18px;
+  }
+  .payment-detail {
+    font-size: 12px;
+    gap: 10px;
+  }
+  .payment-actions {
+    width: 100%;
+  }
+  .payment-actions > button {
+    flex: 1;
+  }
+}

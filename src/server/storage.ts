@@ -4,15 +4,28 @@ import type {
   Bootstrap,
   Ledger,
   MutationResult,
+  PaymentMethod,
   Tag,
   TagGroup,
   Transaction,
 } from '../shared/types';
 import type { Session } from './auth';
 import { ApiError } from './errors';
+import type { Plan } from '../shared/planning';
+import { paymentDefinition } from './payments';
+import { planDefinition } from './planning';
+import { assetDefinition } from './assets';
 
 export type Binding = string | number | null;
-type Entity = 'transaction' | 'ledger' | 'asset' | 'tagGroup' | 'tag' | 'assetOperation';
+type Entity =
+  | 'transaction'
+  | 'ledger'
+  | 'asset'
+  | 'tagGroup'
+  | 'tag'
+  | 'assetOperation'
+  | 'paymentMethod'
+  | 'plan';
 type EntityMap = {
   transaction: Transaction;
   ledger: Ledger;
@@ -20,35 +33,42 @@ type EntityMap = {
   tagGroup: TagGroup;
   tag: Tag;
   assetOperation: AssetOperation;
+  paymentMethod: PaymentMethod;
+  plan: Plan;
 };
 const boolean = (column: string) => `json(CASE ${column} WHEN 1 THEN 'true' ELSE 'false' END)`;
 const definitions: Record<Entity, { table: string; json: string; filter?: string }> = {
+  paymentMethod: paymentDefinition,
+  plan: planDefinition,
   transaction: {
     table: 'transactions',
     filter: " AND t.deleted_at IS NULL AND t.type IN ('income','expense')",
-    json: `json_object('id',t.id,'ledgerId',t.ledger_id,'date',t.date,'description',t.description,'amount',t.amount,'type',t.type,'ownerId',t.owner_id,'paymentMethodId',t.payment_method_id,'tagIds',json(t.tag_ids),'allocations',json(t.allocations_json),'version',t.version,'updatedAt',t.updated_at,'updatedBy',t.updated_by)`,
+    json: `json_object('id',t.id,'ledgerId',t.ledger_id,'date',t.date,'description',t.description,'amount',t.amount,'type',t.type,'ownerId',t.owner_id,'paymentMethodId',t.payment_method_id,'tagIds',json(t.tag_ids),'allocations',json(t.allocations_json),'version',t.version,'updatedAt',t.updated_at,'updatedBy',t.updated_by,'createdBy',t.created_by,'createdAt',t.created_at)`,
   },
   ledger: {
     table: 'ledgers',
-    json: `json_object('id',t.id,'name',t.name,'icon',t.icon,'kind',t.kind,'parentId',t.parent_id,'budget',t.budget,'startDate',t.start_date,'endDate',t.end_date,'archived',${boolean('t.archived')},'version',t.version)`,
+    json: `json_object('id',t.id,'name',t.name,'icon',t.icon,'kind',t.kind,'parentId',t.parent_id,'budget',t.budget,'startDate',t.start_date,'endDate',t.end_date,'archived',${boolean('t.archived')},'version',t.version,'periodStartDay',t.period_start_day,'fixedExpenseTagIds',json(t.fixed_expense_tag_ids),'tagMappings',json(t.tag_mappings))`,
   },
-  asset: {
-    table: 'assets',
-    json: `json_object('id',t.id,'name',t.name,'kind',t.kind,'openingBalance',t.opening_balance,'balance',t.opening_balance+COALESCE((SELECT SUM(e.amount) FROM asset_effects e WHERE e.household_id=t.household_id AND e.asset_id=t.id),0),'color',t.color,'tagIds',json(t.tag_ids),'trackSavings',${boolean('t.track_savings')},'version',t.version)`,
-  },
+  asset: assetDefinition,
   tagGroup: {
     table: 'tag_groups',
     json: `json_object('id',t.id,'name',t.name,'selectionMode',t.selection_mode,'appliesTo',t.applies_to,'role',t.role,'ledgerIds',json(t.ledger_ids),'sortOrder',t.sort_order,'archived',${boolean('t.archived')},'version',t.version)`,
   },
   tag: {
     table: 'tags',
-    json: `json_object('id',t.id,'groupId',t.group_id,'name',t.name,'color',t.color,'sortOrder',t.sort_order,'archived',${boolean('t.archived')},'version',t.version)`,
+    json: `json_object('id',t.id,'groupId',t.group_id,'name',t.name,'color',t.color,'sortOrder',t.sort_order,'archived',${boolean('t.archived')},'version',t.version,'parentId',t.parent_id)`,
   },
   assetOperation: {
     table: 'asset_operations',
     json: `json_object('id',t.id,'type',t.type,'date',t.date,'description',t.description,'fromAssetId',t.from_asset_id,'toAssetId',t.to_asset_id,'assetId',t.asset_id,'amount',t.amount,'targetBalance',t.target_balance,'version',t.version,'createdBy',t.created_by,'createdAt',t.created_at,'deletedAt',t.deleted_at)`,
   },
 };
+export function auditSelection(entity: Entity) {
+  const d = definitions[entity];
+  const payload =
+    entity === 'transaction' ? `json_set(${d.json},'$.deletedAt',t.deleted_at)` : d.json;
+  return `SELECT ${payload} AS payload FROM ${d.table} t WHERE t.household_id=?`;
+}
 function selection(entity: Entity) {
   const d = definitions[entity];
   return `SELECT ${d.json} AS payload FROM ${d.table} t WHERE t.household_id=?${d.filter ?? ''}`;
@@ -99,21 +119,19 @@ export async function bootstrap(db: D1Database, session: Session): Promise<Boots
         "SELECT json_object('id',id,'name',name,'color',color) AS payload FROM users WHERE household_id=? ORDER BY id",
       )
       .bind(h),
-    db
-      .prepare(
-        "SELECT json_object('id',id,'name',name,'type',type,'ownerId',owner_id,'closingDay',closing_day,'paymentDay',payment_day) AS payload FROM payment_methods WHERE household_id=? ORDER BY rowid",
-      )
-      .bind(h),
+    db.prepare(selection('paymentMethod') + ' ORDER BY t.rowid').bind(h),
     db
       .prepare(
         "SELECT json_object('id',id,'assetId',asset_id,'transactionId',transaction_id,'operationId',operation_id,'date',date,'description',description,'amount',amount,'savingsAmount',savings_amount,'actorId',actor_id) AS payload FROM asset_effects WHERE household_id=? ORDER BY date DESC,rowid DESC",
       )
       .bind(h),
     db.prepare('SELECT revision AS payload FROM households WHERE id=?').bind(h),
+    db.prepare(selection('plan') + ' ORDER BY t.rowid').bind(h),
   ]);
   const rows = (i: number) => results[i].results.map((r) => JSON.parse(r.payload));
   return {
     user: session.user,
+    householdId: session.householdId,
     ledgers: rows(0),
     transactions: rows(1),
     assets: rows(2),
@@ -124,7 +142,8 @@ export async function bootstrap(db: D1Database, session: Session): Promise<Boots
     paymentMethods: rows(7),
     assetMovements: rows(8),
     revision: Number(results[9].results[0].payload),
-    mode: 'demo',
+    mode: session.authKind === 'oidc' ? 'production' : 'demo',
+    plans: rows(10),
   };
 }
 export async function replay(
@@ -190,6 +209,8 @@ export async function commit(
     u = session.user.id,
     now = new Date().toISOString();
   const entity = op.entityType === 'deleted-transaction' ? null : op.entityType;
+  const auditEntity = entity ?? 'transaction',
+    historyId = crypto.randomUUID();
   const extra = entity ? `, '${entity}',json((${selection(entity)} AND t.id=?))` : '';
   const bindings: Binding[] = [h];
   if (entity) bindings.push(h, op.entityId);
@@ -200,7 +221,28 @@ export async function commit(
         `INSERT INTO mutation_receipts(household_id,user_id,mutation_id,request_hash,entity_id,created_at,guard_valid) VALUES(?,?,?,?,?,?,(${op.guardSql}))`,
       )
       .bind(h, u, op.mutationId, op.requestHash, op.entityId, now, ...op.guardBindings),
+    db
+      .prepare(
+        `INSERT INTO record_history(id,household_id,revision,entity_type,entity_id,ledger_id,actor_id,created_at,action,before_json) SELECT ?,id,revision+1,?,?,?,?,?, ?,(${auditSelection(auditEntity)} AND t.id=?) FROM households WHERE id=?`,
+      )
+      .bind(
+        historyId,
+        auditEntity,
+        op.entityId,
+        op.ledgerId,
+        u,
+        now,
+        op.entityType === 'deleted-transaction' ? 'delete' : 'update',
+        h,
+        op.entityId,
+        h,
+      ),
     ...op.statements,
+    db
+      .prepare(
+        `UPDATE record_history SET after_json=(${auditSelection(auditEntity)} AND t.id=?), action=CASE WHEN action='delete' THEN 'delete' WHEN before_json IS NULL THEN 'create' ELSE 'update' END WHERE household_id=? AND id=?`,
+      )
+      .bind(h, op.entityId, h, historyId),
     db.prepare('UPDATE households SET revision=revision+1 WHERE id=?').bind(h),
     db
       .prepare(
@@ -239,7 +281,10 @@ export async function commit(
         current,
       );
     }
-    if (String(error).includes('tags.household_id, tags.group_id, tags.name'))
+    if (
+      String(error).includes('tags.household_id, tags.group_id, tags.name') ||
+      String(error).includes('tag_name_in_group')
+    )
       throw new ApiError(409, 'DUPLICATE_TAG', '같은 태그 유형에 같은 이름이 있습니다.');
     throw error;
   }

@@ -86,11 +86,17 @@ export async function saveTransaction(
     '자산 배분 합계가 거래 금액과 같아야 합니다.',
   );
   const results = await db.batch<Record<string, unknown>>([
-    db.prepare('SELECT id FROM ledgers WHERE household_id=? AND id=?').bind(h, tx.ledgerId),
     db
-      .prepare('SELECT id FROM payment_methods WHERE household_id=? AND id=?')
+      .prepare('SELECT id,archived,version FROM ledgers WHERE household_id=? AND id=?')
+      .bind(h, tx.ledgerId),
+    db
+      .prepare('SELECT id,archived,version FROM payment_methods WHERE household_id=? AND id=?')
       .bind(h, tx.paymentMethodId),
-    db.prepare("SELECT id,track_savings FROM assets WHERE household_id=? AND kind='asset'").bind(h),
+    db
+      .prepare(
+        "SELECT id,track_savings,archived,opening_date,version FROM assets WHERE household_id=? AND kind='asset'",
+      )
+      .bind(h),
     db
       .prepare(
         'SELECT asset_id,savings_tracking FROM asset_effects WHERE household_id=? AND transaction_id=?',
@@ -99,6 +105,26 @@ export async function saveTransaction(
   ]);
   requireValue(results[0].results.length === 1, '접근할 수 있는 원본 가계부를 선택해 주세요.');
   requireValue(results[1].results.length === 1, '사용할 수 있는 결제수단을 선택해 주세요.');
+  requireValue(
+    !results[0].results[0].archived || existing?.ledgerId === tx.ledgerId,
+    '보관된 가계부에 새 내역을 추가할 수 없습니다.',
+  );
+  requireValue(
+    !results[1].results[0].archived || existing?.paymentMethodId === tx.paymentMethodId,
+    '보관된 결제수단은 새로 선택할 수 없습니다.',
+  );
+  for (const allocation of tx.allocations) {
+    const asset = results[2].results.find((a) => a.id === allocation.assetId);
+    requireValue(
+      asset &&
+        (!asset.archived || existing?.allocations.some((a) => a.assetId === allocation.assetId)),
+      '보관된 자산을 새로 배분할 수 없습니다.',
+    );
+    requireValue(
+      !asset.opening_date || tx.date >= String(asset.opening_date),
+      '자산 기준일 이전 거래는 배분할 수 없습니다.',
+    );
+  }
   const assets = new Map(results[2].results.map((a) => [String(a.id), Number(a.track_savings)])),
     previous = new Map(
       results[3].results.map((a) => [String(a.asset_id), Number(a.savings_tracking)]),
@@ -115,6 +141,26 @@ export async function saveTransaction(
     tx.ledgerId,
     existing?.tagIds,
   );
+  guards.push(
+    existsGuard('payment_methods', h, tx.paymentMethodId, Number(results[1].results[0].version)),
+  );
+  guards.push(existsGuard('ledgers', h, tx.ledgerId, Number(results[0].results[0].version)));
+  if (tx.allocations.length) {
+    // Guard configuration, not the balance version, so independent transactions
+    // can both commit. JSON keeps a 30-asset allocation below D1's binding limit.
+    const config = tx.allocations.map((allocation) => {
+      const asset = results[2].results.find((a) => a.id === allocation.assetId)!;
+      return {
+        id: allocation.assetId,
+        archived: Number(asset.archived),
+        openingDate: asset.opening_date ?? null,
+      };
+    });
+    guards.push({
+      sql: `NOT EXISTS(SELECT 1 FROM json_each(?) j LEFT JOIN assets a ON a.id=json_extract(j.value,'$.id') AND a.household_id=? WHERE a.id IS NULL OR a.archived<>json_extract(j.value,'$.archived') OR a.opening_date IS NOT json_extract(j.value,'$.openingDate'))`,
+      bindings: [JSON.stringify(config), h],
+    });
+  }
   if (existing)
     guards.push(
       existsGuard(
@@ -158,9 +204,9 @@ export async function saveTransaction(
     : [
         db
           .prepare(
-            "INSERT INTO transactions(ledger_id,date,description,amount,type,owner_id,payment_method_id,tag_ids,allocations_json,updated_at,updated_by,household_id,id,category) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'')",
+            "INSERT INTO transactions(ledger_id,date,description,amount,type,owner_id,payment_method_id,tag_ids,allocations_json,updated_at,updated_by,household_id,id,category,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'',?,?)",
           )
-          .bind(...columns, h, id),
+          .bind(...columns, h, id, session.user.id, now),
       ];
   statements.push(
     db.prepare('DELETE FROM asset_effects WHERE household_id=? AND transaction_id=?').bind(h, id),

@@ -390,19 +390,22 @@ function TagEditor({
   const [color, setColor] = useState(
     editor.type === 'tag' ? (editor.original?.color ?? palette[0]) : palette[0],
   );
+  const [parentId, setParentId] = useState(
+    editor.type === 'tag' ? (editor.original?.parentId ?? '') : '',
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [uncertain, setUncertain] = useState(false);
   const [conflict, setConflict] = useState(false);
   const pending = useRef<Pending | null>(null);
   const initial = useRef(
-    JSON.stringify({ name, selectionMode, appliesTo, ledgerIds, sortOrder, color }),
+    JSON.stringify({ name, selectionMode, appliesTo, ledgerIds, sortOrder, color, parentId }),
   );
   useUnsavedGuard(
     busy ||
       uncertain ||
       initial.current !==
-        JSON.stringify({ name, selectionMode, appliesTo, ledgerIds, sortOrder, color }),
+        JSON.stringify({ name, selectionMode, appliesTo, ledgerIds, sortOrder, color, parentId }),
   );
   const locked = busy || uncertain;
   async function save(event: FormEvent) {
@@ -422,6 +425,7 @@ function TagEditor({
               name: name.trim(),
               color,
               sortOrder,
+              parentId: parentId || null,
               ...(!source && editor.type === 'tag' ? { groupId: editor.group.id } : {}),
             };
       pending.current = {
@@ -614,6 +618,33 @@ function TagEditor({
               </>
             ) : (
               <div>
+                <label>
+                  상위 옵션 (선택)
+                  <select value={parentId} onChange={(e) => setParentId(e.target.value)}>
+                    <option value="">독립 옵션</option>
+                    {data.tags
+                      .filter(
+                        (t) =>
+                          t.id !== source?.id &&
+                          t.groupId !== editor.group.id &&
+                          !t.archived &&
+                          data.tagGroups.some(
+                            (g) =>
+                              g.id === t.groupId &&
+                              g.appliesTo === editor.group.appliesTo &&
+                              !g.archived,
+                          ),
+                      )
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {data.tagGroups.find((g) => g.id === t.groupId)?.name} / {t.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <p className="small muted">
+                  상위 옵션을 선택한 기록에서만 이 옵션을 고를 수 있어요. 예: 식비 → 장보기.
+                </p>
                 <span className="field-label">옵션 색상</span>
                 <div className="tag-color-options">
                   {palette.map((item) => (

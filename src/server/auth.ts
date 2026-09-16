@@ -7,6 +7,57 @@ export interface Session {
   householdId: string;
   tokenHash: string;
   expiresAt: number;
+  authKind: 'demo' | 'oidc';
+}
+
+export const GOOGLE_ISSUER = 'https://accounts.google.com';
+export interface ProductionAuth {
+  origin: string;
+  clientId: string;
+  clientSecret: string;
+  emails: [string, string];
+}
+
+export function productionConfiguration(env: Env): ProductionAuth | null {
+  if (
+    !env.APP_ORIGIN ||
+    !env.GOOGLE_CLIENT_ID ||
+    !env.GOOGLE_CLIENT_SECRET ||
+    !env.AUTH_ALLOWED_EMAILS
+  )
+    return null;
+  try {
+    const origin = new URL(env.APP_ORIGIN);
+    const emails = env.AUTH_ALLOWED_EMAILS.split(',').map((value) => value.trim().toLowerCase());
+    if (
+      origin.protocol !== 'https:' ||
+      origin.origin !== env.APP_ORIGIN ||
+      origin.username ||
+      origin.password ||
+      emails.length !== 2 ||
+      new Set(emails).size !== 2 ||
+      emails.some((email) => !/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(email))
+    )
+      return null;
+    return {
+      origin: origin.origin,
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      emails: emails as [string, string],
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function authConfiguration(request: Request, env: Env) {
+  const demo = demoEnabled(request, env);
+  const config = productionConfiguration(env);
+  return {
+    demoEnabled: demo,
+    oidcEnabled: Boolean(config && new URL(request.url).origin === config.origin && !demo),
+    mode: demo ? ('demo' as const) : ('production' as const),
+  };
 }
 
 export function isLoopback(hostname: string): boolean {
@@ -49,12 +100,18 @@ export function cookieToken(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
-export async function sessionByHash(db: D1Database, tokenHash: string): Promise<Session | null> {
+export async function sessionByHash(
+  db: D1Database,
+  tokenHash: string,
+  env?: Env,
+): Promise<Session | null> {
   const row = await db
     .prepare(
-      `SELECT u.id, u.name, u.color, u.household_id, s.expires_at
+      `SELECT u.id, u.name, u.color, u.household_id, s.expires_at, s.auth_kind, i.issuer, i.email
     FROM sessions s JOIN users u ON u.id = s.user_id
-    WHERE s.token_hash = ? AND s.expires_at > ?`,
+    LEFT JOIN auth_identities i ON i.user_id=u.id AND i.issuer=s.identity_issuer AND i.subject=s.identity_subject AND i.active=1
+    WHERE s.token_hash = ? AND s.expires_at > ? AND u.id IN ('u1','u2')
+    AND (s.auth_kind='demo' OR (s.auth_kind='oidc' AND i.user_id IS NOT NULL))`,
     )
     .bind(tokenHash, Date.now())
     .first<{
@@ -63,33 +120,83 @@ export async function sessionByHash(db: D1Database, tokenHash: string): Promise<
       color: string;
       household_id: string;
       expires_at: number;
+      auth_kind: 'demo' | 'oidc';
+      issuer: string | null;
+      email: string | null;
     }>();
+  if (row && env) {
+    if (row.auth_kind === 'demo' && env.DEMO_MODE !== 'true') return null;
+    if (row.auth_kind === 'oidc') {
+      const config = productionConfiguration(env);
+      if (
+        !config ||
+        row.issuer !== GOOGLE_ISSUER ||
+        row.email !== config.emails[row.id === 'u1' ? 0 : 1]
+      )
+        return null;
+    }
+  }
   return row
     ? {
         user: { id: row.id, name: row.name, color: row.color },
         householdId: row.household_id,
         tokenHash,
         expiresAt: row.expires_at,
+        authKind: row.auth_kind,
       }
     : null;
 }
 
 export async function authenticate(request: Request, env: Env): Promise<Session> {
-  // No production OIDC has been installed yet. Never reuse demo sessions remotely.
-  if (!demoEnabled(request, env))
-    throw new ApiError(
-      503,
-      'AUTH_NOT_CONFIGURED',
-      '운영 로그인 설정이 필요합니다. 로컬 데모만 사용할 수 있습니다.',
-    );
+  const config = authConfiguration(request, env);
+  if (!config.demoEnabled && !config.oidcEnabled)
+    throw new ApiError(503, 'AUTH_NOT_CONFIGURED', '운영 로그인 설정이 필요합니다.');
   const token = cookieToken(request);
-  const session = token ? await sessionByHash(env.DB, await hash(token)) : null;
-  if (!session) throw new ApiError(401, 'UNAUTHENTICATED', '먼저 로그인해 주세요.');
+  const session = token ? await sessionByHash(env.DB, await hash(token), env) : null;
+  if (!session || (session.authKind === 'demo' ? !config.demoEnabled : !config.oidcEnabled))
+    throw new ApiError(401, 'UNAUTHENTICATED', '먼저 로그인해 주세요.');
   return session;
 }
 
-function sessionCookie(token: string, secure: boolean, maxAge: number): string {
+export function sessionCookie(token: string, secure: boolean, maxAge: number): string {
   return `budget_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
+}
+
+export function randomToken(): string {
+  return [...crypto.getRandomValues(new Uint8Array(32))]
+    .map((v) => v.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+export async function issueSession(
+  request: Request,
+  env: Env,
+  userId: string,
+  identity?: { issuer: string; subject: string },
+): Promise<string> {
+  const token = randomToken();
+  const old = cookieToken(request);
+  const statements: D1PreparedStatement[] = [
+    env.DB.prepare('DELETE FROM sessions WHERE expires_at<=?').bind(Date.now()),
+  ];
+  if (old)
+    statements.push(
+      env.DB.prepare('DELETE FROM sessions WHERE token_hash=?').bind(await hash(old)),
+    );
+  statements.push(
+    env.DB.prepare(
+      'INSERT INTO sessions(token_hash,user_id,expires_at,auth_kind,identity_issuer,identity_subject) VALUES(?,?,?,?,?,?)',
+    ).bind(
+      await hash(token),
+      userId,
+      Date.now() + 86400000,
+      identity ? 'oidc' : 'demo',
+      identity?.issuer ?? null,
+      identity?.subject ?? null,
+    ),
+  );
+  await env.DB.batch(statements);
+  return token;
 }
 
 export async function login(request: Request, env: Env): Promise<Response> {
@@ -105,22 +212,7 @@ export async function login(request: Request, env: Env): Promise<Response> {
     .bind(body.userId)
     .first<User>();
   if (!user) throw new ApiError(400, 'INVALID_USER', '데모 초기 데이터를 먼저 준비해 주세요.');
-  const oldToken = cookieToken(request);
-  const raw = crypto.getRandomValues(new Uint8Array(32));
-  const token = [...raw].map((v) => v.toString(16).padStart(2, '0')).join('');
-  const statements: D1PreparedStatement[] = [];
-  if (oldToken)
-    statements.push(
-      env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await hash(oldToken)),
-    );
-  statements.push(
-    env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').bind(
-      await hash(token),
-      user.id,
-      Date.now() + 86400000,
-    ),
-  );
-  await env.DB.batch(statements);
+  const token = await issueSession(request, env, user.id);
   return json({ user, mode: 'demo' }, 200, {
     'Set-Cookie': sessionCookie(token, new URL(request.url).protocol === 'https:', 86400),
   });

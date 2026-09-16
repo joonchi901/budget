@@ -35,7 +35,7 @@ export async function validateTags(
   if (!ids.length) return [];
   const rows = await db
     .prepare(
-      `SELECT t.id,t.version,t.archived,t.group_id,g.version AS group_version,g.archived AS group_archived,g.applies_to,g.ledger_ids,g.selection_mode FROM tags t JOIN tag_groups g ON g.id=t.group_id AND g.household_id=t.household_id WHERE t.household_id=? AND t.id IN (SELECT value FROM json_each(?))`,
+      `SELECT t.id,t.version,t.archived,t.group_id,t.parent_id,g.version AS group_version,g.archived AS group_archived,g.applies_to,g.ledger_ids,g.selection_mode FROM tags t JOIN tag_groups g ON g.id=t.group_id AND g.household_id=t.household_id WHERE t.household_id=? AND t.id IN (SELECT value FROM json_each(?))`,
     )
     .bind(h, JSON.stringify(ids))
     .all<Record<string, unknown>>();
@@ -43,6 +43,10 @@ export async function validateTags(
   const counts = new Map<string, number>();
   for (const row of rows.results) {
     requireValue(row.applies_to === appliesTo, '이 항목에 사용할 수 없는 태그 유형입니다.');
+    requireValue(
+      !row.parent_id || ids.includes(String(row.parent_id)),
+      '소분류의 상위 태그도 함께 선택해 주세요.',
+    );
     const retained = previous.includes(String(row.id));
     const scope = row.ledger_ids == null ? null : (JSON.parse(String(row.ledger_ids)) as string[]);
     requireValue(
@@ -74,6 +78,55 @@ export async function validateTags(
       ],
     },
   ];
+}
+async function parentRelation(
+  db: D1Database,
+  h: string,
+  id: string,
+  group: TagGroup,
+  value: unknown,
+) {
+  const parentId = value == null || value === '' ? null : text(value, '상위 옵션', 600);
+  const guards: Guard[] = [];
+  const visited = new Set([id]);
+  let next = parentId;
+  while (next) {
+    requireValue(!visited.has(next), '태그 관계가 순환할 수 없습니다.');
+    visited.add(next);
+    const parent = await entityById(db, h, 'tag', next);
+    requireValue(
+      parent && !parent.archived && parent.groupId !== group.id,
+      '다른 유형의 사용 가능한 상위 옵션을 선택해 주세요.',
+    );
+    const pg = await entityById(db, h, 'tagGroup', parent.groupId);
+    requireValue(
+      pg && !pg.archived && pg.appliesTo === group.appliesTo,
+      '같은 적용 대상의 상위 옵션을 선택해 주세요.',
+    );
+    guards.push(
+      existsGuard('tags', h, parent.id, parent.version),
+      existsGuard('tag_groups', h, pg.id, pg.version),
+    );
+    next = parent.parentId ?? null;
+  }
+  if (parentId) {
+    const table = group.appliesTo === 'asset' ? 'assets' : 'transactions';
+    const active =
+      group.appliesTo === 'asset'
+        ? ''
+        : " AND e.deleted_at IS NULL AND e.type IN ('income','expense')";
+    const guard = {
+      sql: `NOT EXISTS(SELECT 1 FROM ${table} e WHERE e.household_id=?${active} AND EXISTS(SELECT 1 FROM json_each(e.tag_ids) WHERE value=?) AND NOT EXISTS(SELECT 1 FROM json_each(e.tag_ids) WHERE value=?))`,
+      bindings: [h, id, parentId],
+    };
+    const valid = await db
+      .prepare(`SELECT ${guard.sql} AS valid`)
+      .bind(...guard.bindings)
+      .first<number>('valid');
+    requireValue(valid === 1, '기존 기록에서 상위 옵션을 먼저 선택한 뒤 관계를 설정해 주세요.');
+    guards.push(guard);
+  }
+  return { parentId, guards };
 }
 async function scope(
   db: D1Database,
@@ -217,18 +270,19 @@ export async function createTag(db: D1Database, session: Session, body: ObjectBo
   const name = text(body.name, '태그 이름', 80),
     shade = color(body.color),
     order = body.sortOrder === undefined ? 0 : sortOrder(body.sortOrder);
+  const relation = await parentRelation(db, h, id, group, body.parentId);
   return commit(db, session, {
     ...op,
     entityType: 'tag',
     entityId: id,
     ledgerId: null,
-    ...combineGuards([existsGuard('tag_groups', h, groupId, group.version)]),
+    ...combineGuards([existsGuard('tag_groups', h, groupId, group.version), ...relation.guards]),
     statements: [
       db
         .prepare(
-          'INSERT INTO tags(id,household_id,group_id,name,color,sort_order) VALUES(?,?,?,?,?,?)',
+          'INSERT INTO tags(id,household_id,group_id,name,color,sort_order,parent_id) VALUES(?,?,?,?,?,?,?)',
         )
-        .bind(id, h, groupId, name, shade, order),
+        .bind(id, h, groupId, name, shade, order, relation.parentId),
     ],
   });
 }
@@ -242,18 +296,26 @@ export async function patchTag(db: D1Database, session: Session, id: string, bod
     shade = body.color === undefined ? current.color : color(body.color);
   const order = body.sortOrder === undefined ? current.sortOrder : sortOrder(body.sortOrder),
     archived = body.archived === undefined ? current.archived : bool(body.archived);
+  const group = await entityById(db, h, 'tagGroup', current.groupId);
+  const relation =
+    Object.hasOwn(body, 'parentId') && body.parentId !== current.parentId
+      ? await parentRelation(db, h, id, group!, body.parentId)
+      : { parentId: current.parentId ?? null, guards: [] };
   return commit(db, session, {
     ...op,
     entityType: 'tag',
     entityId: id,
     ledgerId: null,
-    ...combineGuards([existsGuard('tags', h, id, checkVersion(current, body.expectedVersion))]),
+    ...combineGuards([
+      existsGuard('tags', h, id, checkVersion(current, body.expectedVersion)),
+      ...relation.guards,
+    ]),
     statements: [
       db
         .prepare(
-          'UPDATE tags SET name=?,color=?,sort_order=?,archived=?,version=version+1 WHERE household_id=? AND id=?',
+          'UPDATE tags SET name=?,color=?,sort_order=?,archived=?,parent_id=?,version=version+1 WHERE household_id=? AND id=?',
         )
-        .bind(name, shade, order, Number(archived), h, id),
+        .bind(name, shade, order, Number(archived), relation.parentId, h, id),
     ],
   });
 }

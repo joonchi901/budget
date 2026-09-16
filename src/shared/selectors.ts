@@ -1,3 +1,4 @@
+import { accountingPeriod } from './planning';
 import type { Bootstrap, PaymentMethod, Tag, Transaction } from './types';
 
 interface CalendarMonth {
@@ -51,10 +52,13 @@ export function visibleTransactions(
       if (child.kind === 'purpose' && child.parentId === ledgerId) ledgerIds.add(child.id);
     }
   }
+  const period = accountingPeriod(month, ledger.periodStartDay ?? 1);
   return uniqueTransactions(
     data.transactions.filter(
       (transaction) =>
-        ledgerIds.has(transaction.ledgerId) && transaction.date.startsWith(`${month}-`),
+        ledgerIds.has(transaction.ledgerId) &&
+        transaction.date >= period.startDate &&
+        transaction.date <= period.endDate,
     ),
   );
 }

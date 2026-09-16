@@ -120,3 +120,135 @@
 .analytics-tag-group {
   margin-top: 16px;
 }
+.asset-archived-toggle {
+  align-self: center;
+  min-height: 40px;
+  font-size: 13px;
+}
+.asset-months {
+  margin: 24px 0;
+}
+.asset-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.asset-summary-table th,
+.asset-summary-table td {
+  padding: 12px 16px;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border, #ecece6);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.asset-summary-table th:first-child {
+  text-align: left;
+}
+.asset-summary-table tr.selected {
+  background: #eef5ed;
+}
+.asset-months > p {
+  margin: 18px 0 0;
+  line-height: 1.7;
+}
+.asset-trend {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 8px;
+  margin: 22px 0;
+}
+.asset-trend > div {
+  text-align: center;
+  color: var(--muted, #747c72);
+}
+.asset-trend .selected {
+  color: var(--green, #31725f);
+  font-weight: 600;
+}
+.asset-trend-column {
+  height: 110px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-bottom: 1px solid var(--border, #ecece6);
+  margin-bottom: 8px;
+}
+.asset-trend-column span {
+  display: block;
+  width: 65%;
+  max-width: 38px;
+  background: #b0c9b8;
+  border-radius: 4px 4px 0 0;
+}
+.asset-trend .selected span {
+  background: #31725f;
+}
+.asset-trend-column span.negative {
+  background: #c88270;
+}
+.asset-details {
+  margin-top: 16px;
+  font-size: 13px;
+}
+.asset-details summary {
+  cursor: pointer;
+  min-height: 40px;
+  padding: 11px 0;
+  color: var(--green, #31725f);
+}
+.asset-details dl {
+  margin: 0;
+}
+.asset-details dl > div {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 10px;
+  margin: 10px 0;
+}
+.asset-details dt {
+  color: var(--muted, #747c72);
+}
+.asset-details dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.asset-debt-fields {
+  border-top: 1px solid var(--border, #ecece6);
+  margin-top: 12px;
+  padding-top: 16px;
+}
+.asset-debt-fields h3 {
+  margin: 0 0 18px;
+}
+.form-body textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.5;
+  border: 1px solid var(--border, #dce3d9);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: white;
+  color: inherit;
+}
+@media (max-width: 650px) {
+  .asset-archived-toggle {
+    width: 100%;
+  }
+  .asset-months .panel-title {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .asset-trend {
+    gap: 3px;
+  }
+  .asset-trend small {
+    font-size: 10px;
+  }
+  .asset-summary-table th,
+  .asset-summary-table td {
+    padding: 10px;
+  }
+}

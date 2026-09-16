@@ -2,6 +2,14 @@ import { useRef, useState, type FormEvent } from 'react';
 import { ArrowRightLeft, History, Plus, Settings2, Wallet } from 'lucide-react';
 import type { Asset, AssetOperation, Bootstrap } from '../shared/types';
 import { savingsSummary } from '../shared/selectors';
+import {
+  assetBalanceAt,
+  assetSummaryAt,
+  assetTagSubtotals,
+  assetYearHistory,
+  monthEndDate,
+  type AssetDetails,
+} from '../shared/assets';
 import { request, RequestError } from './api';
 import { Dialog, Empty, Stat, ownerName, useUnsavedGuard, won } from './components';
 import { TagFields } from './TagFields';
@@ -25,9 +33,18 @@ const localDate = () => {
 export default function AssetsView({ data, month, onChanged, onNotice }: Props) {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [assetFilter, setAssetFilter] = useState('all');
-  const assets = data.assets.filter((a) => a.kind === 'asset');
-  const total = assets.reduce((s, a) => s + a.balance, 0);
-  const debt = data.assets.filter((a) => a.kind === 'liability').reduce((s, a) => s + a.balance, 0);
+  const [showArchived, setShowArchived] = useState(false);
+  const [tagGroupId, setTagGroupId] = useState('');
+  const asOf = monthEndDate(month);
+  const summary = assetSummaryAt(data, asOf);
+  const assets = data.assets.filter((a) => a.kind === 'asset' && !a.archived);
+  const yearHistory = assetYearHistory(data, month.slice(0, 4));
+  const chartMax = Math.max(1, ...yearHistory.map((row) => Math.abs(row.net ?? 0)));
+  const assetGroups = data.tagGroups.filter((group) => group.appliesTo === 'asset');
+  const selectedGroup = assetGroups.find((group) => group.id === tagGroupId) ?? assetGroups[0];
+  const tagTotals = selectedGroup ? assetTagSubtotals(data, selectedGroup.id, asOf) : [];
+  const displayMoney = (amount: number | null) =>
+    amount === null ? '과거 잔액 미확인' : `${won(amount)}원`;
   const savings = savingsSummary(data, month);
   const operations = data.assetOperations.filter(
     (op) =>
@@ -67,37 +84,54 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
           <span className="eyebrow">OUR NET WORTH</span>
           <h2>우리의 순자산</h2>
           <strong>
-            {won(total - debt)}
-            <small>원</small>
+            {summary.net === null ? '—' : won(summary.net)}
+            {summary.net !== null && <small>원</small>}
           </strong>
-          <p>현재 자산에서 부채를 뺀 금액이에요.</p>
+          <p>{asOf} 기준 · 등록된 자산에서 부채를 뺀 금액이에요.</p>
         </div>
         <div className="asset-hero-detail">
           <span>
-            전체 자산 <strong>{won(total)}원</strong>
+            전체 자산 <strong>{displayMoney(summary.assets)}</strong>
           </span>
           <span>
-            전체 부채 <strong>{won(debt)}원</strong>
+            전체 부채 <strong>{displayMoney(summary.debt)}</strong>
           </span>
           <div className="asset-stack">
-            {assets.map((a) => (
-              <span
-                key={a.id}
-                style={{
-                  width: `${total > 0 ? (Math.max(0, a.balance) / total) * 100 : 0}%`,
-                  background: a.color,
-                }}
-              />
-            ))}
+            {summary.rows
+              .filter((row) => row.asset.kind === 'asset' && row.balance !== null)
+              .map(({ asset: a, balance }) => (
+                <span
+                  key={a.id}
+                  style={{
+                    width: `${summary.knownAssets > 0 ? (Math.max(0, balance!) / summary.knownAssets) * 100 : 0}%`,
+                    background: a.color,
+                  }}
+                />
+              ))}
           </div>
         </div>
       </div>
+      {summary.unknown.length > 0 && (
+        <div className="alert">
+          선택한 월말의 잔액을 확인할 수 없는 자산이 {summary.unknown.length}개 있어 합계를 확정할
+          수 없어요. 기준일이 없거나 처음 확인한 잔액보다 앞선 기간이에요. 기준일과 잔액의 종류는 각
+          자산 설정에서 확인할 수 있어요.
+        </div>
+      )}
       <div className="section-heading">
         <div>
           <h2>자산과 부채</h2>
           <span className="muted small">예비금·투자금·전세금 등 원하는 항목으로 관리해요.</span>
         </div>
         <div className="asset-actions">
+          <label className="checkbox asset-archived-toggle">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+            />
+            보관 항목 보기
+          </label>
           <button
             className="secondary"
             onClick={() => setEditor({ type: 'transfer' })}
@@ -113,54 +147,204 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
         </div>
       </div>
       <div className="asset-grid">
-        {data.assets.map((a) => (
-          <section className="panel asset-card" key={a.id}>
-            <div className="asset-card-heading">
-              <span className="asset-icon" style={{ background: `${a.color}18`, color: a.color }}>
-                <Wallet size={21} />
-              </span>
-              <button
-                className="icon-button"
-                aria-label={`${a.name} 설정`}
-                onClick={() => setEditor({ type: 'asset', asset: a })}
-              >
-                <Settings2 size={17} />
-              </button>
-            </div>
-            <h3>
-              {a.name} {a.kind === 'liability' && <span className="badge">부채</span>}
-            </h3>
-            <strong className="asset-balance" data-testid={`asset-${a.id}`}>
-              {won(a.balance)}
-              <small>원</small>
-            </strong>
-            <div className="row-tags">
-              {a.trackSavings && <span className="savings-badge">저축 집계</span>}
-              {a.tagIds.map((id) => {
-                const t = data.tags.find((t) => t.id === id);
-                return t && <span key={id}>#{t.name}</span>;
-              })}
-            </div>
-            <div className="asset-detail">
-              <span>최초 기준 잔액</span>
-              <span>{won(a.openingBalance)}원</span>
-            </div>
-            <div className="asset-detail">
-              <span>누적 변동</span>
-              <span>
-                {a.balance - a.openingBalance > 0 ? '+' : ''}
-                {won(a.balance - a.openingBalance)}원
-              </span>
-            </div>
-            <button
-              className="text-button asset-adjust"
-              onClick={() => setEditor({ type: 'adjustment', asset: a })}
-            >
-              현재 잔액 맞추기
-            </button>
-          </section>
-        ))}
+        {data.assets
+          .filter((a) => showArchived || !a.archived)
+          .map((a) => {
+            const balance = assetBalanceAt(a, data.assetMovements, asOf);
+            return (
+              <section className="panel asset-card" key={a.id}>
+                <div className="asset-card-heading">
+                  <span
+                    className="asset-icon"
+                    style={{ background: `${a.color}18`, color: a.color }}
+                  >
+                    <Wallet size={21} />
+                  </span>
+                  <button
+                    className="icon-button"
+                    aria-label={`${a.name} 설정`}
+                    onClick={() => setEditor({ type: 'asset', asset: a })}
+                  >
+                    <Settings2 size={17} />
+                  </button>
+                </div>
+                <h3>
+                  {a.name} {a.kind === 'liability' && <span className="badge">부채</span>}
+                  {a.archived && <span className="badge">보관됨</span>}
+                </h3>
+                <strong className="asset-balance" data-testid={`asset-${a.id}`}>
+                  {balance === null ? '—' : won(balance)}
+                  {balance !== null && <small>원</small>}
+                </strong>
+                <p className="small muted">
+                  {balance === null
+                    ? a.openingDate
+                      ? `${a.openingDate} 첫 관측 이전 · 과거 잔액 미확인`
+                      : `기준일 미확인 · 현재 기록 잔액 ${won(a.balance)}원`
+                    : `${asOf} 기준`}
+                </p>
+                <div className="row-tags">
+                  {a.trackSavings && <span className="savings-badge">저축 집계</span>}
+                  {a.tagIds.map((id) => {
+                    const t = data.tags.find((t) => t.id === id);
+                    return t && <span key={id}>#{t.name}</span>;
+                  })}
+                </div>
+                <div className="asset-detail">
+                  <span>소유자 · 기관</span>
+                  <span>
+                    {ownerName(a.details?.ownerId ?? 'shared')} ·{' '}
+                    {a.details?.institution || '미등록'}
+                  </span>
+                </div>
+                <div className="asset-detail">
+                  <span>
+                    {a.details?.openingKind === 'observation'
+                      ? '처음 확인한 잔액'
+                      : '최초 발생 잔액'}
+                  </span>
+                  <span>
+                    {won(a.openingBalance)}원<br />
+                    <small>{a.openingDate || '기준일 미확인'}</small>
+                  </span>
+                </div>
+                <div className="asset-detail">
+                  <span>선택 월말까지 변동</span>
+                  <span>
+                    {balance === null
+                      ? '—'
+                      : `${balance - (a.openingDate! <= asOf ? a.openingBalance : 0) > 0 ? '+' : ''}${won(balance - (a.openingDate! <= asOf ? a.openingBalance : 0))}원`}
+                  </span>
+                </div>
+                <details className="asset-details">
+                  <summary>관리 정보 보기</summary>
+                  <AssetDetailsList asset={a} />
+                </details>
+                <button
+                  className="text-button asset-adjust"
+                  onClick={() => setEditor({ type: 'adjustment', asset: a })}
+                  disabled={a.archived}
+                >
+                  현재 잔액 맞추기
+                </button>
+              </section>
+            );
+          })}
       </div>
+      <section className="panel asset-months">
+        <div className="panel-title">
+          <h2>{month.slice(0, 4)}년 월말 자산</h2>
+          <span className="small muted">보관한 자산도 합계에 포함</span>
+        </div>
+        <div
+          className="asset-trend"
+          role="img"
+          aria-label={`${month.slice(0, 4)}년 월별 순자산 추이. 아래 표에서 정확한 금액을 확인할 수 있습니다.`}
+        >
+          {yearHistory.map((row) => (
+            <div
+              key={row.month}
+              className={row.month === month ? 'selected' : ''}
+              title={`${row.month}: ${displayMoney(row.net)}`}
+            >
+              <div className="asset-trend-column">
+                <span
+                  className={(row.net ?? 0) < 0 ? 'negative' : ''}
+                  style={{
+                    height:
+                      row.net === null
+                        ? '0%'
+                        : `${Math.max(2, (Math.abs(row.net) / chartMax) * 100)}%`,
+                  }}
+                />
+              </div>
+              <small>{Number(row.month.slice(5))}월</small>
+            </div>
+          ))}
+        </div>
+        <div className="table-scroll">
+          <table className="asset-summary-table">
+            <thead>
+              <tr>
+                <th>월말</th>
+                <th>총자산</th>
+                <th>총부채</th>
+                <th>순자산</th>
+              </tr>
+            </thead>
+            <tbody>
+              {yearHistory.map((row) => (
+                <tr key={row.month} className={row.month === month ? 'selected' : ''}>
+                  <th>{row.month}</th>
+                  <td>{displayMoney(row.assets)}</td>
+                  <td>{displayMoney(row.debt)}</td>
+                  <td>{displayMoney(row.net)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="small muted">
+          기준일 잔액과 해당 월말까지의 유효한 변동을 합산해요. 미래 월은 등록된 내역만 반영한
+          예상값이며, 과거 거래를 수정하면 해당 월 이후도 다시 계산해요. 처음 확인한 잔액의 기준일
+          이전 기간은 미확인으로 남겨요.
+        </p>
+      </section>
+      <section className="panel asset-months">
+        <div className="panel-title">
+          <h2>자산 분류별 소계</h2>
+          {selectedGroup && (
+            <select
+              aria-label="자산 집계 태그 유형"
+              value={selectedGroup.id}
+              onChange={(e) => setTagGroupId(e.target.value)}
+            >
+              {assetGroups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                  {group.archived ? ' · 보관됨' : ''}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        {tagTotals.length ? (
+          <>
+            <div className="table-scroll">
+              <table className="asset-summary-table">
+                <thead>
+                  <tr>
+                    <th>분류</th>
+                    <th>항목 수</th>
+                    <th>자산</th>
+                    <th>부채</th>
+                    <th>순자산</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tagTotals
+                    .filter((row) => row.count)
+                    .map((row) => (
+                      <tr key={row.id}>
+                        <th>{row.name}</th>
+                        <td>{row.count}</td>
+                        <td>{displayMoney(row.assets)}</td>
+                        <td>{displayMoney(row.debt)}</td>
+                        <td>{displayMoney(row.net)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="small muted">
+              {asOf} 기준. 복수 선택한 항목은 각 옵션 소계에 포함돼요. 전체 순자산에서는 각 자산을
+              한 번만 합산해요.
+            </p>
+          </>
+        ) : (
+          <Empty>태그 설정에서 자산용 유형과 옵션을 만들면 분류별로 볼 수 있어요.</Empty>
+        )}
+      </section>
       <div className="section-heading">
         <h2>이번 달 저축</h2>
         <span className="muted small">{month} · 저축 집계로 지정한 자산의 실제 변동</span>
@@ -263,6 +447,42 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
   );
 }
 
+function AssetDetailsList({ asset }: { asset: Asset }) {
+  const d = asset.details ?? {};
+  const rows: [string, string][] = [
+    ['메모', d.notes || ''],
+    ...(asset.kind === 'liability'
+      ? ([
+          ['최초 원금', d.principal == null ? '' : `${won(d.principal)}원`],
+          ['금리', d.rate == null ? '' : `${d.rate}% ${d.rateType || ''}`],
+          ['납입일', d.paymentDay == null ? '' : `${d.paymentDay}일`],
+          ['월 납입액', d.monthlyPayment == null ? '' : `${won(d.monthlyPayment)}원`],
+          ['기간', d.term || ''],
+          ['만기일', d.endDate || ''],
+          ['상환 방식', d.repaymentMethod || ''],
+          ['조건', d.conditions || ''],
+          ['수수료', d.fees || ''],
+          ['혜택', d.benefits || ''],
+        ] as [string, string][])
+      : []),
+  ];
+  return (
+    <dl>
+      {rows
+        .filter(([, value]) => value)
+        .map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      {!rows.some(([, value]) => value) && (
+        <p className="small muted">설정에서 관리 정보를 추가해 주세요.</p>
+      )}
+    </dl>
+  );
+}
+
 function AssetEditor({
   data,
   editor,
@@ -282,7 +502,17 @@ function AssetEditor({
   const [color, setColor] = useState(asset?.color ?? '#31725f');
   const [tagIds, setTagIds] = useState(asset?.tagIds ?? []);
   const [tracking, setTracking] = useState(asset?.trackSavings ?? false);
-  const [amount, setAmount] = useState(editor.type === 'adjustment' ? editor.asset.balance : 0);
+  const [openingDate, setOpeningDate] = useState(asset ? (asset.openingDate ?? '') : localDate());
+  const [archived, setArchived] = useState(Boolean(asset?.archived));
+  const [details, setDetails] = useState<AssetDetails>(
+    asset?.details ?? (asset ? {} : { ownerId: 'shared', openingKind: 'observation' }),
+  );
+  const [historyData, setHistoryData] = useState(data);
+  const [amount, setAmount] = useState(
+    editor.type === 'adjustment'
+      ? (assetBalanceAt(editor.asset, data.assetMovements, localDate()) ?? editor.asset.balance)
+      : 0,
+  );
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [date, setDate] = useState(localDate);
@@ -299,11 +529,14 @@ function AssetEditor({
   const [operationVersion, setOperationVersion] = useState(
     editor.type === 'void' ? editor.operation.version : undefined,
   );
-  const [balances, setBalances] = useState(
-    Object.fromEntries(data.assets.map((a) => [a.id, a.balance])),
+  const balances = Object.fromEntries(
+    historyData.assets.map((a) => [a.id, assetBalanceAt(a, historyData.assetMovements, date)]),
   );
-  const [baseBalance, setBaseBalance] = useState(asset?.balance ?? 0);
   const [assetVersion, setAssetVersion] = useState(asset?.version);
+  const latestAsset = historyData.assets.find((a) => a.id === asset?.id) ?? asset;
+  const baseBalance = latestAsset
+    ? assetBalanceAt(latestAsset, historyData.assetMovements, date)
+    : null;
   const snapshot = JSON.stringify({
     name,
     kind,
@@ -315,6 +548,9 @@ function AssetEditor({
     to,
     date,
     description,
+    openingDate,
+    archived,
+    details,
   });
   const initial = useRef(snapshot);
   useUnsavedGuard(busy || uncertain || tagPending || snapshot !== initial.current);
@@ -344,6 +580,9 @@ function AssetEditor({
             name,
             color,
             tagIds,
+            openingDate,
+            archived,
+            details,
             trackSavings: kind === 'asset' && tracking,
             ...(!asset ? { kind, openingBalance: amount } : {}),
           },
@@ -405,8 +644,8 @@ function AssetEditor({
     setError('');
     try {
       const fresh = await request<Bootstrap>('/api/bootstrap');
+      setHistoryData(fresh);
       setVersions(Object.fromEntries(fresh.assets.map((a) => [a.id, a.version])));
-      setBalances(Object.fromEntries(fresh.assets.map((a) => [a.id, a.balance])));
       if (editor.type === 'void') {
         const currentOperation = fresh.assetOperations.find((op) => op.id === editor.operation.id);
         if (!currentOperation || currentOperation.deletedAt) {
@@ -419,13 +658,16 @@ function AssetEditor({
       const current = fresh.assets.find((a) => a.id === asset?.id);
       if (current) {
         setAssetVersion(current.version);
-        setBaseBalance(current.balance);
         if (editor.type === 'asset') {
           setName(current.name);
           setColor(current.color);
           setTagIds(current.tagIds);
           setTracking(current.trackSavings);
-        } else if (editor.type === 'adjustment') setAmount(current.balance);
+          setOpeningDate(current.openingDate ?? '');
+          setArchived(Boolean(current.archived));
+          setDetails(current.details ?? {});
+        } else if (editor.type === 'adjustment')
+          setAmount(assetBalanceAt(current, fresh.assetMovements, date) ?? current.balance);
       }
       setConflict(false);
       await onChanged();
@@ -491,13 +733,74 @@ function AssetEditor({
                     <input type="color" value={color} onChange={(e) => setColor(e.target.value)} />
                   </label>
                 </div>
+                <div className="form-grid">
+                  <label>
+                    소유자
+                    <select
+                      value={details.ownerId ?? 'shared'}
+                      onChange={(e) =>
+                        setDetails({
+                          ...details,
+                          ownerId: e.target.value as AssetDetails['ownerId'],
+                        })
+                      }
+                    >
+                      <option value="shared">공동</option>
+                      <option value="u1">나</option>
+                      <option value="u2">와이프</option>
+                    </select>
+                  </label>
+                  <label>
+                    금융기관
+                    <input
+                      maxLength={2000}
+                      value={details.institution ?? ''}
+                      onChange={(e) => setDetails({ ...details, institution: e.target.value })}
+                      placeholder="은행·증권사 등"
+                    />
+                  </label>
+                </div>
+                <label>
+                  기준 잔액 종류
+                  <select
+                    value={details.openingKind ?? 'initial'}
+                    onChange={(e) =>
+                      setDetails({
+                        ...details,
+                        openingKind: e.target.value as AssetDetails['openingKind'],
+                      })
+                    }
+                  >
+                    <option value="observation">처음 확인한 잔액</option>
+                    <option value="initial">자산·부채 최초 발생 잔액</option>
+                  </select>
+                  <span className="small muted">
+                    {details.openingKind === 'observation'
+                      ? '기존 통장이나 엑셀 월말 잔액처럼 그날 확인한 금액이에요. 앞선 기간의 잔액은 미확인으로 표시해요.'
+                      : '그날 자산이나 부채가 처음 생겼다는 뜻이에요. 앞선 기간의 잔액은 0원으로 표시해요.'}
+                    {asset && ' 종류를 바꾸면 기준일 이전의 통계도 다시 계산해요.'}
+                  </span>
+                </label>
+                <label>
+                  최초 잔액 기준일
+                  <input
+                    type="date"
+                    required
+                    value={openingDate}
+                    onChange={(e) => setOpeningDate(e.target.value)}
+                  />
+                  <span className="small muted">
+                    선택한 종류에 따라 자산이 발생한 날짜 또는 잔액을 처음 확인한 날짜예요. 이미
+                    기록한 변동보다 늦게 지정할 수 없어요.
+                  </span>
+                </label>
                 {!asset && (
                   <label>
                     최초 잔액
                     <input
                       type="number"
                       inputMode="numeric"
-                      min="0"
+                      min={kind === 'liability' ? 0 : undefined}
                       max="1000000000000"
                       step="1"
                       required
@@ -509,6 +812,146 @@ function AssetEditor({
                     </span>
                   </label>
                 )}
+                {kind === 'liability' && (
+                  <section className="asset-debt-fields">
+                    <h3>대출 상세 정보</h3>
+                    <div className="form-grid">
+                      <label>
+                        최초 원금
+                        <input
+                          type="number"
+                          min="0"
+                          max="1000000000000"
+                          step="1"
+                          value={details.principal ?? ''}
+                          onChange={(e) =>
+                            setDetails({
+                              ...details,
+                              principal: e.target.value === '' ? null : Number(e.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        금리 (%)
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.0001"
+                          value={details.rate ?? ''}
+                          onChange={(e) =>
+                            setDetails({
+                              ...details,
+                              rate: e.target.value === '' ? null : Number(e.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        금리 종류
+                        <input
+                          maxLength={2000}
+                          placeholder="고정·변동·혼합 등"
+                          value={details.rateType ?? ''}
+                          onChange={(e) => setDetails({ ...details, rateType: e.target.value })}
+                        />
+                      </label>
+                      <label>
+                        매월 납입일
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          step="1"
+                          value={details.paymentDay ?? ''}
+                          onChange={(e) =>
+                            setDetails({
+                              ...details,
+                              paymentDay: e.target.value === '' ? null : Number(e.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        월 납입액
+                        <input
+                          type="number"
+                          min="0"
+                          max="1000000000000"
+                          step="1"
+                          value={details.monthlyPayment ?? ''}
+                          onChange={(e) =>
+                            setDetails({
+                              ...details,
+                              monthlyPayment: e.target.value === '' ? null : Number(e.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        대출 기간
+                        <input
+                          maxLength={2000}
+                          placeholder="예: 24개월"
+                          value={details.term ?? ''}
+                          onChange={(e) => setDetails({ ...details, term: e.target.value })}
+                        />
+                      </label>
+                      <label>
+                        만기일
+                        <input
+                          type="date"
+                          value={details.endDate ?? ''}
+                          onChange={(e) =>
+                            setDetails({ ...details, endDate: e.target.value || null })
+                          }
+                        />
+                      </label>
+                      <label>
+                        상환 방식
+                        <input
+                          maxLength={2000}
+                          placeholder="예: 원리금 균등"
+                          value={details.repaymentMethod ?? ''}
+                          onChange={(e) =>
+                            setDetails({ ...details, repaymentMethod: e.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                    {(
+                      [
+                        ['conditions', '대출 조건'],
+                        ['fees', '수수료'],
+                        ['benefits', '혜택'],
+                      ] as const
+                    ).map(([field, label]) => (
+                      <label key={field}>
+                        {label}
+                        <textarea
+                          maxLength={2000}
+                          rows={2}
+                          value={details[field] ?? ''}
+                          onChange={(e) => setDetails({ ...details, [field]: e.target.value })}
+                        />
+                      </label>
+                    ))}
+                    <p className="small muted">
+                      대출 조건은 관리용 기록이에요. 실제 부채가 줄거나 평가액이 바뀌면 날짜를
+                      지정해 잔액을 맞춰 주세요.
+                    </p>
+                  </section>
+                )}
+                <label>
+                  관리 메모
+                  <textarea
+                    maxLength={2000}
+                    rows={3}
+                    value={details.notes ?? ''}
+                    onChange={(e) => setDetails({ ...details, notes: e.target.value })}
+                  />
+                </label>
                 {kind === 'asset' && (
                   <label className="checkbox">
                     <input
@@ -532,6 +975,16 @@ function AssetEditor({
                   onPendingChange={setTagPending}
                   disabled={busy || uncertain}
                 />
+                {asset && (
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={archived}
+                      onChange={(e) => setArchived(e.target.checked)}
+                    />
+                    보관하기 · 과거 기록과 잔액은 유지돼요
+                  </label>
+                )}
               </>
             ) : editor.type === 'void' ? (
               <div className="effect-preview">
@@ -550,7 +1003,7 @@ function AssetEditor({
                       <select required value={from} onChange={(e) => setFrom(e.target.value)}>
                         <option value="">선택해 주세요</option>
                         {data.assets
-                          .filter((a) => a.kind === 'asset')
+                          .filter((a) => a.kind === 'asset' && !a.archived)
                           .map((a) => (
                             <option key={a.id} value={a.id} disabled={a.id === to}>
                               {a.name}
@@ -563,7 +1016,7 @@ function AssetEditor({
                       <select required value={to} onChange={(e) => setTo(e.target.value)}>
                         <option value="">선택해 주세요</option>
                         {data.assets
-                          .filter((a) => a.kind === 'asset')
+                          .filter((a) => a.kind === 'asset' && !a.archived)
                           .map((a) => (
                             <option key={a.id} value={a.id} disabled={a.id === from}>
                               {a.name}
@@ -579,7 +1032,13 @@ function AssetEditor({
                     type="number"
                     inputMode="numeric"
                     required
-                    min={editor.type === 'transfer' ? 1 : 0}
+                    min={
+                      editor.type === 'transfer'
+                        ? 1
+                        : editor.asset.kind === 'liability'
+                          ? 0
+                          : undefined
+                    }
                     max="1000000000000"
                     step="1"
                     value={amount}
@@ -589,23 +1048,35 @@ function AssetEditor({
                 {editor.type === 'transfer' && from && to && (
                   <div className="effect-preview">
                     <span>
-                      {data.assets.find((a) => a.id === from)?.name}: {won(balances[from] ?? 0)}원 →{' '}
-                      {won((balances[from] ?? 0) - amount)}원<br />
-                      {data.assets.find((a) => a.id === to)?.name}: {won(balances[to] ?? 0)}원 →{' '}
-                      {won((balances[to] ?? 0) + amount)}원
+                      {date} 기준
+                      <br />
+                      {data.assets.find((a) => a.id === from)?.name}:{' '}
+                      {balances[from] == null
+                        ? '기준일 확인 필요'
+                        : `${won(balances[from])}원 → ${won(balances[from] - amount)}원`}
+                      <br />
+                      {data.assets.find((a) => a.id === to)?.name}:{' '}
+                      {balances[to] == null
+                        ? '기준일 확인 필요'
+                        : `${won(balances[to])}원 → ${won(balances[to] + amount)}원`}
                     </span>
                   </div>
                 )}
                 {editor.type === 'adjustment' && (
                   <div className="effect-preview">
                     <span>
-                      현재 {won(baseBalance)}원 → 변경 후 {won(amount)}원<br />
+                      {date} 기준{' '}
+                      {baseBalance === null ? '기준일 확인 필요' : `${won(baseBalance)}원`} → 확인한
+                      잔액 {won(amount)}원<br />
                       <strong>
-                        조정액 {amount - baseBalance > 0 ? '+' : ''}
-                        {won(amount - baseBalance)}원
+                        조정액{' '}
+                        {baseBalance === null
+                          ? '—'
+                          : `${amount - baseBalance > 0 ? '+' : ''}${won(amount - baseBalance)}원`}
                       </strong>
                       <br />
-                      차액과 사유를 기록하고, 수입·지출·저축 실적에는 포함하지 않아요.
+                      해당 날짜의 잔액과 차액을 기록해요. 이후 변동은 유지하고 수입·지출·저축
+                      실적에는 포함하지 않아요.
                     </span>
                   </div>
                 )}

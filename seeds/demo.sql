@@ -46,3 +46,6 @@ INSERT OR IGNORE INTO transactions (id, household_id, ledger_id, date, descripti
   ('demo-coffee', 'home', 'main', '2026-09-15', '출근길 커피', 4800, 'expense', '카페', 'u2', 'card-w', '["daily","category-home-ecb9b4ed8e98"]', '2026-09-15T09:00:00.000Z', 'u2'),
   ('demo-dinner', 'home', 'main', '2026-09-15', '둘이서 저녁', 42000, 'expense', '외식', 'shared', 'card-j', '["together","category-home-ec99b8ec8b9d"]', '2026-09-15T11:00:00.000Z', 'u1'),
   ('demo-flight', 'home', 'trip', '2026-09-12', '제주 왕복 항공권', 268000, 'expense', '교통', 'shared', 'card-w', '["travel","category-home-eab590ed86b5"]', '2026-09-12T09:00:00.000Z', 'u2');
+
+-- Explicit baseline for fictional seed balances. Real imports choose their own date.
+UPDATE assets SET opening_date='2026-01-01' WHERE household_id='home' AND id IN ('checking','reserve','investment','deposit','loan') AND opening_date IS NULL;

@@ -1,0 +1,234 @@
+.data-workspace {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+.data-panel {
+  padding: 24px;
+  min-width: 0;
+}
+.data-panel .section-heading {
+  margin-top: 0;
+  gap: 16px;
+}
+.data-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.data-panel p {
+  line-height: 1.7;
+}
+.data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.data-member-mapping,
+.data-column-mapping {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+.data-column-mapping {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.data-preview {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border, #e6e8ec);
+}
+.data-table-wrap {
+  overflow: auto;
+  max-height: 430px;
+  margin: 14px 0;
+  border: 1px solid var(--border, #e6e8ec);
+  border-radius: 10px;
+}
+.data-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.data-table-wrap th,
+.data-table-wrap td {
+  padding: 11px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #e6e8ec);
+  min-width: 90px;
+  max-width: 340px;
+  overflow-wrap: anywhere;
+}
+.data-table-wrap th {
+  background: var(--surface, #f7f8fa);
+  position: sticky;
+  top: 0;
+  font-weight: 600;
+}
+.data-errors {
+  color: #9f3535;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 16px 16px 16px 32px;
+  background: #fff3f2;
+  border-radius: 10px;
+  line-height: 1.8;
+}
+.data-history > div,
+.history-entry > summary {
+  display: grid;
+  grid-template-columns: 90px 1fr 190px 50px;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border, #e6e8ec);
+  font-size: 13px;
+}
+.data-history time {
+  color: var(--muted, #6f7584);
+}
+@media (max-width: 700px) {
+  .data-panel {
+    padding: 18px;
+  }
+  .data-column-mapping,
+  .data-member-mapping {
+    grid-template-columns: 1fr 1fr;
+  }
+  .data-history > div,
+  .history-entry > summary {
+    grid-template-columns: 80px 1fr;
+  }
+  .data-history time {
+    font-size: 12px;
+  }
+  .data-actions > button {
+    flex: 1;
+  }
+}
+@media (max-width: 420px) {
+  .data-column-mapping,
+  .data-member-mapping {
+    grid-template-columns: 1fr;
+  }
+}
+
+.data-source-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.data-source-filters label {
+  flex: 1 1 180px;
+}
+.data-source-list article {
+  padding: 18px 0;
+  border-top: 1px solid var(--border, #e6e8ec);
+}
+.data-source-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.data-source-heading p {
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+.data-source-heading button {
+  flex-shrink: 0;
+  min-height: 40px;
+}
+.data-source-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.data-source-list summary {
+  cursor: pointer;
+  min-height: 40px;
+  padding: 10px 0;
+}
+.data-source-list pre {
+  max-height: 320px;
+  overflow: auto;
+  padding: 14px;
+  background: var(--surface, #f7f8fa);
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.data-panel fieldset {
+  min-inline-size: 0;
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.data-panel label:not(.checkbox) {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+.data-panel input:not([type='checkbox']),
+.data-panel select,
+.data-panel textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 10px 11px;
+  border: 1px solid var(--border, #e0e7d9);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+}
+.data-panel input[type='file'] {
+  font-size: 12px;
+}
+.data-panel input[type='file']::file-selector-button {
+  padding: 6px 8px;
+  margin-right: 8px;
+  border: 0;
+  border-radius: 5px;
+  background: #edf3e9;
+  color: #416a40;
+  cursor: pointer;
+}
+.data-panel .checkbox {
+  margin: 16px 0;
+  line-height: 1.6;
+}
+
+.history-entry {
+  border-bottom: 1px solid var(--border, #e6e8ec);
+}
+.history-entry > summary {
+  cursor: pointer;
+  list-style: disclosure-closed;
+}
+.history-entry[open] > summary {
+  list-style: disclosure-open;
+}
+.history-entry > summary:focus-visible {
+  outline: 2px solid var(--primary, #187f72);
+  outline-offset: 3px;
+}
+.history-comparison {
+  padding: 4px 12px 12px;
+  min-width: 0;
+}
+.history-comparison p {
+  overflow-wrap: anywhere;
+}
+.history-comparison td {
+  white-space: pre-wrap;
+}
+@media (max-width: 760px) {
+  .history-entry > summary {
+    grid-template-columns: 1fr 1fr;
+  }
+}

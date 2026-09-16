@@ -53,14 +53,29 @@ export function TagFields({
         <TagField
           key={group.id}
           group={group}
-          tags={tags.filter((tag) => tag.groupId === group.id)}
+          tags={tags.filter(
+            (tag) =>
+              tag.groupId === group.id &&
+              (!tag.parentId || value.includes(tag.parentId) || value.includes(tag.id)),
+          )}
           selected={value}
           disabled={disabled || (pendingGroup !== null && pendingGroup !== group.id)}
           outOfScope={
             group.ledgerIds !== null &&
             (ledgerId === undefined || !group.ledgerIds.includes(ledgerId))
           }
-          onChange={onChange}
+          onChange={(ids) => {
+            let next = ids;
+            for (let i = 0; i < tags.length; i++) {
+              const valid = next.filter((id) => {
+                const t = tags.find((t) => t.id === id);
+                return !t?.parentId || next.includes(t.parentId);
+              });
+              if (valid.length === next.length) break;
+              next = valid;
+            }
+            onChange(next);
+          }}
           onChanged={onChanged}
           onCreated={(tag) =>
             setCreated((previous) => [...previous.filter((item) => item.id !== tag.id), tag])

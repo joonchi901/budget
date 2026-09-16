@@ -583,6 +583,8 @@ b {
 .heading-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 12px;
   flex-shrink: 0;
 }
@@ -2402,6 +2404,16 @@ b {
     width: 100%;
     gap: 8px;
   }
+  .heading-actions > .month-picker {
+    flex-basis: 100%;
+    justify-content: center;
+  }
+  .heading-actions > .secondary,
+  .heading-actions > .primary {
+    flex: 1 1 120px;
+    min-width: 0;
+    min-height: 42px;
+  }
   .heading-actions .primary {
     min-height: 42px;
     padding-inline: 13px;
@@ -2415,7 +2427,8 @@ b {
     font-size: 11px;
   }
   .month-picker .icon-button {
-    width: 28px;
+    width: 40px;
+    min-height: 40px;
   }
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -1,2 +1,9 @@
 # Local development only. The server additionally rejects demo auth off loopback.
 DEMO_MODE=true
+
+# Production uses a separate D1 database and HTTPS origin. Never deploy DEMO_MODE=true.
+# Set these on the deployed Worker using wrangler secret put; do not commit real values.
+# APP_ORIGIN=https://your-budget.example
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=
+# AUTH_ALLOWED_EMAILS=first-person@example.com,second-person@example.com

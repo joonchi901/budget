@@ -19,6 +19,9 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"scripts/*.mjs\" \"*.{ts,json,jsonc,html}\""
   },
   "dependencies": {
+    "fast-xml-parser": "5.11.1",
+    "fflate": "0.8.3",
+    "jose": "6.2.12",
     "lucide-react": "1.46.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"

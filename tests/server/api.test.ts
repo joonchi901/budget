@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, afterAll, afterEach, describe, expect, test, vi } from 'vitest';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import type {
@@ -115,12 +115,16 @@ beforeAll(async () => {
     }),
   );
   db = await runtime.getD1Database('DB');
-  await sqlFile('migrations/0001_schema.sql');
-  await sqlFile('migrations/0002_tags_assets.sql');
+  for (const name of (await readdir('migrations')).filter((n) => n.endsWith('.sql')).sort())
+    await sqlFile(`migrations/${name}`);
 }, 30000);
 
 beforeEach(async () => {
   for (const table of [
+    'record_history',
+    'source_records',
+    'import_records',
+    'planning_records',
     'changes',
     'mutation_receipts',
     'asset_effects',
@@ -932,6 +936,7 @@ describe('real Worker + D1 ledger API', () => {
         name: '새 저축통장',
         kind: 'asset',
         openingBalance: 1000,
+        openingDate: '2026-01-01',
         color: '#987654',
         tagIds: [a.id],
         trackSavings: true,
@@ -968,6 +973,7 @@ describe('real Worker + D1 ledger API', () => {
           name: '부채',
           kind: 'liability',
           openingBalance: 1000,
+          openingDate: '2026-01-01',
           color: '#123456',
           tagIds: [],
           trackSavings: true,
@@ -1242,7 +1248,10 @@ describe('real Worker + D1 ledger API', () => {
       const oldIds = (await old.prepare('SELECT id FROM tags ORDER BY id').all()).results.map(
         (r) => r.id,
       );
-      await sqlFile('migrations/0002_tags_assets.sql', old);
+      for (const name of (await readdir('migrations'))
+        .filter((n) => n.endsWith('.sql') && n > '0001_schema.sql')
+        .sort())
+        await sqlFile(`migrations/${name}`, old);
       const login = await legacy.dispatchFetch('http://localhost/api/auth/demo', {
         method: 'POST',
         body: '{"userId":"u1"}',
@@ -1298,4 +1307,118 @@ describe('real Worker + D1 ledger API', () => {
       await legacy.dispose();
     }
   }, 30000);
+  test('ledger settings preserve independent periods, names, archive history and tag mapping', async () => {
+    const before = await snapshot();
+    const update = await mutate(
+      '/api/ledgers/main',
+      { expectedVersion: 1, name: '가족 기록', periodStartDay: 25, fixedExpenseTagIds: ['daily'] },
+      'PATCH',
+    );
+    expect(update.ledger).toMatchObject({
+      name: '가족 기록',
+      periodStartDay: 25,
+      fixedExpenseTagIds: ['daily'],
+    });
+    const child = await mutate(
+      '/api/ledgers/trip',
+      {
+        expectedVersion: 1,
+        name: '여행 기록',
+        startDate: '2026-09-01',
+        endDate: '2026-09-10',
+        archived: true,
+        tagMappings: { travel: 'daily' },
+      },
+      'PATCH',
+    );
+    expect(child.ledger).toMatchObject({
+      archived: true,
+      parentId: 'main',
+      tagMappings: { travel: 'daily' },
+    });
+    const after = await snapshot();
+    expect(after.transactions).toEqual(before.transactions);
+    expect(after.assetMovements).toEqual(before.assetMovements);
+    expect(
+      (
+        await call('/api/ledgers/main', 'PATCH', {
+          mutationId: crypto.randomUUID(),
+          expectedVersion: 2,
+          archived: true,
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call('/api/ledgers/main', 'PATCH', {
+          mutationId: crypto.randomUUID(),
+          expectedVersion: 2,
+          periodStartDay: 32,
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call('/api/ledgers/main', 'PATCH', {
+          mutationId: crypto.randomUUID(),
+          expectedVersion: 1,
+          name: '이전 버전',
+        })
+      ).status,
+    ).toBe(409);
+  });
+  test('dependent options require their parent, reject cycles and protect existing classifications', async () => {
+    const parentGroup = await group({ name: '상위 분류', selectionMode: 'single' });
+    const childGroup = await group({ name: '하위 분류', selectionMode: 'single' });
+    const parent = await option(parentGroup.id, '식비');
+    const child = (
+      await mutate('/api/tags', {
+        groupId: childGroup.id,
+        name: '장보기',
+        color: '#123456',
+        parentId: parent.id,
+      })
+    ).tag!;
+    expect(child.parentId).toBe(parent.id);
+    expect(
+      (
+        await call('/api/transactions', 'POST', {
+          mutationId: crypto.randomUUID(),
+          transaction: expense({ tagIds: [child.id] }),
+        })
+      ).status,
+    ).toBe(400);
+    const saved = await create(expense({ tagIds: [parent.id, child.id] }));
+    expect(saved.transaction!.tagIds).toEqual([parent.id, child.id]);
+    expect(
+      (
+        await call(`/api/tags/${parent.id}`, 'PATCH', {
+          mutationId: crypto.randomUUID(),
+          expectedVersion: 1,
+          parentId: child.id,
+        })
+      ).status,
+    ).toBe(400);
+    const other = await option(parentGroup.id, '교통');
+    const sameLabel = await mutate('/api/tags', {
+      groupId: childGroup.id,
+      name: '장보기',
+      color: '#123456',
+      parentId: other.id,
+    });
+    expect(sameLabel.tag!.id).not.toBe(child.id);
+    expect(sameLabel.tag!.parentId).toBe(other.id);
+    expect(
+      (
+        await call(`/api/tags/${child.id}`, 'PATCH', {
+          mutationId: crypto.randomUUID(),
+          expectedVersion: 1,
+          parentId: other.id,
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (await snapshot()).transactions.find((t) => t.id === saved.transaction!.id)?.tagIds,
+    ).toEqual([parent.id, child.id]);
+  });
 });

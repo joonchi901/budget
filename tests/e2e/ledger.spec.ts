@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
+import type { Bootstrap } from '../../src/shared/types';
 
 async function login(page: Page, user: '나' | '와이프') {
   await page.goto('/');
@@ -19,6 +20,10 @@ test('two users share source-ledger transactions, asset effects and link changes
   try {
     await login(first, '나');
     await login(second, '와이프');
+    const baseline: Bootstrap = await (await first.request.get('/api/bootstrap')).json();
+    const checkingBefore = baseline.assets.find((asset) => asset.id === 'checking')!.balance;
+    const reserveBefore = baseline.assets.find((asset) => asset.id === 'reserve')!.balance;
+    const balanceText = (amount: number) => `${amount.toLocaleString('ko-KR')}원`;
     await first.getByRole('button', { name: '목적 가계부 추가' }).click();
     await first.getByLabel('가계부 이름').fill('우리의 테스트 여행');
     await first.getByLabel('전체 예산 (원)').fill('300000');
@@ -43,15 +48,19 @@ test('two users share source-ledger transactions, asset effects and link changes
     ).toBeVisible();
     await expect(row.getByRole('button', { name: '여행 중 저녁 식사 수정' })).toHaveCount(0);
     await second.getByRole('button', { name: '자산', exact: true }).click();
-    await expect(second.getByTestId('asset-checking')).toHaveText('2,773,000원');
-    await expect(second.getByTestId('asset-reserve')).toHaveText('500,000원');
+    await expect(second.getByTestId('asset-checking')).toHaveText(
+      balanceText(checkingBefore - 27000),
+    );
+    await expect(second.getByTestId('asset-reserve')).toHaveText(balanceText(reserveBefore));
     await first.getByRole('button', { name: '메인 연결 해제', exact: true }).click();
     await second.getByRole('button', { name: '가계부', exact: true }).click();
     await expect(second.getByRole('row').filter({ hasText: '여행 중 저녁 식사' })).toHaveCount(0);
     await first.getByRole('button', { name: '메인에 연결', exact: true }).click();
     await expect(second.getByRole('row').filter({ hasText: '여행 중 저녁 식사' })).toHaveCount(1);
     await second.getByRole('button', { name: '자산', exact: true }).click();
-    await expect(second.getByTestId('asset-checking')).toHaveText('2,773,000원');
+    await expect(second.getByTestId('asset-checking')).toHaveText(
+      balanceText(checkingBefore - 27000),
+    );
     await second.getByRole('button', { name: '가계부', exact: true }).click();
     await second.getByRole('button', { name: '여행 중 저녁 식사 원본 가계부 열기' }).click();
     await expect(second.getByRole('heading', { name: '우리의 테스트 여행' })).toBeVisible();
@@ -85,7 +94,9 @@ test('two users share source-ledger transactions, asset effects and link changes
     await second.reload();
     await second.getByLabel('조회 월').fill('2026-09');
     await second.getByRole('button', { name: '자산', exact: true }).click();
-    await expect(second.getByTestId('asset-checking')).toHaveText('2,770,000원');
+    await expect(second.getByTestId('asset-checking')).toHaveText(
+      balanceText(checkingBefore - 30000),
+    );
   } finally {
     await Promise.all([a.close(), b.close()]).catch(() => {});
   }
@@ -139,7 +150,7 @@ test('desktop and mobile screens render without page overflow or runtime errors'
   await page.screenshot({ path: 'output/playwright/assets-desktop.png', fullPage: true });
   await page.getByRole('button', { name: '카드 · 통장', exact: true }).click();
   await page.getByLabel('조회 월').fill('2026-10');
-  await expect(page.getByText('2026년 10월 납부 예정 기준')).toBeVisible();
+  await expect(page.getByText('2026년 10월 사용 및 납부 예정')).toBeVisible();
   await page.screenshot({ path: 'output/playwright/cards-desktop.png', fullPage: true });
   await page.getByRole('button', { name: '통계', exact: true }).click();
   await page.getByRole('button', { name: '# 함께', exact: true }).click();
@@ -164,6 +175,8 @@ test('desktop and mobile screens render without page overflow or runtime errors'
       ['카드 · 통장', '카드와 통장'],
       ['통계', '기록으로 보는 우리'],
       ['태그 설정', '우리만의 태그'],
+      ['계획 · 일정', '계획과 일정'],
+      ['데이터 관리', '데이터 관리'],
       ['가계부', '우리의 일상'],
     ]) {
       await page.getByRole('button', { name: menu, exact: true }).click();
@@ -247,7 +260,20 @@ test('custom tag types, inline options and archived history are shared', async (
       '18,000',
     );
     await second.getByLabel('집계할 태그 유형').selectOption({ label: '이동수단' });
-    await expect(second.locator('.category-bars')).toContainText('고속열차');
+    const tagSummary = second.locator('section').filter({
+      has: second.getByRole('heading', { name: '유형별 전체 내역', exact: true }),
+    });
+    const trainSummary = tagSummary.getByRole('row').filter({
+      has: second.getByRole('cell', { name: '고속열차', exact: true }),
+    });
+    await expect(trainSummary.getByRole('cell').nth(1)).toHaveText('1');
+    await expect(trainSummary.getByRole('cell').nth(3)).toHaveText('18,000');
+    await trainSummary.getByRole('button', { name: '18,000', exact: true }).click();
+    const drilldown = second.getByRole('dialog', { name: '고속열차 지출', exact: true });
+    await expect(
+      drilldown.getByRole('row').filter({ hasText: '태그 커스텀 열차 수정' }),
+    ).toContainText('18,000');
+    await drilldown.getByRole('button', { name: '닫기', exact: true }).click();
   } finally {
     await Promise.all([a.close(), b.close()]);
   }
@@ -262,6 +288,7 @@ test('income allocation, savings transfers and balance correction preserve one l
     await page.getByRole('button', { name: '자산 추가', exact: true }).click();
     const form = page.getByRole('dialog');
     await form.getByLabel('자산 이름').fill(name);
+    await form.getByLabel('최초 잔액 기준일').fill('2026-01-01');
     if (track) await form.getByLabel('이 자산의 유입·인출을 저축으로 집계').check();
     await form.getByRole('button', { name: '저장', exact: true }).click();
     await expect(form).toHaveCount(0);

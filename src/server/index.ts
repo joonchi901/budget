@@ -1,5 +1,6 @@
 import type { MutationResult } from '../shared/types';
-import { authenticate, demoEnabled, login, logout, verifyOrigin, type Session } from './auth';
+import { authenticate, authConfiguration, login, logout, verifyOrigin, type Session } from './auth';
+import { startOidcLogin, finishOidcLogin } from './oidc';
 import type { Env } from './env';
 import { ApiError, json } from './errors';
 import {
@@ -12,6 +13,19 @@ import {
 import { bootstrap, getRevision } from './storage';
 import { createTagGroup, patchTagGroup, createTag, patchTag } from './tags';
 import { createAsset, patchAsset, createAssetOperation, deleteAssetOperation } from './assets';
+import { createPaymentMethod, patchPaymentMethod } from './payments';
+import { createPlan, patchPlan } from './planning';
+import {
+  exportBackup,
+  previewRestore,
+  restoreBackup,
+  previewImport,
+  applyImport,
+  readDataBody,
+  dataHistory,
+  sourceRecords,
+  patchSourceRecord,
+} from './data';
 
 export { HouseholdRoom } from '../realtime/HouseholdRoom';
 
@@ -38,17 +52,28 @@ export default {
           : new Response('Our Budget API', { status: 200 });
       }
       if (url.pathname === '/api/config' && request.method === 'GET') {
-        return json({
-          demoEnabled: demoEnabled(request, env),
-          mode: demoEnabled(request, env) ? 'demo' : 'production',
-        });
+        return json(authConfiguration(request, env));
       }
+      if (url.pathname === '/api/auth/oidc/start' && request.method === 'GET')
+        return await startOidcLogin(request, env);
+      if (url.pathname === '/api/auth/oidc/callback' && request.method === 'GET')
+        return await finishOidcLogin(request, env);
       if (url.pathname === '/api/auth/demo' && request.method === 'POST')
         return await login(request, env);
       if (url.pathname === '/api/auth/logout' && request.method === 'POST')
         return await logout(request, env);
       if (request.method !== 'GET' && request.method !== 'HEAD') verifyOrigin(request, env);
       const session = await authenticate(request, env);
+      if (url.pathname === '/api/data/backup' && request.method === 'GET')
+        return json(await exportBackup(env.DB, session));
+      if (url.pathname === '/api/data/history' && request.method === 'GET')
+        return json(await dataHistory(env.DB, session));
+      if (url.pathname === '/api/data/source-records' && request.method === 'GET')
+        return json(await sourceRecords(env.DB, session));
+      if (url.pathname === '/api/data/restore/preview' && request.method === 'POST')
+        return json(await previewRestore(env.DB, session, await readDataBody(request)));
+      if (url.pathname === '/api/data/import/preview' && request.method === 'POST')
+        return json(await previewImport(env.DB, session, await readDataBody(request)));
       if (url.pathname === '/api/bootstrap' && request.method === 'GET')
         return json(await bootstrap(env.DB, session));
       if (url.pathname === '/api/revision' && request.method === 'GET')
@@ -66,6 +91,17 @@ export default {
         return await room.fetch(target, { headers });
       }
       let result: MutationResult | undefined;
+      if (/^\/api\/data\/source-records\/[^/]+$/.test(url.pathname) && request.method === 'PATCH')
+        result = await patchSourceRecord(
+          env.DB,
+          session,
+          decodeURIComponent(url.pathname.split('/').at(-1)!),
+          await readBody(request),
+        );
+      if (url.pathname === '/api/data/restore' && request.method === 'POST')
+        result = await restoreBackup(env.DB, session, await readDataBody(request));
+      else if (url.pathname === '/api/data/import' && request.method === 'POST')
+        result = await applyImport(env.DB, session, await readDataBody(request));
       if (url.pathname === '/api/transactions' && request.method === 'POST') {
         result = await saveTransaction(env.DB, session, await readBody(request));
       } else if (/^\/api\/transactions\/[^/]+$/.test(url.pathname) && request.method === 'DELETE') {
@@ -86,6 +122,14 @@ export default {
         );
       }
       const id = decodeURIComponent(url.pathname.split('/').at(-1)!);
+      if (url.pathname === '/api/payment-methods' && request.method === 'POST')
+        result = await createPaymentMethod(env.DB, session, await readBody(request));
+      else if (/^\/api\/payment-methods\/[^/]+$/.test(url.pathname) && request.method === 'PATCH')
+        result = await patchPaymentMethod(env.DB, session, id, await readBody(request));
+      else if (url.pathname === '/api/plans' && request.method === 'POST')
+        result = await createPlan(env.DB, session, await readBody(request));
+      else if (/^\/api\/plans\/[^/]+$/.test(url.pathname) && request.method === 'PATCH')
+        result = await patchPlan(env.DB, session, id, await readBody(request));
       if (url.pathname === '/api/tag-groups' && request.method === 'POST')
         result = await createTagGroup(env.DB, session, await readBody(request));
       else if (/^\/api\/tag-groups\/[^/]+$/.test(url.pathname) && request.method === 'PATCH')

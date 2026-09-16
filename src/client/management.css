@@ -1,0 +1,265 @@
+.management-stack {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.management-panel {
+  padding: 24px;
+  min-width: 0;
+}
+.management-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.management-filters label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+}
+.management-filters select,
+.management-filters input,
+.management-panel select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border, #e3e8df);
+  border-radius: 9px;
+  background: var(--surface, #fff);
+}
+.management-tags fieldset {
+  border: 0;
+  padding: 8px 0;
+  min-width: 0;
+}
+.management-tags legend {
+  font-size: 13px;
+  font-weight: 600;
+}
+.management-tags button {
+  margin: 4px;
+  min-height: 40px;
+}
+.management-table {
+  overflow: auto;
+  max-width: 100%;
+}
+.management-table table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.management-table th,
+.management-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #e3e8df);
+}
+.management-table td small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted, #6c766d);
+  margin-top: 4px;
+  max-width: 240px;
+  white-space: normal;
+}
+.analysis-amount {
+  min-width: 40px;
+  min-height: 40px;
+  font-variant-numeric: tabular-nums;
+}
+.analysis-matrix th:not(:first-child),
+.analysis-matrix td,
+.analysis-payments td {
+  text-align: right;
+}
+.analysis-matrix th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface, #fff);
+  max-width: 180px;
+  white-space: normal;
+  min-width: 115px;
+}
+.analysis-matrix td {
+  padding: 5px 10px;
+  min-width: 88px;
+}
+.analysis-matrix .analysis-total,
+.analysis-matrix tfoot,
+.analysis-ledgers tfoot,
+.analysis-payments tfoot {
+  font-weight: 700;
+  background: #f3f6ef;
+}
+.analysis-share-track {
+  display: block;
+  width: 100px;
+  height: 5px;
+  border-radius: 3px;
+  background: #e8eee4;
+  overflow: hidden;
+  margin-top: 5px;
+}
+.analysis-share-track > span {
+  display: block;
+  height: 100%;
+  background: #64866f;
+}
+.analysis-matrix tfoot th:first-child {
+  background: #f3f6ef;
+}
+.analysis-matrix:focus-visible {
+  outline: 2px solid var(--green, #31725f);
+  outline-offset: 3px;
+}
+.management-chart {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  min-height: 140px;
+  margin: 20px 0;
+}
+.management-chart button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  flex-direction: column;
+  justify-content: end;
+  background: transparent;
+  border: 0;
+  min-width: 0;
+  min-height: 44px;
+  cursor: pointer;
+}
+.management-chart button > span {
+  display: block;
+  width: 80%;
+  border-radius: 6px 6px 0 0;
+  background: #6e9f87;
+}
+.management-chart small {
+  margin-top: 8px;
+}
+.analysis-flow {
+  margin: 20px 0;
+}
+.analysis-flow-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 0;
+  margin: 16px 0;
+  list-style: none;
+  font-size: 12px;
+}
+.analysis-flow-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.analysis-flow-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.analysis-flow-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.analysis-flow-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(40px, 1fr));
+  min-width: 600px;
+  gap: 8px;
+  padding: 6px 2px;
+}
+.analysis-flow-month {
+  border: 0;
+  background: transparent;
+  min-width: 40px;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+.analysis-flow-bars {
+  display: block;
+  position: relative;
+  width: 100%;
+}
+.analysis-flow-axis {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid #87917e;
+}
+.analysis-flow-bar {
+  position: absolute;
+  width: 23%;
+  border-radius: 3px 3px 0 0;
+}
+.analysis-flow-bar.negative {
+  border-radius: 0 0 3px 3px;
+}
+.analysis-flow-bar.income,
+.analysis-flow-swatch.income {
+  background: #7972c8;
+}
+.analysis-flow-bar.expense,
+.analysis-flow-swatch.expense {
+  background: #53836b;
+}
+.analysis-flow-bar.savings,
+.analysis-flow-swatch.savings {
+  background: #b37b39;
+}
+.analysis-flow-month small {
+  display: block;
+  margin-top: 10px;
+}
+.analysis-flow-month:focus-visible {
+  outline: 2px solid #31725f;
+  outline-offset: 1px;
+}
+.management-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+.management-calendar button {
+  padding: 12px 5px;
+  background: #fafbf8;
+  border: 1px solid #e6eae1;
+  border-radius: 10px;
+  display: grid;
+  gap: 6px;
+  text-align: center;
+  font-size: 11px;
+  cursor: pointer;
+}
+.management-calendar button.no-spend {
+  background: #edf5e9;
+  border-color: #d6e7cd;
+}
+.management-calendar small {
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 680px) {
+  .management-panel {
+    padding: 16px;
+  }
+  .management-calendar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .management-chart {
+    gap: 2px;
+  }
+  .management-chart small {
+    font-size: 10px;
+  }
+}

@@ -41,7 +41,7 @@ export class HouseholdRoom extends DurableObject<Env> {
     }
     const tokenHash = request.headers.get('X-Budget-Session');
     const householdId = request.headers.get('X-Budget-Household');
-    const session = tokenHash ? await sessionByHash(this.env.DB, tokenHash) : null;
+    const session = tokenHash ? await sessionByHash(this.env.DB, tokenHash, this.env) : null;
     if (!session || session.householdId !== householdId)
       return new Response('Unauthorized', { status: 401 });
     const ledgerId = new URL(request.url).searchParams.get('ledgerId') ?? 'main';
@@ -73,7 +73,9 @@ export class HouseholdRoom extends DurableObject<Env> {
       return;
     }
     const attachment = this.attachment(socket);
-    const session = attachment ? await sessionByHash(this.env.DB, attachment.tokenHash) : null;
+    const session = attachment
+      ? await sessionByHash(this.env.DB, attachment.tokenHash, this.env)
+      : null;
     if (!attachment || !session || session.householdId !== attachment.householdId) {
       socket.close(1008, 'Session ended');
       return;
@@ -154,7 +156,7 @@ export class HouseholdRoom extends DurableObject<Env> {
       let valid = false;
       if (attachment) {
         try {
-          const session = await sessionByHash(this.env.DB, attachment.tokenHash);
+          const session = await sessionByHash(this.env.DB, attachment.tokenHash, this.env);
           valid = session?.householdId === attachment.householdId;
         } catch {
           /* Fail closed if current authorization cannot be checked. */
