@@ -51,6 +51,8 @@ npm run dev
 
 **Google OIDC 코드는 구현했으며 실제 두 계정과 원격 배포는 아직 연결하지 않았습니다.** [운영 로그인 설정](./docs/auth-deployment.md)에 필요한 값과 절차를 정리했습니다. 데모 인증은 `DEMO_MODE=true`와 로컬 호스트 조건을 모두 요구하며 운영에서는 허용하지 않습니다. Cloudflare 실제 사용량·무료 운영 비용·원격 성능은 별도 검증이 필요합니다.
 
+운영 배포는 `wrangler.jsonc`의 `production` 환경을 사용합니다. `npm run deploy:preview`로 업로드 없이 패키징을 검사할 수 있습니다. 계정 연결·운영 D1 ID 등록 후 `npm run db:migrate:production`, `npm run deploy:production` 순서로 배포합니다. 자세한 초기 설정과 비로그인 접근 검사는 [운영 로그인 설정](./docs/auth-deployment.md)을 따릅니다.
+
 ## Excel 가져오기와 백업
 
 - 데이터 관리 → 원본 XLSX 선택 → 결제수단 연결 → 미리보기 → 반영 순서로 사용합니다.

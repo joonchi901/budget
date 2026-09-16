@@ -20,4 +20,23 @@
   ],
   "durable_objects": { "bindings": [{ "name": "COLLABORATION", "class_name": "HouseholdRoom" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HouseholdRoom"] }],
+  "env": {
+    "production": {
+      "name": "our-budget-production",
+      "workers_dev": true,
+      "preview_urls": false,
+      "vars": { "DEMO_MODE": "false" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "budget-production",
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "durable_objects": {
+        "bindings": [{ "name": "COLLABORATION", "class_name": "HouseholdRoom" }],
+      },
+    },
+  },
 }

@@ -1,6 +1,24 @@
 # 부부 2인 운영 로그인 설정
 
-현재 소스는 Google OpenID Connect의 Authorization Code 로그인과 서버 세션을 제공한다. 로컬 mock issuer 검증과 실제 Google·Cloudflare 계정 연결은 구분한다. **실제 OAuth 클라이언트·비밀값·운영 D1·공개 주소를 아직 설정하거나 배포하지 않았다.**
+현재 소스는 Google OpenID Connect의 Authorization Code 로그인과 서버 세션을 제공한다. 로컬 mock issuer 검증과 실제 Google·Cloudflare 계정 연결은 구분한다. **2026-09-17 기준 운영 환경 분리와 배포 dry-run을 완료했으며, 실제 계정 인증·운영 D1·OAuth 연결과 원격 배포는 아직 진행 전이다.**
+
+## 배포 환경과 명령
+
+`wrangler.jsonc`의 기본 환경은 기존 로컬 `budget-local`을 사용한다. `env.production`은 별도 Worker 이름 `our-budget-production`, DB `budget-production`, `DEMO_MODE=false`, SQLite Durable Object 바인딩을 명시한다. 웹과 API는 하나의 Worker에서 제공하고 `workers.dev`를 사용한다. 버전별 preview URL은 끈다. 환경별 바인딩은 자동 상속되지 않으므로 [Cloudflare 환경 설정](https://developers.cloudflare.com/workers/wrangler/environments/)에 따라 운영 환경에 다시 선언했다.
+
+| 명령                                                          | 역할                                                                     |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `npm run deploy:preview`                                      | 웹 빌드와 운영 Worker 패키징 검사. `--dry-run`으로 업로드하지 않음       |
+| `npm run db:migrate:production`                               | 운영 D1에 migration만 적용. 가상 seed를 실행하지 않음                    |
+| `npm run deploy:production`                                   | 웹 빌드 후 `--env production`으로 업로드                                 |
+| `npm run check:production -- https://실제주소 --unconfigured` | 초기 배포의 HTTPS·운영 모드·설정 누락 시 데이터 차단·원격 데모 차단 확인 |
+| `npm run check:production -- https://실제주소 --configured`   | Google 설정 후 공개 설정과 비로그인 API·백업·WebSocket 차단 확인         |
+
+운영 D1 ID는 아직 placeholder이므로 계정 연결 후 새 DB의 실제 ID로 교체해야 한다. `deploy:preview` 성공은 계정 권한이나 원격 배포 성공을 뜻하지 않는다.
+
+Cloudflare 로그인은 `wrangler login --scopes account:read user:read workers_scripts:write d1:write --use-keyring`으로 시작하고 사용자가 공식 브라우저 화면에서 승인한다. Google client secret과 이메일은 [Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/)로 등록하며 Git/명령 인수/공개 문서에 쓰지 않는다. 각 `secret put` 명령에도 `--env production`을 지정한다. `.env.*`, `.dev.vars.*`는 예제 파일을 제외하고 Git에서 무시한다.
+
+원격 점검 스크립트는 세션이나 금융 데이터를 입력받지 않고 비로그인 요청만 보낸다. 실제 두 사용자 로그인·공동 편집·로그아웃 검증은 별도로 필요하다.
 
 ## 로그인 방식
 
@@ -15,15 +33,15 @@ Google 클라이언트와 callback 등록, 서버 흐름, ID token과 `sub`의 �
 
 ## 필요한 운영 값
 
-| 값 | 설정 내용 |
-| --- | --- |
-| `APP_ORIGIN` | 최종 HTTPS origin. 예: `https://budget.example.com`. 끝 `/`와 경로를 붙이지 않음 |
-| `GOOGLE_CLIENT_ID` | Google Cloud의 웹 애플리케이션 OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | 같은 OAuth client의 secret |
-| `AUTH_ALLOWED_EMAILS` | 정확히 서로 다른 두 이메일을 쉼표로 구분. 첫 번째가 `u1`, 두 번째가 `u2` |
-| `DEMO_MODE` | 운영에서는 미설정 또는 `false` |
+| 값                     | 설정 내용                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| `APP_ORIGIN`           | 최종 HTTPS origin. 예: `https://budget.example.com`. 끝 `/`와 경로를 붙이지 않음 |
+| `GOOGLE_CLIENT_ID`     | Google Cloud의 웹 애플리케이션 OAuth client ID                                   |
+| `GOOGLE_CLIENT_SECRET` | 같은 OAuth client의 secret                                                       |
+| `AUTH_ALLOWED_EMAILS`  | 정확히 서로 다른 두 이메일을 쉼표로 구분. 첫 번째가 `u1`, 두 번째가 `u2`         |
+| `DEMO_MODE`            | 운영에서는 미설정 또는 `false`                                                   |
 
-이메일 목록과 비밀값은 정적 웹 번들에 포함하지 않는다. 운영 Worker에는 `wrangler secret put APP_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_ALLOWED_EMAILS`로 각각 설정한다. 실제 값을 명령 인수나 소스 파일에 넣지 않는다. `GET /api/config`는 `demoEnabled`, `oidcEnabled`, `mode`만 공개한다.
+이메일 목록과 비밀값은 정적 웹 번들에 포함하지 않는다. 운영 Worker에는 `wrangler secret put APP_ORIGIN --env production`과 같은 방식으로 네 값을 각각 설정한다. 실제 값을 명령 인수나 소스 파일에 넣지 않는다. `GET /api/config`는 `demoEnabled`, `oidcEnabled`, `mode`만 공개한다.
 
 ## 운영 연결 순서
 
