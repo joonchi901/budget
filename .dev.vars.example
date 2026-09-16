@@ -1,0 +1,2 @@
+# Local development only. The server additionally rejects demo auth off loopback.
+DEMO_MODE=true
