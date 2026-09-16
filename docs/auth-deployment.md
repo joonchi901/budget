@@ -1,18 +1,50 @@
 # 부부 2인 운영 로그인 설정
 
-현재 소스는 Google OpenID Connect의 Authorization Code 로그인과 서버 세션을 제공한다. 로컬 mock issuer 검증과 실제 Google·Cloudflare 계정 연결은 구분한다. **2026-09-17 기준 Cloudflare 로그인, 운영 D1 생성과 migration 적용을 완료했다. 첫 배포는 자산 업로드까지 진행했으나 Cloudflare 계정의 이메일 미인증 오류(`10034`)로 Worker 생성에 실패했다. 이메일 인증을 기다리는 중이며 공개 서비스와 Google 로그인은 아직 검증하지 않았다.**
+현재 소스는 Google OpenID Connect의 Authorization Code 로그인과 서버 세션을 제공한다. 로컬 mock issuer 검증과 실제 Google·Cloudflare 계정 연결은 구분한다. **2026-09-17 기준 Cloudflare 운영 배포, Google OAuth client와 Worker secrets 설정, 인증 설정 완료 상태의 공개 접근 차단 검사를 마쳤다. 본인 Google 계정의 로그인·새로고침 유지·로그아웃·재로그인과 실시간 연결을 확인했다. 배우자 계정 로그인과 실제 2인 공동 동작은 아직 확인하지 않았다.**
 
 ## 현재 연결 상태
 
-| 항목            | 확인된 상태                                                                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cloudflare 계정 | OAuth 로그인 성공. 이메일 인증은 사용자 완료 대기                                                                                                 |
-| 운영 D1         | `budget-production`, ID `700713f0-f352-463f-aea1-a05336091a66`, APAC 생성 및 운영 설정 반영                                                       |
-| 운영 스키마     | `0001`~`0011` 원격 migration 적용 완료. 읽기 전용 조회로 migration 11개, 가구·사용자·거래·자산·세션 0건 확인                                      |
-| 첫 배포         | 정적 자산 업로드와 `workers.dev` 계정 하위 도메인 등록 완료. Worker 생성은 오류 `10034`로 실패                                                    |
-| 공개 HTTPS 주소 | Worker 배포가 완료되지 않아 실제 서비스 주소 미확정                                                                                               |
-| Google OAuth    | 전용 프로젝트 `Our Budget` (`our-budget-508823`) 생성 확인. 앱 정보·대상 입력 후 Google 사용자 데이터 정책 동의 대기. OAuth client·secrets 미설정 |
-| 원격 검증       | 공개 주소의 접근 차단 검사, 실제 Google 로그인과 2인 공동 편집 검증 미실시                                                                        |
+| 항목            | 확인된 상태                                                                                                                                                          |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cloudflare 계정 | OAuth 로그인과 사용자 이메일 인증 완료                                                                                                                               |
+| 운영 D1         | `budget-production`, ID `700713f0-f352-463f-aea1-a05336091a66`, APAC 생성 및 운영 설정 반영                                                                          |
+| 운영 스키마     | `0001`~`0011` 원격 migration 적용 완료. 최초 배포 전 조회에서 migration 11개와 빈 가구·사용자·거래·자산·세션 확인                                                    |
+| 운영 배포       | 소스 `1cbb067`의 최초 업로드 version `fe1fe4e5-5f00-464c-93c2-179d80bc1470`. 비밀값 등록 후 현재 활성 version `e044d481-5d20-4633-8c36-f3f6a5dc189a`                 |
+| 공개 HTTPS 주소 | [https://our-budget-production.our-budget.workers.dev](https://our-budget-production.our-budget.workers.dev)                                                         |
+| Google OAuth    | 전용 프로젝트 `Our Budget` (`our-budget-508823`)의 `Budget Web` 웹 클라이언트 생성 완료. 운영 callback과 `openid`·`userinfo.email` 범위 저장 확인                    |
+| Worker secrets  | 사용자 승인 후 `APP_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_ALLOWED_EMAILS` 네 값 등록 완료                                                       |
+| 허용 계정       | 두 사람의 Google 기본 이메일을 수신해 서버 허용목록에 등록. 실제 이메일과 비밀값은 문서·Git에 기록하지 않음                                                          |
+| 원격 검증       | 인증 설정 완료 상태의 비로그인 API·백업·WebSocket 차단과 demo 차단 통과. 본인 로그인·실시간 연결·새로고침·로그아웃·재로그인 확인. 배우자 로그인·2인 공동 동작 미확인 |
+
+첫 배포에서 발생했던 Cloudflare 이메일 미인증 오류(`10034`)는 사용자 인증 후 재배포하여 해소했다. 아래 검사는 Google 인증 설정 전 상태를 확인한 결과다.
+
+```sh
+npm run check:production -- https://our-budget-production.our-budget.workers.dev --unconfigured
+```
+
+- `/`: HTTPS `200`, 웹 앱 HTML 응답.
+- `/api/config`: `mode=production`, `demoEnabled=false`, `oidcEnabled=false`.
+- `/api/bootstrap`, `/api/data/backup`, `/api/ws`: `503 AUTH_NOT_CONFIGURED`.
+- `POST /api/auth/demo`: `404 NOT_FOUND`.
+
+모든 항목을 통과했다. 이 결과는 공개 배포와 인증 미설정 시 접근 차단을 확인한 것이며 Google 로그인이나 인증된 데이터 접근 성공을 뜻하지 않는다.
+
+### 인증 설정 완료 후 검증
+
+사용자 승인으로 OAuth client 생성과 Worker secrets 등록을 완료한 뒤 다음 검사를 실행했다.
+
+```sh
+npm run check:production -- https://our-budget-production.our-budget.workers.dev --configured
+```
+
+- `/`: HTTPS `200`, 웹 앱 HTML 응답.
+- `/api/config`: `mode=production`, `demoEnabled=false`, `oidcEnabled=true`.
+- 비로그인 `/api/bootstrap`, `/api/data/backup`, `/api/ws`: `401 UNAUTHENTICATED`.
+- `POST /api/auth/demo`: `404 NOT_FOUND`.
+
+공개 검사 전체를 통과했다. Chrome 운영 화면에서 본인 Google 계정으로 로그인하여 메인 가계부와 `실시간 연결됨`을 확인했고, 새로고침 후 로그인 유지, 로그아웃 후 로그인 화면 복귀, 재로그인 후 실시간 연결까지 확인했다.
+
+첫 로그인 후 로그아웃 전의 원격 D1 읽기 전용 조회는 가구 1개, 사용자 2개, 활성 로그인 identity 1개, OIDC 세션 1개, 거래·자산·자산변동 각 0개였다. 이 수치는 해당 시점의 관측값이며 금융 기록을 생성하지 않았다. 사용자 2개는 초기 가구 구성이고 **배우자가 실제 로그인했다는 증거는 아니다.** 배우자 기기의 로그인과 2인 공동 동작은 확인 요청 후 응답 대기 중이다.
 
 ## 배포 환경과 명령
 
@@ -30,7 +62,7 @@
 
 Cloudflare 로그인은 `wrangler login --scopes account:read user:read workers_scripts:write d1:write --use-keyring`으로 시작하고 사용자가 공식 브라우저 화면에서 승인한다. Google client secret과 이메일은 [Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/)로 등록하며 Git/명령 인수/공개 문서에 쓰지 않는다. 각 `secret put` 명령에도 `--env production`을 지정한다. `.env.*`, `.dev.vars.*`는 예제 파일을 제외하고 Git에서 무시한다.
 
-원격 점검 스크립트는 세션이나 금융 데이터를 입력받지 않고 비로그인 요청만 보낸다. 실제 두 사용자 로그인·공동 편집·로그아웃 검증은 별도로 필요하다.
+원격 점검 스크립트는 세션이나 금융 데이터를 입력받지 않고 비로그인 요청만 보낸다. 본인 계정의 실제 로그인·로그아웃은 위 브라우저 검사로 별도 확인했고, 배우자 로그인·2인 공동 편집 검증은 남아 있다.
 
 ## 로그인 방식
 
@@ -45,25 +77,27 @@ Google 클라이언트와 callback 등록, 서버 흐름, ID token과 `sub`의 �
 
 ## 필요한 운영 값
 
-| 값                     | 설정 내용                                                                        |
-| ---------------------- | -------------------------------------------------------------------------------- |
-| `APP_ORIGIN`           | 최종 HTTPS origin. 예: `https://budget.example.com`. 끝 `/`와 경로를 붙이지 않음 |
-| `GOOGLE_CLIENT_ID`     | Google Cloud의 웹 애플리케이션 OAuth client ID                                   |
-| `GOOGLE_CLIENT_SECRET` | 같은 OAuth client의 secret                                                       |
-| `AUTH_ALLOWED_EMAILS`  | 정확히 서로 다른 두 이메일을 쉼표로 구분. 첫 번째가 `u1`, 두 번째가 `u2`         |
-| `DEMO_MODE`            | 운영에서는 미설정 또는 `false`                                                   |
+| 값                     | 설정 내용                                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| `APP_ORIGIN`           | `https://our-budget-production.our-budget.workers.dev`. 끝 `/`와 경로를 붙이지 않음 |
+| `GOOGLE_CLIENT_ID`     | Google Cloud의 웹 애플리케이션 OAuth client ID                                      |
+| `GOOGLE_CLIENT_SECRET` | 같은 OAuth client의 secret                                                          |
+| `AUTH_ALLOWED_EMAILS`  | 정확히 서로 다른 두 이메일을 쉼표로 구분. 첫 번째가 `u1`, 두 번째가 `u2`            |
+| `DEMO_MODE`            | 운영에서는 미설정 또는 `false`                                                      |
 
 이메일 목록과 비밀값은 정적 웹 번들에 포함하지 않는다. 운영 Worker에는 `wrangler secret put APP_ORIGIN --env production`과 같은 방식으로 네 값을 각각 설정한다. 실제 값을 명령 인수나 소스 파일에 넣지 않는다. `GET /api/config`는 `demoEnabled`, `oidcEnabled`, `mode`만 공개한다.
+
+Gmail이 아닌 주소로 만든 Google 계정도 사용할 수 있다. 단, 서버는 Google ID token의 `email_verified=true`를 요구하며 `email`과 허용목록을 공백 제거·소문자화 후 정확히 비교한다. 전달 주소, `+` 별칭, 점 생략 등을 같은 주소로 변환하지 않는다. 두 사람의 서로 다른 Google 계정이 실제 반환하는 기본 이메일을 등록해야 한다.
 
 ## 운영 연결 순서
 
 1. **완료:** 개발 DB와 분리된 운영용 D1을 생성하고 실제 database ID를 배포 설정에 지정했다.
 2. **완료:** 운영 D1에 `0001`~`0011` migration을 순서대로 적용했다. 운영에 `seeds/demo.sql`을 실행하지 않았다.
-3. **현재 대기:** Cloudflare 계정 이메일 인증 후 Worker 배포를 다시 실행하고 최종 HTTPS origin을 확정한다. 임시 preview 호스트는 허용 origin으로 자동 취급하지 않는다.
-4. Google Cloud에서 웹 애플리케이션 OAuth client와 동의 화면을 구성한다. 승인된 redirect URI에 `APP_ORIGIN + /api/auth/oidc/callback`을 정확히 등록한다. 아래의 개인용 Google 설정을 따른다.
-5. 위 네 값을 Worker secrets에 설정하고 운영 `DEMO_MODE=false`를 유지한다.
-6. 빌드·migration·배포 후 두 실제 계정으로 각각 로그인해 같은 빈 가계부를 보는지 확인한다. 다른 계정과 직접 `/api/auth/demo` 접근은 거절되어야 한다.
-7. 한 기기에서 수정한 내역을 다른 기기에서 확인하고 로그아웃·세션 만료·재접속을 검증한다. 이 단계의 실제 결과를 운영 검증 기록에 별도로 남긴다.
+3. **완료:** 이메일 인증 후 Worker를 배포하고 위 HTTPS origin과 인증 미설정 상태의 공개 접근 차단을 확인했다. 임시 preview 호스트는 허용 origin으로 자동 취급하지 않는다.
+4. **완료:** `Budget Web` 웹 클라이언트를 생성하고 `https://our-budget-production.our-budget.workers.dev/api/auth/oidc/callback`과 `openid`·`userinfo.email` 범위를 등록했다.
+5. **완료:** 두 사람의 Google 기본 이메일을 수신하고 위 네 값을 Worker secrets에 등록했다. 운영 `DEMO_MODE=false`를 유지한다.
+6. **부분 확인:** `--configured` 공개 검사는 통과했고 본인 계정의 메인 가계부 접근·실시간 연결·새로고침 유지·로그아웃·재로그인을 확인했다. 배우자 기기에서 같은 가계부에 로그인하는 확인은 대기 중이다. 제3의 비허용 Google 계정에 대한 실제 운영 로그인 거절은 별도 미검증이며 로컬 인증 테스트로 검증했다.
+7. **남음:** 실제 두 기기의 접속·편집 위치·변경 공유, 재접속과 세션 만료를 확인하고 결과를 운영 검증 기록에 남긴다. 금융 기록을 사용하는 공동 편집 검증은 이번 로그인 확인에서 수행하지 않았다.
 
 첫 허용 로그인이 완료되면 가구 `home`, 사용자 `u1/u2`, 예산 0원의 메인 가계부 `main`, 기본 현금 결제수단을 초기화한다. 가상 자산·거래·카드는 만들지 않는다. 최초 사용자 표시명은 나/와이프이며 금융 데이터와 별개다. 이미 다른 가구 사용자 구성이 있는 DB는 자동으로 덮어쓰지 않고 초기 설정 오류로 차단한다.
 
@@ -90,4 +124,6 @@ Google 클라이언트와 callback 등록, 서버 흐름, ID token과 `sub`의 �
 
 `tests/server/auth-production.test.ts`는 로컬에서 생성한 RSA 키와 mock Google 응답을 사용한다. 실제 서명 검증, 두 계정 제한, issuer/subject 고정, state 재사용·브라우저 바인딩·PKCE, 잘못된 claim, 원격 demo 세션, 구성원 해제·로그아웃·만료를 검증한다. 테스트가 실제 Google 운영 자격증명이나 원격 배포 성공을 증명하지는 않는다.
 
-운영 D1 생성과 스키마 적용은 완료했다. 남은 선행 작업은 **Cloudflare 계정 이메일 인증과 Worker 재배포**, Google 정책 확인 후 OAuth client 구성이다. 아직 확정할 외부 값은 **두 사람의 Google 이메일, OAuth client ID/secret, 최종 HTTPS 주소**다. 이 값으로 실제 연결을 마친 뒤 공개 주소 접근 차단, 두 사람의 로그인·공동 편집·로그아웃을 검증한다. 로그인 실패 시에는 인증 정보 대신 안전한 오류 설명과 다시 로그인 경로를 보여준다.
+운영 D1·스키마·Worker·Google OAuth·secrets 연결과 공개 접근 차단 검증은 완료했다. 본인 계정의 실제 로그인 흐름도 확인했다. 남은 사용자 확인은 **배우자 기기의 로그인과 실제 2인 공동 동작**이며, 원격 장기 미사용·세션 만료와 금융 자료를 사용하는 공동 편집은 아직 검증하지 않았다. 로그인 실패 시에는 인증 정보 대신 안전한 오류 설명과 다시 로그인 경로를 보여준다.
+
+GitHub 원격 반영은 개인 계정 인증 만료로 대기 중이다. 별도 GitHub CLI 프로필의 개인 계정 device flow 승인을 요청했으며, 기존 회사 계정으로 대체하지 않았고 push는 아직 실행하지 않았다. 이 인증은 Cloudflare 운영 배포·Google 로그인 상태와 별개다.

@@ -1,6 +1,6 @@
 # 우리의 가계부
 
-부부가 함께 쓰는 로컬 웹 가계부입니다. 메인·목적별 가계부의 수입·지출, 사용자 정의 태그, 명시적 자산 반영, 자산 이동·잔액 조정·저축 통계와 공동 사용 흐름을 개발하고 있습니다. 전체 기능이나 운영 배포가 완료된 상태는 아닙니다.
+부부가 함께 쓰는 웹 가계부입니다. 메인·목적별 가계부의 수입·지출, 사용자 정의 태그, 명시적 자산 반영, 자산 이동·잔액 조정·저축 통계와 공동 사용 흐름을 개발하고 있습니다. Cloudflare 호스팅과 Google 로그인 연결을 완료했고 본인 계정의 실제 로그인·실시간 연결을 확인했습니다. 배우자 로그인과 실제 2인 공동 동작은 확인 대기 중입니다.
 
 원장·태그·자산·대출·카드·통장·계획·통계·엑셀 이관·백업과 공동 편집을 구현하고 검증합니다. 최신 통과 결과는 [구현 현황](./docs/implementation-status.md), 원본 자료 대조와 미확정 항목은 [Excel 검증 보고서](./docs/excel-parity-audit.md)에 기록합니다.
 
@@ -49,9 +49,13 @@ npm run dev
 - 카드 구매만 소비 지출입니다. 청구 예상액·납부일은 별도 정보이며 지출을 다시 생성하지 않습니다. 할부·취소·이월·은행 휴일 보정은 아직 지원하지 않습니다.
 - 가구당 Durable Object 하나로 접속·편집 위치·변경 순번을 공유하고, 누락된 변경은 API 재조회로 복구하는 구조입니다.
 
-**Google OIDC 코드는 구현했으며 실제 두 계정과 원격 배포는 아직 연결하지 않았습니다.** [운영 로그인 설정](./docs/auth-deployment.md)에 필요한 값과 절차를 정리했습니다. 데모 인증은 `DEMO_MODE=true`와 로컬 호스트 조건을 모두 요구하며 운영에서는 허용하지 않습니다. Cloudflare 실제 사용량·무료 운영 비용·원격 성능은 별도 검증이 필요합니다.
+**운영 주소는 [우리의 가계부](https://our-budget-production.our-budget.workers.dev)이며, 등록한 두 Google 계정으로 로그인합니다.** 2026-09-17 소스 `1cbb067`의 최초 업로드 version은 `fe1fe4e5-5f00-464c-93c2-179d80bc1470`, 비밀값 등록 후 현재 활성 version은 `e044d481-5d20-4633-8c36-f3f6a5dc189a`입니다. Google 웹 클라이언트·운영 callback·최소 로그인 범위와 Worker secrets 네 개를 설정했습니다. 실제 이메일·비밀값은 Git에 기록하지 않습니다.
 
-운영 배포는 `wrangler.jsonc`의 `production` 환경을 사용합니다. `npm run deploy:preview`로 업로드 없이 패키징을 검사할 수 있습니다. 2026-09-17 운영 D1 생성과 migration 11개 적용을 완료했으며, Worker 생성은 Cloudflare 계정 이메일 인증 오류(`10034`)로 대기 중입니다. 인증 후 `npm run deploy:production`을 다시 실행합니다. 후속 스키마 변경은 `npm run db:migrate:production`으로 적용합니다. 자세한 초기 설정과 비로그인 접근 검사는 [운영 로그인 설정](./docs/auth-deployment.md)을 따릅니다.
+인증 설정 완료 상태에서 HTTPS 화면, 운영 모드, 비로그인 API·백업·WebSocket의 `401 UNAUTHENTICATED`, 원격 데모의 `404 NOT_FOUND` 검사를 통과했습니다. 본인 Google 계정의 메인 가계부 접근·실시간 연결·새로고침 유지·로그아웃·재로그인을 확인했고 금융 기록은 만들지 않았습니다. **배우자 계정 로그인과 실제 2인 공동 동작은 아직 확인하지 않았습니다.**
+
+운영 배포는 `wrangler.jsonc`의 `production` 환경을 사용합니다. 운영 D1 생성과 migration 11개 적용을 완료했고 가상 seed는 실행하지 않았습니다. `npm run deploy:preview`로 업로드 없이 패키징을 검사하고 `npm run deploy:production`으로 배포합니다. 후속 스키마 변경은 `npm run db:migrate:production`으로 적용합니다. 자세한 연결 상태와 비로그인 접근 검사는 [운영 로그인 설정](./docs/auth-deployment.md)을 따릅니다.
+
+Gmail이 아닌 주소의 Google 계정도 사용할 수 있습니다. 별칭·전달 주소 대신 각 계정이 실제 반환하는 기본 이메일 두 개를 허용목록에 등록해야 합니다. 데모 인증은 `DEMO_MODE=true`와 로컬 호스트 조건을 모두 요구하며 운영에서는 허용하지 않습니다. Cloudflare 실제 사용량·무료 운영 비용·원격 성능은 별도 검증이 필요합니다.
 
 ## Excel 가져오기와 백업
 
@@ -100,6 +104,8 @@ NODE_USE_SYSTEM_CA=1 npm ci
 ## Git 작업 기록
 
 [GitHub 저장소](https://github.com/joonchi901/budget)의 `main`에서 작업합니다. 문서, 원장 API, 웹 화면, 검증처럼 검토 가능한 작업 단위로 커밋을 나누고, 해당 변경을 검증한 뒤 push합니다. 커밋 메시지에는 변경한 기능이나 해결한 문제를 적습니다.
+
+2026-09-17 현재 개인 GitHub 인증 만료로 원격 push는 대기 중입니다. 별도 GitHub CLI 프로필로 개인 계정의 device flow 승인을 요청했으며 기존 회사 계정은 사용하지 않았습니다. Cloudflare 배포와 Google 로그인 연결은 완료했으며 GitHub 재인증과는 별개입니다.
 
 ## 설계 문서
 
