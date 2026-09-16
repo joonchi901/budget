@@ -23,6 +23,7 @@
   "env": {
     "production": {
       "name": "our-budget-production",
+      "account_id": "ea8edaa239f697f86347131b03db228b",
       "workers_dev": true,
       "preview_urls": false,
       "vars": { "DEMO_MODE": "false" },
@@ -30,7 +31,7 @@
         {
           "binding": "DB",
           "database_name": "budget-production",
-          "database_id": "00000000-0000-0000-0000-000000000000",
+          "database_id": "700713f0-f352-463f-aea1-a05336091a66",
           "migrations_dir": "migrations",
         },
       ],
