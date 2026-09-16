@@ -61,16 +61,16 @@ npm run dev
 
 ## 개발 명령
 
-| 명령 | 역할 |
-| --- | --- |
-| `npm run dev` | 로컬 DB 준비·빌드 후 웹과 Worker 함께 실행 |
-| `npm run db:init` | 로컬 마이그레이션과 가상 예시 데이터 적용 |
-| `npm run typecheck` | TypeScript 검사 |
-| `npm test` | Vitest 테스트 실행 |
-| `npm run build` | 웹 앱 빌드 |
-| `npm run check` | 타입 검사·테스트·빌드 순서로 실행 |
-| `npm run test:e2e` | Playwright 브라우저 테스트 실행 |
-| `npm run format` | 선택적으로 소스·테스트·설정 파일의 서식 정리 |
+| 명령                | 역할                                         |
+| ------------------- | -------------------------------------------- |
+| `npm run dev`       | 로컬 DB 준비·빌드 후 웹과 Worker 함께 실행   |
+| `npm run db:init`   | 로컬 마이그레이션과 가상 예시 데이터 적용    |
+| `npm run typecheck` | TypeScript 검사                              |
+| `npm test`          | Vitest 테스트 실행                           |
+| `npm run build`     | 웹 앱 빌드                                   |
+| `npm run check`     | 타입 검사·테스트·빌드 순서로 실행            |
+| `npm run test:e2e`  | Playwright 브라우저 테스트 실행              |
+| `npm run format`    | 선택적으로 소스·테스트·설정 파일의 서식 정리 |
 
 명령의 존재가 검증 완료를 뜻하지는 않습니다. 실제 실행 결과와 남은 범위는 [구현 현황](./docs/implementation-status.md)에 기록합니다.
 
@@ -104,4 +104,5 @@ NODE_USE_SYSTEM_CA=1 npm ci
 - [기능 정의서](./docs/functional-requirements.md): 전체 기능 범위와 수용 기준
 - [시스템 구성 기준서](./docs/system-architecture-baseline.md): 운영 구조와 보안·복구 기준
 - [핵심 흐름 설계](./docs/core-design.md): 이번 구현의 업무 규칙과 데이터 관계
+- [UI/UX 개선 기준](./docs/ui-ux-design.md): Toss 공식 자료 조사, 화면 구조·디자인 규칙과 검증
 - [구현 현황](./docs/implementation-status.md): 현재 소스·검증 근거와 후속 필수 기능
