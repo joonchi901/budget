@@ -1,3 +1,8 @@
+import { Tooltip } from './Tooltip';
+import { SelectField, SelectOption } from './SelectField';
+import { TagBadge } from './TagBadge';
+import { DateField } from './DateFields';
+import { ColorField } from './ColorField';
 import { useRef, useState, type FormEvent } from 'react';
 import { ArrowRightLeft, History, Plus, Settings2, Wallet } from 'lucide-react';
 import type { Asset, AssetOperation, Bootstrap } from '../shared/types';
@@ -195,7 +200,9 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
                   {a.trackSavings && <span className="savings-badge">저축 집계</span>}
                   {a.tagIds.map((id) => {
                     const t = data.tags.find((t) => t.id === id);
-                    return t && <span key={id}>#{t.name}</span>;
+                    return (
+                      t && <TagBadge key={id} name={t.name} color={t.color} archived={t.archived} />
+                    );
                   })}
                 </div>
                 <details className="asset-details">
@@ -260,24 +267,22 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
           aria-label={`${month.slice(0, 4)}년 월별 순자산 추이. 아래 표에서 정확한 금액을 확인할 수 있습니다.`}
         >
           {yearHistory.map((row) => (
-            <div
-              key={row.month}
-              className={row.month === month ? 'selected' : ''}
-              title={`${row.month}: ${displayMoney(row.net)}`}
-            >
-              <div className="asset-trend-column">
-                <span
-                  className={(row.net ?? 0) < 0 ? 'negative' : ''}
-                  style={{
-                    height:
-                      row.net === null
-                        ? '0%'
-                        : `${Math.max(2, (Math.abs(row.net) / chartMax) * 100)}%`,
-                  }}
-                />
+            <Tooltip content={`${row.month}: ${displayMoney(row.net)}`} key={row.month}>
+              <div className={row.month === month ? 'selected' : ''}>
+                <div className="asset-trend-column">
+                  <span
+                    className={(row.net ?? 0) < 0 ? 'negative' : ''}
+                    style={{
+                      height:
+                        row.net === null
+                          ? '0%'
+                          : `${Math.max(2, (Math.abs(row.net) / chartMax) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <small>{Number(row.month.slice(5))}월</small>
               </div>
-              <small>{Number(row.month.slice(5))}월</small>
-            </div>
+            </Tooltip>
           ))}
         </div>
         <details className="asset-table-details">
@@ -315,18 +320,18 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
         <div className="panel-title">
           <h2>자산 분류별 소계</h2>
           {selectedGroup && (
-            <select
+            <SelectField
               aria-label="자산 집계 태그 유형"
               value={selectedGroup.id}
-              onChange={(e) => setTagGroupId(e.target.value)}
+              onValueChange={(value) => setTagGroupId(value)}
             >
               {assetGroups.map((group) => (
-                <option key={group.id} value={group.id}>
+                <SelectOption key={group.id} value={group.id}>
                   {group.name}
                   {group.archived ? ' · 보관됨' : ''}
-                </option>
+                </SelectOption>
               ))}
-            </select>
+            </SelectField>
           )}
         </div>
         {tagTotals.length ? (
@@ -347,7 +352,17 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
                     .filter((row) => row.count)
                     .map((row) => (
                       <tr key={row.id}>
-                        <th>{row.name}</th>
+                        <th>
+                          {data.tags.some((tag) => tag.id === row.id) ? (
+                            <TagBadge
+                              name={row.name}
+                              color={data.tags.find((tag) => tag.id === row.id)!.color}
+                              archived={data.tags.find((tag) => tag.id === row.id)!.archived}
+                            />
+                          ) : (
+                            row.name
+                          )}
+                        </th>
                         <td>{row.count}</td>
                         <td>{displayMoney(row.assets)}</td>
                         <td>{displayMoney(row.debt)}</td>
@@ -371,18 +386,18 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
           <h2>
             <History size={18} /> 자산 변동 내역
           </h2>
-          <select
+          <SelectField
             aria-label="변동 내역 자산"
             value={assetFilter}
-            onChange={(e) => setAssetFilter(e.target.value)}
+            onValueChange={(value) => setAssetFilter(value)}
           >
-            <option value="all">전체 자산</option>
+            <SelectOption value="all">전체 자산</SelectOption>
             {data.assets.map((a) => (
-              <option key={a.id} value={a.id}>
+              <SelectOption key={a.id} value={a.id}>
                 {a.name}
-              </option>
+              </SelectOption>
             ))}
-          </select>
+          </SelectField>
         </div>
         {history.map((row) => {
           const op = row.operation;
@@ -732,40 +747,36 @@ function AssetEditor({
                     {!asset && (
                       <label>
                         종류
-                        <select
+                        <SelectField
                           value={kind}
-                          onChange={(e) => setKind(e.target.value as typeof kind)}
+                          onValueChange={(value) => setKind(value as typeof kind)}
                         >
-                          <option value="asset">자산</option>
-                          <option value="liability">부채</option>
-                        </select>
+                          <SelectOption value="asset">자산</SelectOption>
+                          <SelectOption value="liability">부채</SelectOption>
+                        </SelectField>
                       </label>
                     )}
                     <label>
                       표시 색상
-                      <input
-                        type="color"
-                        value={color}
-                        onChange={(e) => setColor(e.target.value)}
-                      />
+                      <ColorField value={color} onValueChange={(value) => setColor(value)} />
                     </label>
                   </div>
                   <div className="form-grid">
                     <label>
                       소유자
-                      <select
+                      <SelectField
                         value={details.ownerId ?? 'shared'}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           setDetails({
                             ...details,
-                            ownerId: e.target.value as AssetDetails['ownerId'],
+                            ownerId: value as AssetDetails['ownerId'],
                           })
                         }
                       >
-                        <option value="shared">공동</option>
-                        <option value="u1">나</option>
-                        <option value="u2">와이프</option>
-                      </select>
+                        <SelectOption value="shared">공동</SelectOption>
+                        <SelectOption value="u1">나</SelectOption>
+                        <SelectOption value="u2">와이프</SelectOption>
+                      </SelectField>
                     </label>
                     <label>
                       금융기관
@@ -782,18 +793,18 @@ function AssetEditor({
                   <h3>기준 잔액</h3>
                   <label>
                     기준 잔액 종류
-                    <select
+                    <SelectField
                       value={details.openingKind ?? 'initial'}
-                      onChange={(e) =>
+                      onValueChange={(value) =>
                         setDetails({
                           ...details,
-                          openingKind: e.target.value as AssetDetails['openingKind'],
+                          openingKind: value as AssetDetails['openingKind'],
                         })
                       }
                     >
-                      <option value="observation">처음 확인한 잔액</option>
-                      <option value="initial">자산·부채 최초 발생 잔액</option>
-                    </select>
+                      <SelectOption value="observation">처음 확인한 잔액</SelectOption>
+                      <SelectOption value="initial">자산·부채 최초 발생 잔액</SelectOption>
+                    </SelectField>
                     <span className="small muted">
                       {details.openingKind === 'observation'
                         ? '기존 통장이나 엑셀 월말 잔액처럼 그날 확인한 금액이에요. 앞선 기간의 잔액은 미확인으로 표시해요.'
@@ -803,11 +814,10 @@ function AssetEditor({
                   </label>
                   <label>
                     최초 잔액 기준일
-                    <input
-                      type="date"
+                    <DateField
                       required
                       value={openingDate}
-                      onChange={(e) => setOpeningDate(e.target.value)}
+                      onValueChange={(value) => setOpeningDate(value)}
                     />
                     <span className="small muted">
                       선택한 종류에 따라 자산이 발생한 날짜 또는 잔액을 처음 확인한 날짜예요. 이미
@@ -921,11 +931,10 @@ function AssetEditor({
                       </label>
                       <label>
                         만기일
-                        <input
-                          type="date"
+                        <DateField
                           value={details.endDate ?? ''}
-                          onChange={(e) =>
-                            setDetails({ ...details, endDate: e.target.value || null })
+                          onValueChange={(value) =>
+                            setDetails({ ...details, endDate: value || null })
                           }
                         />
                       </label>
@@ -1023,29 +1032,29 @@ function AssetEditor({
                   <div className="form-grid">
                     <label>
                       보내는 자산
-                      <select required value={from} onChange={(e) => setFrom(e.target.value)}>
-                        <option value="">선택해 주세요</option>
+                      <SelectField required value={from} onValueChange={(value) => setFrom(value)}>
+                        <SelectOption value="">선택해 주세요</SelectOption>
                         {data.assets
                           .filter((a) => a.kind === 'asset' && !a.archived)
                           .map((a) => (
-                            <option key={a.id} value={a.id} disabled={a.id === to}>
+                            <SelectOption key={a.id} value={a.id} disabled={a.id === to}>
                               {a.name}
-                            </option>
+                            </SelectOption>
                           ))}
-                      </select>
+                      </SelectField>
                     </label>
                     <label>
                       받는 자산
-                      <select required value={to} onChange={(e) => setTo(e.target.value)}>
-                        <option value="">선택해 주세요</option>
+                      <SelectField required value={to} onValueChange={(value) => setTo(value)}>
+                        <SelectOption value="">선택해 주세요</SelectOption>
                         {data.assets
                           .filter((a) => a.kind === 'asset' && !a.archived)
                           .map((a) => (
-                            <option key={a.id} value={a.id} disabled={a.id === from}>
+                            <SelectOption key={a.id} value={a.id} disabled={a.id === from}>
                               {a.name}
-                            </option>
+                            </SelectOption>
                           ))}
-                      </select>
+                      </SelectField>
                     </label>
                   </div>
                 )}
@@ -1105,12 +1114,7 @@ function AssetEditor({
                 )}
                 <label>
                   날짜
-                  <input
-                    type="date"
-                    required
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                  />
+                  <DateField required value={date} onValueChange={(value) => setDate(value)} />
                 </label>
                 <label>
                   {editor.type === 'transfer' ? '이동 내용' : '조정 사유'}

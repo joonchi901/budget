@@ -1,3 +1,5 @@
+import { SelectField, SelectOption } from './SelectField';
+import { MonthField } from './DateFields';
 import { useRef, useState, type FormEvent } from 'react';
 import { Archive, CreditCard, Plus, Search, Settings2, Wallet } from 'lucide-react';
 import type { Bootstrap, OwnerId, PaymentMethod } from '../shared/types';
@@ -541,17 +543,17 @@ function PaymentEditor({
               <div className="form-grid">
                 <label>
                   명의
-                  <select
+                  <SelectField
                     value={draft.ownerId}
-                    onChange={(e) => field('ownerId', e.target.value as OwnerId)}
+                    onValueChange={(value) => field('ownerId', value as OwnerId)}
                   >
-                    <option value="shared">공동</option>
+                    <SelectOption value="shared">공동</SelectOption>
                     {data.users.map((u) => (
-                      <option key={u.id} value={u.id}>
+                      <SelectOption key={u.id} value={u.id}>
                         {u.name}
-                      </option>
+                      </SelectOption>
                     ))}
-                  </select>
+                  </SelectField>
                 </label>
                 {textInput('purpose', '용도')}
               </div>
@@ -564,13 +566,13 @@ function PaymentEditor({
                     {textInput('institution', '카드사')}
                     <label>
                       카드 종류
-                      <select
+                      <SelectField
                         value={draft.cardKind ?? 'credit'}
-                        onChange={(e) => field('cardKind', e.target.value as 'credit' | 'debit')}
+                        onValueChange={(value) => field('cardKind', value as 'credit' | 'debit')}
                       >
-                        <option value="credit">신용카드</option>
-                        <option value="debit">체크카드</option>
-                      </select>
+                        <SelectOption value="credit">신용카드</SelectOption>
+                        <SelectOption value="debit">체크카드</SelectOption>
+                      </SelectField>
                     </label>
                   </div>
                   {(draft.cardKind ?? 'credit') === 'credit' && (
@@ -599,23 +601,23 @@ function PaymentEditor({
                   </p>
                   <label>
                     결제 통장
-                    <select
+                    <SelectField
                       value={draft.linkedAccountId ?? ''}
-                      onChange={(e) => field('linkedAccountId', e.target.value || null)}
+                      onValueChange={(value) => field('linkedAccountId', value || null)}
                     >
-                      <option value="">연결 안 함</option>
+                      <SelectOption value="">연결 안 함</SelectOption>
                       {data.paymentMethods
                         .filter(
                           (p: ManagedPayment) =>
                             p.type === 'account' && (!p.archived || p.id === draft.linkedAccountId),
                         )
                         .map((p: ManagedPayment) => (
-                          <option key={p.id} value={p.id}>
+                          <SelectOption key={p.id} value={p.id}>
                             {p.name}
                             {p.archived ? ' (보관)' : ''}
-                          </option>
+                          </SelectOption>
                         ))}
-                    </select>
+                    </SelectField>
                   </label>
                 </section>
                 <section className="payment-form-section">
@@ -627,10 +629,9 @@ function PaymentEditor({
                     {moneyInput('annualFee', '연회비 (원)')}
                     <label>
                       유효기간
-                      <input
-                        type="month"
+                      <MonthField
                         value={draft.expiry ?? ''}
-                        onChange={(e) => field('expiry', e.target.value)}
+                        onValueChange={(value) => field('expiry', value)}
                       />
                     </label>
                     {textInput('usagePeriodNote', '사용 기간 메모')}
@@ -660,19 +661,19 @@ function PaymentEditor({
                 )}
                 <label>
                   연결 자산
-                  <select
+                  <SelectField
                     value={draft.assetId ?? ''}
-                    onChange={(e) => field('assetId', e.target.value || null)}
+                    onValueChange={(value) => field('assetId', value || null)}
                   >
-                    <option value="">연결 안 함</option>
+                    <SelectOption value="">연결 안 함</SelectOption>
                     {data.assets
                       .filter((a) => a.kind === 'asset')
                       .map((a) => (
-                        <option key={a.id} value={a.id}>
+                        <SelectOption key={a.id} value={a.id}>
                           {a.name}
-                        </option>
+                        </SelectOption>
                       ))}
-                  </select>
+                  </SelectField>
                 </label>
                 <p className="small muted">
                   자산의 현재 잔액을 함께 표시해요. 연결만으로 잔액이나 수입·지출이 추가되지는

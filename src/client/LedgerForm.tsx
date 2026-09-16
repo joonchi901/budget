@@ -1,3 +1,6 @@
+import { SelectField, SelectOption } from './SelectField';
+import { DateField } from './DateFields';
+import { TagBadge } from './TagBadge';
 import { useRef, useState, type FormEvent } from 'react';
 import { Dialog, useUnsavedGuard } from './components';
 import { RequestError, request } from './api';
@@ -139,15 +142,14 @@ export default function LedgerForm({
             <div className="form-grid">
               <label>
                 시작일 (선택)
-                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+                <DateField value={start} onValueChange={(value) => setStart(value)} />
               </label>
               <label>
                 종료일 (선택)
-                <input
-                  type="date"
+                <DateField
                   min={start || undefined}
                   value={end}
-                  onChange={(e) => setEnd(e.target.value)}
+                  onValueChange={(value) => setEnd(value)}
                 />
               </label>
             </div>
@@ -191,7 +193,7 @@ export default function LedgerForm({
                           )
                         }
                       />
-                      {t.name}
+                      <TagBadge name={t.name} color={t.color} archived={t.archived} />
                     </label>
                   ))}
                 </div>
@@ -213,27 +215,30 @@ export default function LedgerForm({
                       )
                       .map((t) => (
                         <label key={t.id}>
-                          {t.name}의 메인 분류
-                          <select
+                          <span>
+                            <TagBadge name={t.name} color={t.color} archived={t.archived} />의 메인
+                            분류
+                          </span>
+                          <SelectField
                             value={mapping[t.id] ?? ''}
-                            onChange={(e) =>
+                            onValueChange={(value) =>
                               setMapping((previous) => {
                                 const next = { ...previous };
-                                if (e.target.value) next[t.id] = e.target.value;
+                                if (value) next[t.id] = value;
                                 else delete next[t.id];
                                 return next;
                               })
                             }
                           >
-                            <option value="">원본 유지</option>
+                            <SelectOption value="">원본 유지</SelectOption>
                             {availableTags
                               .filter((option) => option.id !== t.id)
                               .map((option) => (
-                                <option key={option.id} value={option.id}>
-                                  {option.name}
-                                </option>
+                                <SelectOption key={option.id} value={option.id}>
+                                  <TagBadge name={option.name} color={option.color} />
+                                </SelectOption>
                               ))}
-                          </select>
+                          </SelectField>
                         </label>
                       ))}
                   </>

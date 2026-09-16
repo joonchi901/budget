@@ -1,5 +1,8 @@
+import { Tooltip } from './Tooltip';
+import { SelectField, SelectOption } from './SelectField';
+import { DateField } from './DateFields';
 import { useId, useState } from 'react';
-import { ArrowRight, ChevronDown, Download, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, Download, SlidersHorizontal, X } from 'lucide-react';
 import type { Bootstrap, Transaction } from '../shared/types';
 import { accountingPeriod } from '../shared/planning';
 import {
@@ -17,6 +20,7 @@ import {
 } from '../shared/analytics';
 import { totals } from '../shared/selectors';
 import { Dialog, Empty, Stat, ownerName, won } from './components';
+import { TagBadge } from './TagBadge';
 import './management.css';
 
 export function downloadFile(name: string, content: string, type = 'text/csv;charset=utf-8') {
@@ -116,7 +120,7 @@ export default function AnalyticsView({
   const householdIncome = totals(
     data.transactions.filter((t) => t.date >= period.startDate && t.date <= period.endDate),
   ).income;
-  const activeFilters: Array<{ id: string; label: string; remove(): void }> = [
+  const activeFilters: Array<{ id: string; label: string; tagId?: string; remove(): void }> = [
     ...(sourceId
       ? [
           {
@@ -152,6 +156,7 @@ export default function AnalyticsView({
       : []),
     ...selected.map((id) => ({
       id: `tag:${id}`,
+      tagId: id,
       label: `# ${analysisTagName(data, id)}`,
       remove: () => setSelected((current) => current.filter((value) => value !== id)),
     })),
@@ -202,6 +207,18 @@ export default function AnalyticsView({
       </>
     );
   }
+  function tagLabel(id: string, fallback?: string) {
+    const tag = data.tags.find((item) => item.id === id);
+    return tag ? (
+      <TagBadge
+        name={analysisTagName(data, id)}
+        color={tag.color}
+        title={data.tagGroups.find((group) => group.id === tag.groupId)?.name}
+      />
+    ) : (
+      fallback
+    );
+  }
   function table(list: Transaction[]) {
     return (
       <div className="management-table">
@@ -225,7 +242,11 @@ export default function AnalyticsView({
                 </td>
                 <td>
                   {tx.description}
-                  <small>{tx.tagIds.map((id) => analysisTagName(data, id)).join(' · ')}</small>
+                  <span className="tag-badge-list">
+                    {tx.tagIds.map((id) => (
+                      <span key={id}>{tagLabel(id)}</span>
+                    ))}
+                  </span>
                 </td>
                 <td>
                   {ownerName(tx.ownerId)}
@@ -334,38 +355,38 @@ export default function AnalyticsView({
         <div className="management-filters analysis-basic-filters">
           <label>
             가계부
-            <select
+            <SelectField
               aria-label="분석할 가계부"
               value={ledgerId}
-              onChange={(e) => {
+              onValueChange={(value) => {
                 setSourceLedgerId('');
-                setLedgerId(e.target.value);
+                setLedgerId(value);
               }}
             >
               {data.ledgers.map((l) => (
-                <option key={l.id} value={l.id}>
+                <SelectOption key={l.id} value={l.id}>
                   {l.name}
-                </option>
+                </SelectOption>
               ))}
-            </select>
+            </SelectField>
           </label>
           <label>
             조회 범위
-            <select value={mode} onChange={(e) => setMode(e.target.value)}>
-              <option value="month">선택 월</option>
-              <option value="year">선택 연도</option>
-              <option value="range">직접 기간</option>
-            </select>
+            <SelectField value={mode} onValueChange={(value) => setMode(value)}>
+              <SelectOption value="month">선택 월</SelectOption>
+              <SelectOption value="year">선택 연도</SelectOption>
+              <SelectOption value="range">직접 기간</SelectOption>
+            </SelectField>
           </label>
           {mode === 'range' && (
             <>
               <label>
                 통계 시작일
-                <input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+                <DateField value={start} onValueChange={(value) => setStart(value)} />
               </label>
               <label>
                 통계 종료일
-                <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+                <DateField value={end} onValueChange={(value) => setEnd(value)} />
               </label>
             </>
           )}
@@ -387,61 +408,58 @@ export default function AnalyticsView({
             {ledger?.kind === 'main' && (
               <label>
                 거래 출처
-                <select
-                  value={sourceId}
-                  onChange={(event) => setSourceLedgerId(event.target.value)}
-                >
-                  <option value="">메인과 연결 가계부 전체</option>
+                <SelectField value={sourceId} onValueChange={(value) => setSourceLedgerId(value)}>
+                  <SelectOption value="">메인과 연결 가계부 전체</SelectOption>
                   {sourceLedgers.map((source) => (
-                    <option key={source.id} value={source.id}>
+                    <SelectOption key={source.id} value={source.id}>
                       {source.name}
                       {source.id === ledgerId ? ' · 직접 기록' : ''}
                       {source.archived ? ' (보관)' : ''}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </SelectField>
               </label>
             )}
             <label>
               귀속
-              <select value={owner} onChange={(e) => setOwner(e.target.value)}>
-                <option value="">전체</option>
+              <SelectField value={owner} onValueChange={(value) => setOwner(value)}>
+                <SelectOption value="">전체</SelectOption>
                 {['u1', 'u2', 'shared'].map((id) => (
-                  <option key={id} value={id}>
+                  <SelectOption key={id} value={id}>
                     {ownerName(id)}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </SelectField>
             </label>
             <label>
               결제수단
-              <select value={payment} onChange={(e) => setPayment(e.target.value)}>
-                <option value="">전체</option>
+              <SelectField value={payment} onValueChange={(value) => setPayment(value)}>
+                <SelectOption value="">전체</SelectOption>
                 {data.paymentMethods.map((p) => (
-                  <option key={p.id} value={p.id}>
+                  <SelectOption key={p.id} value={p.id}>
                     {p.name}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </SelectField>
             </label>
             <label>
               연결 자산
-              <select value={asset} onChange={(e) => setAsset(e.target.value)}>
-                <option value="">전체</option>
+              <SelectField value={asset} onValueChange={(value) => setAsset(value)}>
+                <SelectOption value="">전체</SelectOption>
                 {data.assets.map((a) => (
-                  <option key={a.id} value={a.id}>
+                  <SelectOption key={a.id} value={a.id}>
                     {a.name}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </SelectField>
             </label>
             <label>
               거래 종류
-              <select value={type} onChange={(e) => setType(e.target.value)}>
-                <option value="">수입과 지출</option>
-                <option value="income">수입</option>
-                <option value="expense">지출</option>
-              </select>
+              <SelectField value={type} onValueChange={(value) => setType(value)}>
+                <SelectOption value="">수입과 지출</SelectOption>
+                <SelectOption value="income">수입</SelectOption>
+                <SelectOption value="expense">지출</SelectOption>
+              </SelectField>
             </label>
           </div>
           <div className="management-tags">
@@ -457,6 +475,7 @@ export default function AnalyticsView({
                         key={t.id}
                         className={`tag-filter ${selected.includes(t.id) ? 'active' : ''}`}
                         aria-pressed={selected.includes(t.id)}
+                        aria-label={`# ${analysisTagName(data, t.id)}${t.archived ? ' (보관)' : ''}`}
                         onClick={() =>
                           setSelected((prev) =>
                             prev.includes(t.id)
@@ -465,8 +484,16 @@ export default function AnalyticsView({
                           )
                         }
                       >
-                        # {analysisTagName(data, t.id)}
-                        {t.archived ? ' (보관)' : ''}
+                        <TagBadge
+                          name={analysisTagName(data, t.id)}
+                          color={t.color}
+                          archived={t.archived}
+                        />
+                        <Check
+                          size={16}
+                          aria-hidden="true"
+                          className={`tag-filter-check ${selected.includes(t.id) ? 'selected' : ''}`}
+                        />
                       </button>
                     ))}
                 </div>
@@ -489,7 +516,7 @@ export default function AnalyticsView({
                 onClick={item.remove}
                 aria-label={`${item.label} 필터 해제`}
               >
-                {item.label}
+                {item.tagId ? tagLabel(item.tagId, item.label) : item.label}
                 <X size={13} aria-hidden="true" />
               </button>
             ))}
@@ -551,49 +578,49 @@ export default function AnalyticsView({
                   {annual.map((row) => {
                     const summary = `${row.month} 수입 ${won(row.income)}원, 지출 ${won(row.expense)}원, 가구 순저축 ${won(row.savings)}원`;
                     return (
-                      <button
-                        type="button"
-                        key={row.month}
-                        className="analysis-flow-month"
-                        aria-label={`${summary}. 이 기간 거래 보기`}
-                        title={summary}
-                        onClick={() =>
-                          setDetail({
-                            title: row.month,
-                            rows: analysisTransactions(data, {
-                              ...filter,
-                              startDate: row.startDate,
-                              endDate: row.endDate,
-                            }),
-                          })
-                        }
-                      >
-                        <span
-                          className="analysis-flow-bars"
-                          style={{ height: flowHeight }}
-                          aria-hidden="true"
+                      <Tooltip content={summary} key={row.month}>
+                        <button
+                          type="button"
+                          className="analysis-flow-month"
+                          aria-label={`${summary}. 이 기간 거래 보기`}
+                          onClick={() =>
+                            setDetail({
+                              title: row.month,
+                              rows: analysisTransactions(data, {
+                                ...filter,
+                                startDate: row.startDate,
+                                endDate: row.endDate,
+                              }),
+                            })
+                          }
                         >
-                          <span className="analysis-flow-axis" style={{ top: flowBand }} />
-                          {flowMetrics.map((item, index) => {
-                            const value = row[item.key],
-                              height = (Math.abs(value) / flowMax) * flowBand;
-                            return (
-                              <span
-                                key={item.key}
-                                className={`analysis-flow-bar ${item.key}${value < 0 ? ' negative' : ''}`}
-                                data-metric={item.key}
-                                data-value={value}
-                                style={{
-                                  height,
-                                  top: value < 0 ? flowBand : flowBand - height,
-                                  left: `${10 + index * 28}%`,
-                                }}
-                              />
-                            );
-                          })}
-                        </span>
-                        <small>{Number(row.month.slice(5))}월</small>
-                      </button>
+                          <span
+                            className="analysis-flow-bars"
+                            style={{ height: flowHeight }}
+                            aria-hidden="true"
+                          >
+                            <span className="analysis-flow-axis" style={{ top: flowBand }} />
+                            {flowMetrics.map((item, index) => {
+                              const value = row[item.key],
+                                height = (Math.abs(value) / flowMax) * flowBand;
+                              return (
+                                <span
+                                  key={item.key}
+                                  className={`analysis-flow-bar ${item.key}${value < 0 ? ' negative' : ''}`}
+                                  data-metric={item.key}
+                                  data-value={value}
+                                  style={{
+                                    height,
+                                    top: value < 0 ? flowBand : flowBand - height,
+                                    left: `${10 + index * 28}%`,
+                                  }}
+                                />
+                              );
+                            })}
+                          </span>
+                          <small>{Number(row.month.slice(5))}월</small>
+                        </button>
+                      </Tooltip>
                     );
                   })}
                 </div>
@@ -683,13 +710,13 @@ export default function AnalyticsView({
               </div>
               <label>
                 집계할 태그 유형
-                <select value={groupId} onChange={(e) => setGroup(e.target.value)}>
+                <SelectField value={groupId} onValueChange={(value) => setGroup(value)}>
                   {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
+                    <SelectOption key={g.id} value={g.id}>
                       {g.name}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </SelectField>
               </label>
             </div>
             <p className="small muted">
@@ -708,7 +735,7 @@ export default function AnalyticsView({
                 <tbody>
                   {breakdown.map((r) => (
                     <tr key={r.id}>
-                      <td>{r.name}</td>
+                      <td>{tagLabel(r.id, r.name)}</td>
                       <td>{r.count}</td>
                       <td>
                         <button
@@ -773,16 +800,14 @@ export default function AnalyticsView({
                 <h3>{year}년 분류별 월간 상세</h3>
                 <label>
                   연간 상세 금액
-                  <select
+                  <SelectField
                     value={metric}
                     disabled={Boolean(type)}
-                    onChange={(event) =>
-                      setAnnualMetric(event.target.value as 'income' | 'expense')
-                    }
+                    onValueChange={(value) => setAnnualMetric(value as 'income' | 'expense')}
                   >
-                    <option value="expense">지출</option>
-                    <option value="income">수입</option>
-                  </select>
+                    <SelectOption value="expense">지출</SelectOption>
+                    <SelectOption value="income">수입</SelectOption>
+                  </SelectField>
                 </label>
               </div>
               <p className="small muted">
@@ -806,12 +831,10 @@ export default function AnalyticsView({
                     <tr>
                       <th scope="col">항목 · {metricName}</th>
                       {matrix.periods.map((column) => (
-                        <th
-                          scope="col"
-                          key={column.month}
-                          title={`${column.startDate} ~ ${column.endDate}`}
-                        >
-                          {Number(column.month.slice(5))}월
+                        <th scope="col" key={column.month}>
+                          <Tooltip content={`${column.startDate} ~ ${column.endDate}`}>
+                            <span>{Number(column.month.slice(5))}월</span>
+                          </Tooltip>
                         </th>
                       ))}
                       <th scope="col">연간 합계</th>
@@ -821,7 +844,7 @@ export default function AnalyticsView({
                   <tbody>
                     {matrix.groups.map((row) => (
                       <tr key={row.id}>
-                        <th scope="row">{row.name}</th>
+                        <th scope="row">{tagLabel(row.id, row.name)}</th>
                         {annualCells(row.id, row.name, row)}
                       </tr>
                     ))}

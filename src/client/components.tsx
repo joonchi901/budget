@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 export const won = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
@@ -42,6 +42,8 @@ export function Dialog({
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const [validationMessage, setValidationMessage] = useState('');
+  const invalidFocus = useRef(false);
   useLayoutEffect(() => {
     const el = ref.current!;
     el.showModal();
@@ -53,6 +55,20 @@ export function Dialog({
       ref={ref}
       className="dialog"
       aria-label={title}
+      onInputCapture={() => setValidationMessage('')}
+      onInvalidCapture={(event) => {
+        event.preventDefault();
+        const field = event.target;
+        if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+        if (field.classList.contains('control-validation')) return;
+        if (invalidFocus.current) return;
+        invalidFocus.current = true;
+        setValidationMessage(field.validationMessage || '입력한 내용을 확인해 주세요.');
+        queueMicrotask(() => {
+          field.focus();
+          invalidFocus.current = false;
+        });
+      }}
       onCancel={(e) => {
         e.preventDefault();
         if (!locked) onClose();
@@ -73,6 +89,11 @@ export function Dialog({
           <X size={20} />
         </button>
       </div>
+      {validationMessage && (
+        <div className="dialog-validation-message" role="alert">
+          {validationMessage}
+        </div>
+      )}
       {children}
     </dialog>
   );

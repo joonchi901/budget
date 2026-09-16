@@ -3,6 +3,8 @@ import { Check, ChevronDown, Plus, Search, X } from 'lucide-react';
 import type { Bootstrap, MutationResult, Tag, TagGroup } from '../shared/types';
 import { RequestError, request } from './api';
 import { useUnsavedGuard } from './components';
+import { Popover } from './Popover';
+import { TagBadge } from './TagBadge';
 import './tags.css';
 
 export interface TagFieldsProps {
@@ -15,8 +17,6 @@ export interface TagFieldsProps {
   onChanged(): Promise<void>;
   onPendingChange?(pending: boolean): void;
 }
-
-const tagStyle = (color: string) => ({ backgroundColor: `${color}1c`, color });
 
 export function TagFields({
   data,
@@ -136,15 +136,6 @@ function TagField({
     (tag) => tag.name.trim().toLocaleLowerCase() === query.trim().toLocaleLowerCase(),
   );
   useUnsavedGuard(locked);
-  useEffect(() => {
-    if (!open) return;
-    input.current?.focus();
-    const closeOutside = (event: PointerEvent) => {
-      if (!locked && !root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('pointerdown', closeOutside);
-    return () => document.removeEventListener('pointerdown', closeOutside);
-  }, [open, locked]);
   function close() {
     if (!locked) {
       setOpen(false);
@@ -217,13 +208,17 @@ function TagField({
       ];
       if (!buttons.length) return;
       const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-      buttons[
-        (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length
-      ]?.focus();
+      const next =
+        index < 0
+          ? event.key === 'ArrowDown'
+            ? 0
+            : buttons.length - 1
+          : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
+      buttons[next]?.focus();
     }
   }
   return (
-    <div className="tag-field" ref={root} onKeyDown={keyboard}>
+    <div className="tag-field" ref={root} onKeyDown={keyboard} data-control-name="tagIds">
       <div className="tag-field-label">
         <span>{group.name}</span>
         <div className="tag-field-label-actions">
@@ -241,143 +236,185 @@ function TagField({
           )}
         </div>
       </div>
-      <button
-        ref={trigger}
-        type="button"
-        className={`tag-field-trigger ${open ? 'is-open' : ''}`}
-        disabled={disabled || readonly || locked}
-        aria-label={`${group.name} 선택`}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={listId}
-        onClick={() => {
-          setOpen(!open);
-          setQuery('');
-          setError('');
+      <Popover
+        label={`${group.name} 옵션 선택`}
+        open={open && (!readonly || locked)}
+        locked={locked}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (next) {
+            setQuery('');
+            setError('');
+          }
         }}
+        className="tag-popover-shell"
+        trigger={(props) => (
+          <button
+            {...props}
+            ref={(node) => {
+              trigger.current = node;
+              props.ref.current = node;
+            }}
+            type="button"
+            className={`ui-control-trigger tag-field-trigger ${open ? 'is-open' : ''}`}
+            disabled={disabled || readonly || locked}
+            aria-label={`${group.name} 선택`}
+          >
+            <span className="tag-field-values">
+              {selectedTags.length ? (
+                selectedTags.map((tag) => (
+                  <TagBadge
+                    key={tag.id}
+                    name={tag.name}
+                    color={tag.color}
+                    archived={tag.archived}
+                  />
+                ))
+              ) : (
+                <span className="tag-placeholder">선택 또는 새 옵션 만들기</span>
+              )}
+            </span>
+            {!readonly && <ChevronDown size={15} />}
+          </button>
+        )}
       >
-        <span className="tag-field-values">
-          {selectedTags.length ? (
-            selectedTags.map((tag) => (
-              <span className="custom-tag" style={tagStyle(tag.color)} key={tag.id}>
-                {tag.name}
-                {tag.archived && <small>보관됨</small>}
-              </span>
-            ))
-          ) : (
-            <span className="tag-placeholder">선택 또는 새 옵션 만들기</span>
-          )}
-        </span>
-        {!readonly && <ChevronDown size={15} />}
-      </button>
+        {() => (
+          <div className="tag-popover">
+            <div className="tag-search">
+              <Search size={16} />
+              <input
+                ref={input}
+                data-autofocus="true"
+                type="search"
+                name="tagIds"
+                value={query}
+                maxLength={80}
+                aria-label={`${group.name} 옵션 검색`}
+                placeholder="옵션 검색 또는 만들기"
+                disabled={locked}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setError('');
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const exact = options.find((tag) => tag.name === query.trim());
+                    if (exact) choose(exact);
+                    else if (query.trim() && !exactMatch) void create();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="옵션 선택 닫기"
+                onClick={close}
+                disabled={locked}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            {selectedTags.length > 0 && (
+              <div className="tag-selected-options" aria-label={`${group.name} 선택한 옵션`}>
+                {selectedTags.map((tag) => (
+                  <TagBadge
+                    key={tag.id}
+                    name={tag.name}
+                    color={tag.color}
+                    archived={tag.archived}
+                    disabled={locked || disabled}
+                    onRemove={() => onChange(selected.filter((id) => id !== tag.id))}
+                  />
+                ))}
+              </div>
+            )}
+            <p className="tag-choice-heading">옵션 선택 또는 만들기</p>
+            <div
+              id={listId}
+              role="listbox"
+              aria-label={`${group.name} 옵션`}
+              aria-multiselectable={group.selectionMode === 'multiple'}
+              className="tag-choice-list"
+            >
+              {options.map((tag) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected.includes(tag.id)}
+                  aria-label={tag.name}
+                  aria-describedby={tag.parentId ? `${listId}-${tag.id}-parent` : undefined}
+                  disabled={locked || disabled}
+                  className="tag-choice"
+                  key={tag.id}
+                  onClick={() => choose(tag)}
+                >
+                  <span className="tag-choice-content">
+                    <TagBadge name={tag.name} color={tag.color} />
+                    {tag.parentId && (
+                      <small id={`${listId}-${tag.id}-parent`}>
+                        상위 ·{' '}
+                        {tags.find((parent) => parent.id === tag.parentId)?.name ?? '보관된 옵션'}
+                      </small>
+                    )}
+                  </span>
+                  <span className="tag-choice-check" aria-hidden="true">
+                    {selected.includes(tag.id) && <Check size={16} />}
+                  </span>
+                </button>
+              ))}
+              {options.length === 0 && (
+                <p className="tag-no-options">
+                  {query ? '일치하는 옵션이 없어요.' : '첫 옵션을 만들어 보세요.'}
+                </p>
+              )}
+            </div>
+            {query.trim() && !exactMatch && (
+              <button
+                type="button"
+                className="tag-create-option"
+                aria-label={`“${query.trim()}” 만들기`}
+                disabled={locked || disabled}
+                onClick={() => void create()}
+              >
+                <Plus size={16} />
+                <span>만들기</span>
+                <TagBadge name={query.trim()} color="#64866f" />
+              </button>
+            )}
+            {error && (
+              <div className="tag-picker-error" role="alert">
+                {error}
+              </div>
+            )}
+            {uncertain && (
+              <div className="tag-picker-retry">
+                <p>생성 결과를 확인할 때까지 입력을 유지해요.</p>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => void create()}
+                >
+                  {busy ? '확인 중…' : '생성 결과 다시 확인'}
+                </button>
+              </div>
+            )}
+            {busy && !uncertain && (
+              <p className="tag-field-note" role="status">
+                옵션을 만드는 중이에요…
+              </p>
+            )}
+          </div>
+        )}
+      </Popover>
       {readonly && (
         <p className="tag-field-note">
           {group.archived
             ? '보관된 유형의 기존 선택이에요.'
             : '이 가계부에 적용되지 않는 기존 선택이에요.'}
         </p>
-      )}
-      {open && (!readonly || locked) && (
-        <div className="tag-popover">
-          <div className="tag-search">
-            <Search size={16} />
-            <input
-              ref={input}
-              type="search"
-              name="tagIds"
-              value={query}
-              maxLength={80}
-              aria-label={`${group.name} 옵션 검색`}
-              placeholder="옵션 검색 또는 만들기"
-              disabled={locked}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setError('');
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  const exact = options.find((tag) => tag.name === query.trim());
-                  if (exact) choose(exact);
-                  else if (query.trim() && !exactMatch) void create();
-                }
-              }}
-            />
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="옵션 선택 닫기"
-              onClick={close}
-              disabled={locked}
-            >
-              <X size={16} />
-            </button>
-          </div>
-          <div
-            id={listId}
-            role="listbox"
-            aria-label={`${group.name} 옵션`}
-            aria-multiselectable={group.selectionMode === 'multiple'}
-            className="tag-choice-list"
-          >
-            {options.map((tag) => (
-              <button
-                type="button"
-                role="option"
-                aria-selected={selected.includes(tag.id)}
-                disabled={locked || disabled}
-                className="tag-choice"
-                key={tag.id}
-                onClick={() => choose(tag)}
-              >
-                <span className="custom-tag" style={tagStyle(tag.color)}>
-                  {tag.name}
-                </span>
-                {selected.includes(tag.id) && <Check size={16} />}
-              </button>
-            ))}
-            {options.length === 0 && (
-              <p className="tag-no-options">
-                {query ? '일치하는 옵션이 없어요.' : '첫 옵션을 만들어 보세요.'}
-              </p>
-            )}
-          </div>
-          {query.trim() && !exactMatch && (
-            <button
-              type="button"
-              className="tag-create-option"
-              disabled={locked || disabled}
-              onClick={() => void create()}
-            >
-              <Plus size={16} />
-              <span>“{query.trim()}” 만들기</span>
-            </button>
-          )}
-          {error && (
-            <div className="tag-picker-error" role="alert">
-              {error}
-            </div>
-          )}
-          {uncertain && (
-            <div className="tag-picker-retry">
-              <p>생성 결과를 확인할 때까지 입력을 유지해요.</p>
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy}
-                onClick={() => void create()}
-              >
-                {busy ? '확인 중…' : '생성 결과 다시 확인'}
-              </button>
-            </div>
-          )}
-          {busy && !uncertain && (
-            <p className="tag-field-note" role="status">
-              옵션을 만드는 중이에요…
-            </p>
-          )}
-        </div>
       )}
     </div>
   );

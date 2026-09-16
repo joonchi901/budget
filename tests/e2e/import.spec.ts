@@ -1,3 +1,4 @@
+import { selectChoice } from './helpers/controls';
 import { expect, test } from '@playwright/test';
 import { strToU8, zipSync } from 'fflate';
 import type { Bootstrap } from '../../src/shared/types';
@@ -66,7 +67,7 @@ test('XLSX preview, review evidence and repeat import are usable from the data s
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     buffer: workbook(),
   });
-  await page.getByLabel('엑셀 결제수단 합성 현금').selectOption('@new:cash');
+  await selectChoice(page.getByLabel('엑셀 결제수단 합성 현금'), '@new:cash');
   await page.getByRole('button', { name: '엑셀 반영 미리보기', exact: true }).click();
   await expect(page.getByRole('heading', { name: '반영할 내용', exact: true })).toBeVisible();
   await expect(page.locator('.data-preview')).toContainText('거래 1건');
@@ -99,8 +100,8 @@ test('XLSX preview, review evidence and repeat import are usable from the data s
   await page.getByLabel('1!31 minor', { exact: true }).fill(' 합성 적립 ');
   await page.getByText('저축 기록의 자산 이동 연결 (1행)', { exact: true }).click();
   await expect(page.getByLabel('저축 합성 적립 fromAssetId')).toBeVisible();
-  await page.getByLabel('저축 합성 적립 fromAssetId').selectOption('checking');
-  await page.getByLabel('저축 합성 적립 toAssetId').selectOption('investment');
+  await selectChoice(page.getByLabel('저축 합성 적립 fromAssetId'), 'checking');
+  await selectChoice(page.getByLabel('저축 합성 적립 toAssetId'), 'investment');
   await page.getByRole('button', { name: '엑셀 반영 미리보기', exact: true }).click();
   await expect(page.locator('.data-preview')).toContainText('거래 0건');
   await expect(page.locator('.data-preview')).toContainText('자산 이동 1건 · 이동 금액 5,000원');

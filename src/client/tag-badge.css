@@ -1,0 +1,101 @@
+.tag-badge.custom-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+.tag-badge .tag-badge-name {
+  min-width: 0;
+}
+.tag-badge.custom-tag > small {
+  font-size: 11px;
+  font-weight: 400;
+  flex-shrink: 0;
+}
+.tag-badge.custom-tag.tag-badge-removable {
+  min-height: 40px;
+  padding-right: 0;
+  gap: 0;
+}
+.tag-badge .tag-badge-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  margin: -3px 0 -3px 2px;
+  padding: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: transparent;
+  transition: background-color 150ms ease;
+}
+.tag-badge .tag-badge-remove:hover:not(:disabled) {
+  background: #191f2810;
+}
+.row-tags .tag-badge.custom-tag,
+.asset-tags .tag-badge.custom-tag {
+  font-size: 12px;
+  min-height: 25px;
+  padding: 3px 7px;
+}
+.row-tags.transaction-tag-badges {
+  max-width: 240px;
+  gap: 5px;
+  margin-top: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tag-badge .tag-badge-remove {
+    transition: none;
+  }
+}
+
+.tag-badge-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.planning-condition.planning-condition-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  color: var(--muted, #6b7684);
+  background: transparent;
+}
+.management-tags button.tag-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: transparent;
+}
+.management-tags button.tag-filter:hover:not(:disabled) {
+  background: var(--canvas, #f2f4f6);
+}
+.management-tags button.tag-filter[aria-pressed='true'] {
+  border-color: #b4d5ff;
+  background: var(--blue-soft, #e8f3ff);
+}
+.tag-filter-check {
+  flex-shrink: 0;
+  opacity: 0;
+}
+.tag-filter-check.selected {
+  opacity: 1;
+}

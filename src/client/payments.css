@@ -252,15 +252,6 @@
 .payment-more > summary::-webkit-details-marker {
   display: none;
 }
-.payment-more > summary::after {
-  content: '+';
-  color: var(--muted, #8b95a1);
-  font-size: 22px;
-  font-weight: 400;
-}
-.payment-more[open] > summary::after {
-  content: '−';
-}
 .payment-more > summary:focus-visible {
   outline: 2px solid var(--blue, #3182f6);
   outline-offset: 3px;

@@ -232,17 +232,6 @@
 .asset-table-details summary::-webkit-details-marker {
   display: none;
 }
-.assets-workspace .asset-details summary::after,
-.asset-table-details summary::after {
-  content: '+';
-  color: var(--muted, #8b95a1);
-  font-size: 22px;
-  font-weight: 400;
-}
-.assets-workspace .asset-details[open] > summary::after,
-.asset-table-details[open] > summary::after {
-  content: '−';
-}
 .assets-workspace summary:focus-visible {
   outline: 2px solid var(--blue, #3182f6);
   outline-offset: 3px;
@@ -348,7 +337,7 @@
   background: #d6e5fc;
   border-radius: 6px 6px 2px 2px;
 }
-.asset-trend .selected span {
+.asset-trend .selected .asset-trend-column span {
   background: var(--blue, #3182f6);
 }
 .asset-trend-column span.negative {

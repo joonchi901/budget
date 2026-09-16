@@ -1,3 +1,5 @@
+import { Tooltip } from './Tooltip';
+import { SelectField, SelectOption } from './SelectField';
 import { useRef, useState, type FormEvent } from 'react';
 import {
   Archive,
@@ -14,6 +16,8 @@ import {
 import type { Bootstrap, MutationResult, Tag, TagGroup } from '../shared/types';
 import { RequestError, request } from './api';
 import { Dialog, useUnsavedGuard } from './components';
+import { TagBadge } from './TagBadge';
+import { ColorField } from './ColorField';
 import './tags.css';
 
 const palette = [
@@ -253,12 +257,7 @@ export default function TagManager({
                     key={tag.id}
                   >
                     <div className="tag-managed-label">
-                      <span
-                        className="custom-tag"
-                        style={{ color: tag.color, backgroundColor: `${tag.color}1c` }}
-                      >
-                        {tag.name}
-                      </span>
+                      <TagBadge name={tag.name} color={tag.color} />
                       {tag.parentId && (
                         <small className="tag-parent-label">
                           상위 옵션 ·{' '}
@@ -269,30 +268,34 @@ export default function TagManager({
                       {tag.archived && <small>보관됨</small>}
                     </div>
                     <div className="tag-option-actions">
-                      <button
-                        type="button"
-                        className="icon-button"
-                        disabled={locked || active.archived || index === 0}
-                        aria-label={`${tag.name} 맨 앞으로 이동`}
-                        title="맨 앞으로 이동"
-                        onClick={() => patch('tags', tag, { sortOrder: options[0].sortOrder - 1 })}
-                      >
-                        <ChevronsUp size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-button"
-                        disabled={locked || active.archived || index === options.length - 1}
-                        aria-label={`${tag.name} 맨 뒤로 이동`}
-                        title="맨 뒤로 이동"
-                        onClick={() =>
-                          patch('tags', tag, {
-                            sortOrder: options[options.length - 1].sortOrder + 1,
-                          })
-                        }
-                      >
-                        <ChevronsDown size={14} />
-                      </button>
+                      <Tooltip content="맨 앞으로 이동">
+                        <button
+                          type="button"
+                          className="icon-button"
+                          disabled={locked || active.archived || index === 0}
+                          aria-label={`${tag.name} 맨 앞으로 이동`}
+                          onClick={() =>
+                            patch('tags', tag, { sortOrder: options[0].sortOrder - 1 })
+                          }
+                        >
+                          <ChevronsUp size={14} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="맨 뒤로 이동">
+                        <button
+                          type="button"
+                          className="icon-button"
+                          disabled={locked || active.archived || index === options.length - 1}
+                          aria-label={`${tag.name} 맨 뒤로 이동`}
+                          onClick={() =>
+                            patch('tags', tag, {
+                              sortOrder: options[options.length - 1].sortOrder + 1,
+                            })
+                          }
+                        >
+                          <ChevronsDown size={14} />
+                        </button>
+                      </Tooltip>
                       <button
                         type="button"
                         className="icon-button"
@@ -550,28 +553,26 @@ function TagEditor({
                 <div className="form-grid">
                   <label>
                     선택 방식
-                    <select
+                    <SelectField
                       value={selectionMode}
-                      onChange={(event) =>
-                        setSelectionMode(event.target.value as TagGroup['selectionMode'])
+                      onValueChange={(value) =>
+                        setSelectionMode(value as TagGroup['selectionMode'])
                       }
                     >
-                      <option value="single">단일 선택</option>
-                      <option value="multiple">복수 선택</option>
-                    </select>
+                      <SelectOption value="single">단일 선택</SelectOption>
+                      <SelectOption value="multiple">복수 선택</SelectOption>
+                    </SelectField>
                   </label>
                   <label>
                     사용 위치
-                    <select
+                    <SelectField
                       value={appliesTo}
                       disabled={Boolean(source)}
-                      onChange={(event) =>
-                        setAppliesTo(event.target.value as TagGroup['appliesTo'])
-                      }
+                      onValueChange={(value) => setAppliesTo(value as TagGroup['appliesTo'])}
                     >
-                      <option value="transaction">가계부 내역</option>
-                      <option value="asset">자산</option>
-                    </select>
+                      <SelectOption value="transaction">가계부 내역</SelectOption>
+                      <SelectOption value="asset">자산</SelectOption>
+                    </SelectField>
                   </label>
                 </div>
                 {appliesTo === 'transaction' && (
@@ -626,8 +627,8 @@ function TagEditor({
               <div>
                 <label>
                   상위 옵션 (선택)
-                  <select value={parentId} onChange={(e) => setParentId(e.target.value)}>
-                    <option value="">독립 옵션</option>
+                  <SelectField value={parentId} onValueChange={(value) => setParentId(value)}>
+                    <SelectOption value="">독립 옵션</SelectOption>
                     {data.tags
                       .filter(
                         (t) =>
@@ -642,11 +643,12 @@ function TagEditor({
                           ),
                       )
                       .map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {data.tagGroups.find((g) => g.id === t.groupId)?.name} / {t.name}
-                        </option>
+                        <SelectOption key={t.id} value={t.id}>
+                          {data.tagGroups.find((g) => g.id === t.groupId)?.name} /{' '}
+                          <TagBadge name={t.name} color={t.color} />
+                        </SelectOption>
                       ))}
-                  </select>
+                  </SelectField>
                 </label>
                 <p className="small muted">
                   상위 옵션을 선택한 기록에서만 이 옵션을 고를 수 있어요. 예: 식비 → 장보기.
@@ -666,20 +668,17 @@ function TagEditor({
                     </button>
                   ))}
                   <label className="tag-custom-color">
-                    <input
-                      type="color"
+                    <ColorField
                       aria-label="직접 색상 선택"
                       value={color}
-                      onChange={(event) => setColor(event.target.value)}
+                      onValueChange={setColor}
                     />
                     <span>직접 선택</span>
                   </label>
                 </div>
                 <div className="tag-color-preview">
                   <span className="small muted">미리보기</span>
-                  <span className="custom-tag" style={{ color, backgroundColor: `${color}1c` }}>
-                    {name || '새 옵션'}
-                  </span>
+                  <TagBadge name={name || '새 옵션'} color={color} />
                 </div>
               </div>
             )}

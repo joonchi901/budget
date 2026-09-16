@@ -1,3 +1,5 @@
+import { SelectField, SelectOption, SelectGroup } from './SelectField';
+import { FileField } from './FileField';
 import { useRef, useState } from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import type { Bootstrap } from '../shared/types';
@@ -172,7 +174,7 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
       <fieldset disabled={busy || uncertain}>
         <label>
           원본 가계부 XLSX
-          <input type="file" accept=".xlsx" onChange={(e) => void load(e.target.files?.[0])} />
+          <FileField accept=".xlsx" onChange={(e) => void load(e.target.files?.[0])} />
         </label>
         {book && (
           <>
@@ -197,22 +199,22 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
               </label>
               <label>
                 가져올 가계부
-                <select
+                <SelectField
                   value={ledgerId}
-                  onChange={(e) => {
-                    setLedgerId(e.target.value);
+                  onValueChange={(value) => {
+                    setLedgerId(value);
                     clearPreview();
                   }}
                 >
-                  <option value="@new">새 독립 가계부</option>
+                  <SelectOption value="@new">새 독립 가계부</SelectOption>
                   {data.ledgers
                     .filter((l) => !l.archived)
                     .map((l) => (
-                      <option key={l.id} value={l.id}>
+                      <SelectOption key={l.id} value={l.id}>
                         {l.name}
-                      </option>
+                      </SelectOption>
                     ))}
-                </select>
+                </SelectField>
               </label>
               {ledgerId === '@new' && (
                 <label>
@@ -238,41 +240,41 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
                 {names.map((name) => (
                   <label key={name}>
                     원본: {name || '(미기록)'}
-                    <select
+                    <SelectField
                       aria-label={`엑셀 결제수단 ${name || '미기록'}`}
                       value={payments[name] ?? ''}
-                      onChange={(e) => {
-                        setPayments((old) => ({ ...old, [name]: e.target.value }));
+                      onValueChange={(value) => {
+                        setPayments((old) => ({ ...old, [name]: value }));
                         clearPreview();
                       }}
                     >
-                      <option value="">
+                      <SelectOption value="">
                         {management?.payments.filter((p) => p.name === name).length === 1
                           ? '원본 관리 항목에 연결'
                           : '미지정 · 검토함에 보관'}
-                      </option>
-                      <optgroup label="현재 결제수단">
+                      </SelectOption>
+                      <SelectGroup label="현재 결제수단">
                         {data.paymentMethods
                           .filter((p) => !p.archived)
                           .map((p) => (
-                            <option key={p.id} value={p.id}>
+                            <SelectOption key={p.id} value={p.id}>
                               {p.name}
-                            </option>
+                            </SelectOption>
                           ))}
-                      </optgroup>
-                      <optgroup label="원본 관리 항목">
+                      </SelectGroup>
+                      <SelectGroup label="원본 관리 항목">
                         {management?.payments.map((p) => (
-                          <option key={p.key} value={`@source:${p.key}`}>
+                          <SelectOption key={p.key} value={`@source:${p.key}`}>
                             {p.name} · {p.source}
-                          </option>
+                          </SelectOption>
                         ))}
-                      </optgroup>
-                      <optgroup label="원본 이름으로 새로 등록">
-                        <option value="@new:card">카드</option>
-                        <option value="@new:account">통장</option>
-                        <option value="@new:cash">현금</option>
-                      </optgroup>
-                    </select>
+                      </SelectGroup>
+                      <SelectGroup label="원본 이름으로 새로 등록">
+                        <SelectOption value="@new:card">카드</SelectOption>
+                        <SelectOption value="@new:account">통장</SelectOption>
+                        <SelectOption value="@new:cash">현금</SelectOption>
+                      </SelectGroup>
+                    </SelectField>
                   </label>
                 ))}
               </div>
@@ -342,27 +344,27 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
                     {(['fromAssetId', 'toAssetId'] as const).map((key) => (
                       <label key={key}>
                         {key === 'fromAssetId' ? '출금 자산' : '입금 자산'}
-                        <select
+                        <SelectField
                           aria-label={`저축 ${name} ${key}`}
                           value={savings[name]?.[key] ?? ''}
-                          onChange={(e) => {
+                          onValueChange={(value) => {
                             setSavings((old) => ({
                               ...old,
                               [name]: {
                                 ...(old[name] ?? { fromAssetId: '', toAssetId: '' }),
-                                [key]: e.target.value,
+                                [key]: value,
                               },
                             }));
                             clearPreview();
                           }}
                         >
-                          <option value="">미지정 · 검토함에 보관</option>
+                          <SelectOption value="">미지정 · 검토함에 보관</SelectOption>
                           {assets.map((a) => (
-                            <option key={a.id} value={a.id}>
+                            <SelectOption key={a.id} value={a.id}>
                               {a.name} · 기준일 {a.openingDate ?? '미확인'}
-                            </option>
+                            </SelectOption>
                           ))}
-                        </select>
+                        </SelectField>
                       </label>
                     ))}
                   </div>
@@ -402,54 +404,54 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
                           <td>{won(r.amount)}</td>
                           <td>
                             {r.kind === 'expense' && (
-                              <select
+                              <SelectField
                                 aria-label={`${r.key} 차감 자산`}
                                 value={reserve[r.key]?.assetId ?? ''}
-                                onChange={(e) => {
+                                onValueChange={(value) => {
                                   setReserve((old) => ({
                                     ...old,
                                     [r.key]: {
                                       ...(old[r.key] ?? { paymentMethodId: '', assetId: '' }),
-                                      assetId: e.target.value,
+                                      assetId: value,
                                     },
                                   }));
                                   clearPreview();
                                 }}
                               >
-                                <option value="">추가하지 않음</option>
+                                <SelectOption value="">추가하지 않음</SelectOption>
                                 {assets.map((a) => (
-                                  <option key={a.id} value={a.id}>
+                                  <SelectOption key={a.id} value={a.id}>
                                     {a.name}
-                                  </option>
+                                  </SelectOption>
                                 ))}
-                              </select>
+                              </SelectField>
                             )}
                           </td>
                           <td>
                             {r.kind === 'expense' && (
-                              <select
+                              <SelectField
                                 aria-label={`${r.key} 결제수단`}
                                 value={reserve[r.key]?.paymentMethodId ?? ''}
-                                onChange={(e) => {
+                                onValueChange={(value) => {
                                   setReserve((old) => ({
                                     ...old,
                                     [r.key]: {
                                       ...(old[r.key] ?? { assetId: '', paymentMethodId: '' }),
-                                      paymentMethodId: e.target.value,
+                                      paymentMethodId: value,
                                     },
                                   }));
                                   clearPreview();
                                 }}
                               >
-                                <option value="">선택해 주세요</option>
+                                <SelectOption value="">선택해 주세요</SelectOption>
                                 {data.paymentMethods
                                   .filter((p) => !p.archived)
                                   .map((p) => (
-                                    <option key={p.id} value={p.id}>
+                                    <SelectOption key={p.id} value={p.id}>
                                       {p.name}
-                                    </option>
+                                    </SelectOption>
                                   ))}
-                              </select>
+                              </SelectField>
                             )}
                           </td>
                         </tr>

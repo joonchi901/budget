@@ -1,3 +1,4 @@
+import { chooseDate, chooseMonth, selectChoice } from './helpers/controls';
 import { expect, test, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 
@@ -16,7 +17,7 @@ async function login(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: '나로 시작하기' }).click();
   await expect(page.getByRole('heading', { level: 1, name: /우리의 일상/ })).toBeVisible();
-  await page.getByLabel('조회 월', { exact: true }).fill('2026-09');
+  await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2026-09');
   await expect(page.getByTestId('connection')).toHaveText('실시간 연결됨');
 }
 
@@ -55,6 +56,11 @@ async function openScreen(page: Page, screen: Screen, mobile: boolean) {
   ).toBeVisible();
   if (screen.key === 'data') await expect(page.getByLabel('원본 가계부 XLSX')).toBeVisible();
   await fitsViewport(page, screen.label);
+  await expect(
+    page.locator(
+      'select:visible, input[type="month"]:visible, input[type="date"]:visible, input[type="color"]:visible, [title]:visible',
+    ),
+  ).toHaveCount(0);
 }
 
 async function openTransactionDraft(page: Page, suffix?: string) {
@@ -62,7 +68,7 @@ async function openTransactionDraft(page: Page, suffix?: string) {
   const form = page.getByRole('dialog', { name: '새 내역', exact: true });
   await form.getByLabel('내용', { exact: true }).fill('화면 확인용 초안');
   await form.getByLabel('금액', { exact: true }).fill('12340');
-  await form.getByLabel('날짜', { exact: true }).fill('2026-09-16');
+  await chooseDate(form.getByLabel('날짜', { exact: true }), '2026-09-16');
   await fitsViewport(page, '새 내역');
   expect(
     await form.evaluate((element) => {
@@ -104,7 +110,7 @@ test('desktop screens remain reachable and data tabs preserve file selections, m
     ),
   });
   await csv.getByRole('textbox', { name: /^원본 자료 ID/ }).fill('디자인 검증 원본 식별자');
-  await csv.getByRole('combobox', { name: '내역', exact: true }).selectOption('내용');
+  await selectChoice(csv.getByRole('combobox', { name: '내역', exact: true }), '내용');
 
   await page.getByRole('tab', { name: '백업·복원', exact: true }).click();
   const backup = page.getByRole('tabpanel', { name: '백업·복원', exact: true });
@@ -122,7 +128,10 @@ test('desktop screens remain reachable and data tabs preserve file selections, m
   await expect(csv.getByRole('textbox', { name: /^원본 자료 ID/ })).toHaveValue(
     '디자인 검증 원본 식별자',
   );
-  await expect(csv.getByRole('combobox', { name: '내역', exact: true })).toHaveValue('내용');
+  await expect(csv.getByRole('combobox', { name: '내역', exact: true })).toHaveAttribute(
+    'data-value',
+    '내용',
+  );
   expect(
     await csv
       .getByLabel('CSV 파일', { exact: true })

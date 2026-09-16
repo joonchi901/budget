@@ -1,3 +1,5 @@
+import { SelectField, SelectOption } from './SelectField';
+import { FileField } from './FileField';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Archive, Download, FileSpreadsheet, History, Inbox, Upload } from 'lucide-react';
 import type { Bootstrap } from '../shared/types';
@@ -61,7 +63,6 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
   const [activeTab, setActiveTab] = useState<DataTab>(excelImport ? 'excel' : 'backup');
   const tabs = dataTabs.filter((tab) => tab.id !== 'excel' || excelImport);
   const [backup, setBackup] = useState<BudgetBackup | null>(null),
-    [fileName, setFileName] = useState(''),
     [memberMap, setMemberMap] = useState<Record<string, string>>({}),
     [restore, setRestore] = useState<RestorePreview | null>(null),
     [replaceConfirmed, setReplaceConfirmed] = useState(false);
@@ -125,7 +126,6 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
       if (value.format !== 'our-budget' || !Array.isArray(value.members))
         throw new Error('가계부 JSON 백업 파일을 선택해 주세요.');
       setBackup(value);
-      setFileName(file.name);
       setMemberMap(
         Object.fromEntries(
           value.members.map((m) => [m.id, data.users.some((u) => u.id === m.id) ? m.id : '']),
@@ -395,34 +395,32 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
           <fieldset disabled={locked}>
             <label>
               복원할 JSON 파일
-              <input
-                type="file"
+              <FileField
                 accept=".json,application/json"
                 onChange={(e) => void loadBackup(e.target.files?.[0])}
               />
             </label>
             {backup && (
               <>
-                <p>{fileName}</p>
                 <div className="data-member-mapping">
                   {backup.members.map((member) => (
                     <label key={member.id}>
                       원본 {member.name} → 현재 구성원
-                      <select
+                      <SelectField
                         value={memberMap[member.id] ?? ''}
-                        onChange={(e) => {
-                          setMemberMap((old) => ({ ...old, [member.id]: e.target.value }));
+                        onValueChange={(value) => {
+                          setMemberMap((old) => ({ ...old, [member.id]: value }));
                           setRestore(null);
                           setReplaceConfirmed(false);
                         }}
                       >
-                        <option value="">선택해 주세요</option>
+                        <SelectOption value="">선택해 주세요</SelectOption>
                         {data.users.map((user) => (
-                          <option key={user.id} value={user.id}>
+                          <SelectOption key={user.id} value={user.id}>
                             {user.name}
-                          </option>
+                          </SelectOption>
                         ))}
-                      </select>
+                      </SelectField>
                     </label>
                   ))}
                 </div>
@@ -508,8 +506,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
           <fieldset disabled={locked}>
             <label>
               CSV 파일
-              <input
-                type="file"
+              <FileField
                 accept=".csv,text/csv"
                 onChange={(e) => void loadCsv(e.target.files?.[0])}
               />
@@ -534,22 +531,22 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
                   </label>
                   <label>
                     가져올 가계부
-                    <select
+                    <SelectField
                       value={ledgerId}
-                      onChange={(e) => {
-                        setLedgerId(e.target.value);
+                      onValueChange={(value) => {
+                        setLedgerId(value);
                         setImportPreview(null);
                       }}
                     >
-                      <option value="">선택해 주세요</option>
+                      <SelectOption value="">선택해 주세요</SelectOption>
                       {data.ledgers
                         .filter((l) => !l.archived)
                         .map((l) => (
-                          <option key={l.id} value={l.id}>
+                          <SelectOption key={l.id} value={l.id}>
                             {l.name}
-                          </option>
+                          </SelectOption>
                         ))}
-                    </select>
+                    </SelectField>
                   </label>
                 </div>
                 <div className="data-column-mapping">
@@ -557,20 +554,20 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
                     <label key={key}>
                       {csvMappingLabels[key]}
                       {key === 'tags' || key === 'owner' ? ' (선택)' : ''}
-                      <select
+                      <SelectField
                         value={mapping[key]}
-                        onChange={(e) => {
-                          setMapping((old) => ({ ...old, [key]: e.target.value }));
+                        onValueChange={(value) => {
+                          setMapping((old) => ({ ...old, [key]: value }));
                           setImportPreview(null);
                         }}
                       >
-                        <option value="">연결 안 함</option>
+                        <SelectOption value="">연결 안 함</SelectOption>
                         {csv[0].map((header, index) => (
-                          <option key={index} value={header}>
+                          <SelectOption key={index} value={header}>
                             {header}
-                          </option>
+                          </SelectOption>
                         ))}
-                      </select>
+                      </SelectField>
                     </label>
                   ))}
                 </div>
@@ -766,20 +763,20 @@ function SourceInbox({ data, onChanged, onNotice, disabled }: Props & { disabled
       <div className="data-source-filters">
         <label>
           검토 상태
-          <select
+          <SelectField
             value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
+            onValueChange={(value) => {
+              setStatus(value);
               setPage(0);
             }}
           >
-            <option value="">전체</option>
+            <SelectOption value="">전체</SelectOption>
             {Object.entries(sourceStatusLabels).map(([key, label]) => (
-              <option key={key} value={key}>
+              <SelectOption key={key} value={key}>
                 {label}
-              </option>
+              </SelectOption>
             ))}
-          </select>
+          </SelectField>
         </label>
         <label>
           출처·메모 검색
@@ -982,16 +979,16 @@ function SourceEditor({
           <fieldset disabled={busy || uncertain || conflict}>
             <label>
               검토 상태
-              <select
+              <SelectField
                 value={status}
-                onChange={(e) => setStatus(e.target.value as SourceRecord['status'])}
+                onValueChange={(value) => setStatus(value as SourceRecord['status'])}
               >
                 {Object.entries(sourceStatusLabels).map(([key, label]) => (
-                  <option key={key} value={key}>
+                  <SelectOption key={key} value={key}>
                     {label}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </SelectField>
             </label>
             <label>
               검토 메모

@@ -1,3 +1,4 @@
+import { chooseMonth, selectChoice } from './helpers/controls';
 import { expect, test } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import type { Bootstrap, MutationResult } from '../../src/shared/types';
@@ -103,9 +104,9 @@ test('annual category matrix and payment drilldown agree on accounting periods',
     expect(response.status()).toBe(200);
   }
   await page.reload();
-  await page.getByLabel('조회 월', { exact: true }).fill('2026-01');
+  await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2026-01');
   await page.getByRole('button', { name: '통계', exact: true }).click();
-  await page.getByRole('combobox', { name: '분석할 가계부', exact: true }).selectOption(ledgerId);
+  await selectChoice(page.getByRole('combobox', { name: '분석할 가계부', exact: true }), ledgerId);
   await showView('소비 흐름');
   const flow = page.getByRole('group', { name: '2026년 수입 지출 가구 순저축 추이', exact: true });
   const januaryFlow = flow.getByRole('button', {
@@ -127,18 +128,19 @@ test('annual category matrix and payment drilldown agree on accounting periods',
   expect(positiveBar!.height).toBeGreaterThan(0);
   expect(positiveBar!.y + positiveBar!.height).toBeLessThanOrEqual(februaryAxis!.y + 0.1);
   await page.locator('summary').filter({ hasText: '추가 필터' }).click();
-  await page.getByRole('combobox', { name: '거래 종류', exact: true }).selectOption('income');
+  await selectChoice(page.getByRole('combobox', { name: '거래 종류', exact: true }), 'income');
   await expect(
     flow.getByRole('button', {
       name: '2026-01 수입 1,000원, 지출 0원, 가구 순저축 -200원. 이 기간 거래 보기',
       exact: true,
     }),
   ).toBeVisible();
-  await page.getByRole('combobox', { name: '거래 종류', exact: true }).selectOption('');
+  await selectChoice(page.getByRole('combobox', { name: '거래 종류', exact: true }), '');
   await showAnnualCategoryDetail();
-  await page
-    .getByRole('combobox', { name: '집계할 태그 유형', exact: true })
-    .selectOption(category.id);
+  await selectChoice(
+    page.getByRole('combobox', { name: '집계할 태그 유형', exact: true }),
+    category.id,
+  );
   const matrix = page.getByRole('region', { name: '2026년 분류별 지출 월간 상세표' });
   await expect(matrix.getByRole('columnheader')).toHaveCount(15);
   await expect(
@@ -164,7 +166,7 @@ test('annual category matrix and payment drilldown agree on accounting periods',
   await expect(dialog.locator('tbody tr')).toHaveCount(3);
   await dialog.getByRole('button', { name: '닫기', exact: true }).click();
   await showAnnualCategoryDetail();
-  await page.getByRole('combobox', { name: '연간 상세 금액', exact: true }).selectOption('income');
+  await selectChoice(page.getByRole('combobox', { name: '연간 상세 금액', exact: true }), 'income');
   await expect(
     page
       .getByRole('region', { name: '2026년 분류별 수입 월간 상세표' })
@@ -208,11 +210,11 @@ test('annual category matrix and payment drilldown agree on accounting periods',
   });
   expect(connected.status()).toBe(200);
   await page.reload();
-  await page.getByLabel('조회 월', { exact: true }).fill('2026-01');
+  await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2026-01');
   await page.getByRole('button', { name: '통계', exact: true }).click();
-  await page.getByRole('combobox', { name: '분석할 가계부', exact: true }).selectOption('main');
+  await selectChoice(page.getByRole('combobox', { name: '분석할 가계부', exact: true }), 'main');
   await page.locator('summary').filter({ hasText: '추가 필터' }).click();
-  await page.getByRole('combobox', { name: '거래 출처', exact: true }).selectOption(ledgerId);
+  await selectChoice(page.getByRole('combobox', { name: '거래 출처', exact: true }), ledgerId);
   await showView('가계부·결제수단');
   const contributions = page.locator('.analysis-ledgers');
   const linkedRow = contributions
@@ -227,7 +229,7 @@ test('annual category matrix and payment drilldown agree on accounting periods',
   await expect(dialog).toContainText('분석 1월 시작');
   await expect(dialog).not.toContainText('분석 1월 끝');
   await dialog.getByRole('button', { name: '닫기', exact: true }).click();
-  await page.getByRole('combobox', { name: '거래 출처', exact: true }).selectOption('main');
+  await selectChoice(page.getByRole('combobox', { name: '거래 출처', exact: true }), 'main');
   await showView('거래 내역');
   await expect(page.getByRole('heading', { name: '선택한 거래 0건', exact: true })).toBeVisible();
 });

@@ -1,3 +1,5 @@
+import { SelectField, SelectOption } from './SelectField';
+import { DateField } from './DateFields';
 import { useRef, useState, type FormEvent } from 'react';
 import { CalendarDays, Plus, Settings2 } from 'lucide-react';
 import type { Bootstrap } from '../shared/types';
@@ -16,6 +18,7 @@ import {
 } from '../shared/planning';
 import { request, RequestError } from './api';
 import { Dialog, Empty, ownerName, useUnsavedGuard, won } from './components';
+import { TagBadge } from './TagBadge';
 import './planning.css';
 
 interface Props {
@@ -125,14 +128,14 @@ export default function PlanningView({ data, month, ledgerId, onChanged, onNotic
       <div className="planning-toolbar">
         <label>
           계획 가계부
-          <select value={ledger.id} onChange={(e) => setSelectedLedger(e.target.value)}>
+          <SelectField value={ledger.id} onValueChange={(value) => setSelectedLedger(value)}>
             {data.ledgers.map((l) => (
-              <option key={l.id} value={l.id}>
+              <SelectOption key={l.id} value={l.id}>
                 {l.icon} {l.name}
                 {l.archived ? ' · 보관됨' : ''}
-              </option>
+              </SelectOption>
             ))}
-          </select>
+          </SelectField>
         </label>
         <label className="checkbox">
           <input
@@ -258,7 +261,6 @@ function PlanCard({
 }) {
   const actual = planActual(data, plan),
     remaining = plan.amount - actual;
-  const filtered = plan.tagIds.map((id) => data.tags.find((t) => t.id === id)?.name ?? '이전 태그');
   const progress = plan.amount > 0 ? Math.max(0, Math.min(100, (actual / plan.amount) * 100)) : 0;
   const payroll = plan.kind === 'payroll' ? payrollSummary(plan) : null;
   const schedule = plan.kind === 'schedule' ? scheduleOccurrences(plan, month) : [];
@@ -285,18 +287,23 @@ function PlanCard({
       <p className="small muted">
         <CalendarDays size={13} /> {plan.startDate} ~ {plan.endDate}
       </p>
-      {(filtered.length > 0 || plan.ownerId || plan.paymentMethodId) && (
-        <p className="planning-condition">
-          {[
-            ...filtered,
-            plan.ownerId ? ownerName(plan.ownerId) : '',
-            plan.paymentMethodId
-              ? data.paymentMethods.find((p) => p.id === plan.paymentMethodId)?.name
-              : '',
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </p>
+      {(plan.tagIds.length > 0 || plan.ownerId || plan.paymentMethodId) && (
+        <div className="planning-condition planning-condition-badges">
+          {plan.tagIds.map((id) => {
+            const tag = data.tags.find((item) => item.id === id);
+            return tag ? (
+              <TagBadge key={id} name={tag.name} color={tag.color} />
+            ) : (
+              <span key={id}>이전 태그</span>
+            );
+          })}
+          {plan.ownerId && <span>{ownerName(plan.ownerId)}</span>}
+          {plan.paymentMethodId && (
+            <span>
+              {data.paymentMethods.find((item) => item.id === plan.paymentMethodId)?.name}
+            </span>
+          )}
+        </div>
       )}
       {plan.kind === 'schedule' ? (
         <>
@@ -636,15 +643,14 @@ function PlanEditor({
               <div className="form-grid">
                 <label>
                   시작일
-                  <input
+                  <DateField
                     required
-                    type="date"
                     value={draft.startDate}
-                    onChange={(e) =>
+                    onValueChange={(value) =>
                       update({
-                        startDate: e.target.value,
+                        startDate: value,
                         ...(draft.kind === 'schedule' && draft.repeat === 'once'
-                          ? { endDate: e.target.value }
+                          ? { endDate: value }
                           : {}),
                       })
                     }
@@ -652,13 +658,12 @@ function PlanEditor({
                 </label>
                 <label>
                   {draft.kind === 'schedule' ? '마지막 결제일' : '종료일'}
-                  <input
+                  <DateField
                     required
-                    type="date"
                     min={draft.startDate}
                     value={draft.endDate}
                     disabled={draft.kind === 'schedule' && draft.repeat === 'once'}
-                    onChange={(e) => update({ endDate: e.target.value })}
+                    onValueChange={(value) => update({ endDate: value })}
                   />
                 </label>
               </div>
@@ -669,31 +674,31 @@ function PlanEditor({
                 <div className="form-grid">
                   <label>
                     예산 기간
-                    <select
+                    <SelectField
                       value={draft.cadence}
-                      onChange={(e) =>
-                        update({ cadence: e.target.value as 'month' | 'week' | 'period' })
+                      onValueChange={(value) =>
+                        update({ cadence: value as 'month' | 'week' | 'period' })
                       }
                     >
-                      <option value="month">월간</option>
-                      <option value="week">주간 (최대 7일)</option>
-                      <option value="period">전체 기간</option>
-                    </select>
+                      <SelectOption value="month">월간</SelectOption>
+                      <SelectOption value="week">주간 (최대 7일)</SelectOption>
+                      <SelectOption value="period">전체 기간</SelectOption>
+                    </SelectField>
                   </label>
                   <label>
                     예산 범위
-                    <select
+                    <SelectField
                       value={draft.budgetScope}
-                      onChange={(e) =>
+                      onValueChange={(value) =>
                         update({
-                          budgetScope: e.target.value as 'total' | 'category',
-                          ...(e.target.value === 'total' ? { tagIds: [] } : {}),
+                          budgetScope: value as 'total' | 'category',
+                          ...(value === 'total' ? { tagIds: [] } : {}),
                         })
                       }
                     >
-                      <option value="total">전체 예산</option>
-                      <option value="category">태그 항목별 예산</option>
-                    </select>
+                      <SelectOption value="total">전체 예산</SelectOption>
+                      <SelectOption value="category">태그 항목별 예산</SelectOption>
+                    </SelectField>
                   </label>
                 </div>
               )}
@@ -702,44 +707,46 @@ function PlanEditor({
                   <div className="form-grid">
                     <label>
                       목표 대상
-                      <select
+                      <SelectField
                         value={draft.metric}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           update({
-                            metric: e.target.value as 'income' | 'expense' | 'savings',
+                            metric: value as 'income' | 'expense' | 'savings',
                             assetId: null,
-                            ...(e.target.value === 'savings'
+                            ...(value === 'savings'
                               ? { tagIds: [], paymentMethodId: null, ownerId: null }
                               : {}),
                           })
                         }
                       >
-                        <option value="income">수입</option>
-                        <option value="expense">지출</option>
-                        {ledger?.kind === 'main' && <option value="savings">순저축</option>}
-                      </select>
+                        <SelectOption value="income">수입</SelectOption>
+                        <SelectOption value="expense">지출</SelectOption>
+                        {ledger?.kind === 'main' && (
+                          <SelectOption value="savings">순저축</SelectOption>
+                        )}
+                      </SelectField>
                     </label>
                     <label>
                       달성 기준
-                      <select
+                      <SelectField
                         value={draft.direction}
-                        onChange={(e) =>
-                          update({ direction: e.target.value as 'atLeast' | 'atMost' })
+                        onValueChange={(value) =>
+                          update({ direction: value as 'atLeast' | 'atMost' })
                         }
                       >
-                        <option value="atLeast">목표 금액 이상 달성</option>
-                        <option value="atMost">목표 금액 이하 유지</option>
-                      </select>
+                        <SelectOption value="atLeast">목표 금액 이상 달성</SelectOption>
+                        <SelectOption value="atMost">목표 금액 이하 유지</SelectOption>
+                      </SelectField>
                     </label>
                   </div>
                   {draft.metric === 'savings' && (
                     <label>
                       저축 자산
-                      <select
+                      <SelectField
                         value={draft.assetId ?? ''}
-                        onChange={(e) => update({ assetId: e.target.value || null })}
+                        onValueChange={(value) => update({ assetId: value || null })}
                       >
-                        <option value="">가구 전체 순저축</option>
+                        <SelectOption value="">가구 전체 순저축</SelectOption>
                         {data.assets
                           .filter(
                             (a) =>
@@ -747,11 +754,11 @@ function PlanEditor({
                               (!a.archived || (draft.kind === 'goal' && draft.assetId === a.id)),
                           )
                           .map((a) => (
-                            <option key={a.id} value={a.id}>
+                            <SelectOption key={a.id} value={a.id}>
                               {a.name}
-                            </option>
+                            </SelectOption>
                           ))}
-                      </select>
+                      </SelectField>
                       <small className="muted">실제 저축 유입에서 인출을 뺀 금액을 집계해요.</small>
                     </label>
                   )}
@@ -809,36 +816,36 @@ function PlanEditor({
                     <div className="form-grid">
                       <label>
                         배분 목적
-                        <select
+                        <SelectField
                           value={line.purpose}
-                          onChange={(e) =>
+                          onValueChange={(value) =>
                             lineChange(line.id, {
-                              purpose: e.target.value as PayrollLine['purpose'],
+                              purpose: value as PayrollLine['purpose'],
                             })
                           }
                         >
-                          <option value="expense">지출</option>
-                          <option value="savings">저축</option>
-                          <option value="other">기타</option>
-                        </select>
+                          <SelectOption value="expense">지출</SelectOption>
+                          <SelectOption value="savings">저축</SelectOption>
+                          <SelectOption value="other">기타</SelectOption>
+                        </SelectField>
                       </label>
                       <label>
                         예정 배분 자산
-                        <select
+                        <SelectField
                           value={line.assetId ?? ''}
-                          onChange={(e) => lineChange(line.id, { assetId: e.target.value || null })}
+                          onValueChange={(value) => lineChange(line.id, { assetId: value || null })}
                         >
-                          <option value="">연결 안 함</option>
+                          <SelectOption value="">연결 안 함</SelectOption>
                           {data.assets
                             .filter(
                               (a) => a.kind === 'asset' && (!a.archived || line.assetId === a.id),
                             )
                             .map((a) => (
-                              <option key={a.id} value={a.id}>
+                              <SelectOption key={a.id} value={a.id}>
                                 {a.name}
-                              </option>
+                              </SelectOption>
                             ))}
-                        </select>
+                        </SelectField>
                       </label>
                     </div>
                     <button
@@ -887,19 +894,18 @@ function PlanEditor({
                 <h3>행사 결산</h3>
                 <label>
                   실적 기록 방식
-                  <select
+                  <SelectField
                     value={draft.actualMode}
-                    onChange={(e) =>
+                    onValueChange={(value) =>
                       update({
-                        actualMode: e.target.value as 'transactions' | 'manual',
-                        actualAmount:
-                          e.target.value === 'manual' ? (draft.actualAmount ?? 0) : null,
+                        actualMode: value as 'transactions' | 'manual',
+                        actualAmount: value === 'manual' ? (draft.actualAmount ?? 0) : null,
                       })
                     }
                   >
-                    <option value="transactions">조건에 맞는 지출 자동 집계</option>
-                    <option value="manual">행사 실적 금액 직접 기록</option>
-                  </select>
+                    <SelectOption value="transactions">조건에 맞는 지출 자동 집계</SelectOption>
+                    <SelectOption value="manual">행사 실적 금액 직접 기록</SelectOption>
+                  </SelectField>
                 </label>
                 {draft.actualMode === 'manual' && (
                   <>
@@ -929,18 +935,18 @@ function PlanEditor({
                 <h3>결제와 납부</h3>
                 <label>
                   결제 반복
-                  <select
+                  <SelectField
                     value={draft.repeat}
-                    onChange={(e) =>
+                    onValueChange={(value) =>
                       update({
-                        repeat: e.target.value as 'once' | 'monthly',
-                        ...(e.target.value === 'once' ? { endDate: draft.startDate } : {}),
+                        repeat: value as 'once' | 'monthly',
+                        ...(value === 'once' ? { endDate: draft.startDate } : {}),
                       })
                     }
                   >
-                    <option value="once">한 번</option>
-                    <option value="monthly">매월 시작일과 같은 날짜</option>
-                  </select>
+                    <SelectOption value="once">한 번</SelectOption>
+                    <SelectOption value="monthly">매월 시작일과 같은 날짜</SelectOption>
+                  </SelectField>
                 </label>
                 <p className="small muted">
                   매월 같은 날짜가 없으면 해당 월 말일로 표시해요. 납부 확인은 정보 기록이며
@@ -950,14 +956,17 @@ function PlanEditor({
                 <div className="form-grid">
                   <label>
                     예정 결제일
-                    <select value={selectedDueDate} onChange={(e) => setDueDate(e.target.value)}>
+                    <SelectField
+                      value={selectedDueDate}
+                      onValueChange={(value) => setDueDate(value)}
+                    >
                       {dueOptions.map((o) => (
-                        <option key={o.date} value={o.date}>
+                        <SelectOption key={o.date} value={o.date}>
                           {o.date}
                           {o.payment ? ' · 확인됨' : ''}
-                        </option>
+                        </SelectOption>
                       ))}
-                    </select>
+                    </SelectField>
                   </label>
                   <button
                     type="button"
@@ -986,14 +995,13 @@ function PlanEditor({
                     <div className="form-grid">
                       <label>
                         실제 납부일
-                        <input
-                          type="date"
+                        <DateField
                           required
                           value={payment.paidDate}
-                          onChange={(e) =>
+                          onValueChange={(value) =>
                             update({
                               payments: draft.payments.map((p) =>
-                                p.date === payment.date ? { ...p, paidDate: e.target.value } : p,
+                                p.date === payment.date ? { ...p, paidDate: value } : p,
                               ),
                             })
                           }
@@ -1044,36 +1052,36 @@ function PlanEditor({
                 <div className="form-grid">
                   <label>
                     귀속
-                    <select
+                    <SelectField
                       value={draft.ownerId ?? ''}
-                      onChange={(e) =>
-                        update({ ownerId: (e.target.value || null) as Plan['ownerId'] })
+                      onValueChange={(value) =>
+                        update({ ownerId: (value || null) as Plan['ownerId'] })
                       }
                     >
-                      <option value="">전체</option>
+                      <SelectOption value="">전체</SelectOption>
                       {data.users.map((u) => (
-                        <option key={u.id} value={u.id}>
+                        <SelectOption key={u.id} value={u.id}>
                           {u.name}
-                        </option>
+                        </SelectOption>
                       ))}
-                      <option value="shared">공동</option>
-                    </select>
+                      <SelectOption value="shared">공동</SelectOption>
+                    </SelectField>
                   </label>
                   <label>
                     결제수단
-                    <select
+                    <SelectField
                       value={draft.paymentMethodId ?? ''}
-                      onChange={(e) => update({ paymentMethodId: e.target.value || null })}
+                      onValueChange={(value) => update({ paymentMethodId: value || null })}
                     >
-                      <option value="">전체 / 지정 안 함</option>
+                      <SelectOption value="">전체 / 지정 안 함</SelectOption>
                       {data.paymentMethods
                         .filter((p) => !p.archived || p.id === draft.paymentMethodId)
                         .map((p) => (
-                          <option key={p.id} value={p.id}>
+                          <SelectOption key={p.id} value={p.id}>
                             {p.name}
-                          </option>
+                          </SelectOption>
                         ))}
-                    </select>
+                    </SelectField>
                   </label>
                 </div>
                 {ledger?.kind === 'main' && draft.kind !== 'schedule' && (
@@ -1116,7 +1124,11 @@ function PlanEditor({
                                       })
                                     }
                                   />
-                                  {tag.name}
+                                  <TagBadge
+                                    name={tag.name}
+                                    color={tag.color}
+                                    archived={tag.archived}
+                                  />
                                 </label>
                               ))}
                           </div>
@@ -1206,13 +1218,13 @@ function RoundSelect({
   return (
     <label>
       {label}
-      <select value={value} onChange={(e) => onChange(e.target.value as Rounding)}>
+      <SelectField value={value} onValueChange={(value) => onChange(value as Rounding)}>
         {(Object.keys(roundingNames) as Rounding[]).map((rounding) => (
-          <option value={rounding} key={rounding}>
+          <SelectOption value={rounding} key={rounding}>
             {roundingNames[rounding]}
-          </option>
+          </SelectOption>
         ))}
-      </select>
+      </SelectField>
     </label>
   );
 }

@@ -1,3 +1,6 @@
+import { Tooltip } from './Tooltip';
+import { SelectField, SelectOption } from './SelectField';
+import { MonthField } from './DateFields';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpRight,
@@ -29,6 +32,7 @@ import TransactionForm from './TransactionForm';
 import LedgerForm from './LedgerForm';
 import AssetsView from './AssetsView';
 import TagManager from './TagManager';
+import { TagBadge } from './TagBadge';
 import PaymentsView from './PaymentsView';
 import PlanningView from './PlanningView';
 import AnalyticsView from './AnalyticsView';
@@ -233,7 +237,9 @@ export default function App() {
   }[page];
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#main-content">본문으로 바로가기</a>
+      <a className="skip-link" href="#main-content">
+        본문으로 바로가기
+      </a>
       <aside className="sidebar">
         <a
           className="brand"
@@ -283,19 +289,19 @@ export default function App() {
             </button>
           </div>
           {data.ledgers.map((item) => (
-            <button
-              key={item.id}
-              title={item.name}
-              className={ledgerId === item.id && page === 'ledger' ? 'active' : ''}
-              onClick={() => navigate(item.id)}
-            >
-              <span>{item.icon}</span>
-              <span className="truncate">
-                {item.name}
-                {item.archived ? ' (보관)' : ''}
-              </span>
-              {item.parentId && <Link2 size={13} />}
-            </button>
+            <Tooltip content={item.name} key={item.id}>
+              <button
+                className={ledgerId === item.id && page === 'ledger' ? 'active' : ''}
+                onClick={() => navigate(item.id)}
+              >
+                <span>{item.icon}</span>
+                <span className="truncate">
+                  {item.name}
+                  {item.archived ? ' (보관)' : ''}
+                </span>
+                {item.parentId && <Link2 size={13} />}
+              </button>
+            </Tooltip>
           ))}
         </div>
         <div className="sidebar-bottom">
@@ -331,22 +337,20 @@ export default function App() {
           </div>
           <div className="collaboration">
             <div className="avatar-group">
-              <span
-                className="avatar tiny"
-                title={`${data.user.name} (나)`}
-                style={{ background: data.user.color }}
-              >
-                {data.user.name.slice(0, 1)}
-              </span>
-              {state.peers.map((peer, index) => (
-                <span
-                  key={`${peer.userId}-${index}`}
-                  className="avatar tiny"
-                  title={`${peer.name} · ${data.ledgers.find((l) => l.id === peer.ledgerId)?.name ?? '가계부'}`}
-                  style={{ background: peer.color }}
-                >
-                  {peer.name.slice(0, 1)}
+              <Tooltip content={`${data.user.name} (나)`}>
+                <span className="avatar tiny" style={{ background: data.user.color }}>
+                  {data.user.name.slice(0, 1)}
                 </span>
+              </Tooltip>
+              {state.peers.map((peer, index) => (
+                <Tooltip
+                  content={`${peer.name} · ${data.ledgers.find((l) => l.id === peer.ledgerId)?.name ?? '가계부'}`}
+                  key={`${peer.userId}-${index}`}
+                >
+                  <span className="avatar tiny" style={{ background: peer.color }}>
+                    {peer.name.slice(0, 1)}
+                  </span>
+                </Tooltip>
               ))}
             </div>
             <span className={`live-status ${state.connection}`} data-testid="connection">
@@ -397,12 +401,12 @@ export default function App() {
                   </button>
                   <label>
                     <span className="sr-only">조회 월</span>
-                    <input
+                    <MonthField
                       aria-label="조회 월"
-                      type="month"
+                      required
                       value={month}
-                      onChange={(e) => {
-                        if (e.target.value) setMonth(e.target.value);
+                      onValueChange={(value) => {
+                        if (value) setMonth(value);
                       }}
                     />
                   </label>
@@ -759,7 +763,6 @@ function LedgerView({
       )
         .filter((row) => row.count > 0)
         .sort((a, b) => b.amount - a.amount)
-        .map((row) => [row.name, row.amount] as [string, number])
     : [];
   const filtered = entries
     .filter(
@@ -838,21 +841,21 @@ function LedgerView({
           {ledger.kind === 'main' && (
             <label className="ledger-scope-select small muted">
               거래 목록의 가계부 범위
-              <select
+              <SelectField
                 aria-label="거래 목록의 가계부 범위"
                 value={sourceScope}
-                onChange={(e) => setSourceScope(e.target.value)}
+                onValueChange={(value) => setSourceScope(value)}
               >
-                <option value="all">메인과 연결된 가계부 전체</option>
-                <option value={ledger.id}>메인에 직접 기록한 내역</option>
+                <SelectOption value="all">메인과 연결된 가계부 전체</SelectOption>
+                <SelectOption value={ledger.id}>메인에 직접 기록한 내역</SelectOption>
                 {data.ledgers
                   .filter((l) => l.parentId === ledger.id)
                   .map((l) => (
-                    <option key={l.id} value={l.id}>
+                    <SelectOption key={l.id} value={l.id}>
                       {l.name}
-                    </option>
+                    </SelectOption>
                   ))}
-              </select>
+              </SelectField>
             </label>
           )}
           <div className="transaction-tabs" role="group" aria-label="내역 종류 필터">
@@ -912,22 +915,20 @@ function LedgerView({
                         </div>
                       </td>
                       <td className="tags-cell">
-                        <span className="category-name">
-                          {categoryNames(data, tx).join(' · ') || '미분류'}
-                        </span>
-                        <div className="row-tags">
+                        <div className="row-tags transaction-tag-badges">
+                          {categoryNames(data, tx).length === 0 && (
+                            <span className="category-name">미분류</span>
+                          )}
                           {tx.tagIds.map((id) => {
                             const tag = data.tags.find((t) => t.id === id);
                             return (
-                              tag &&
-                              data.tagGroups.find((g) => g.id === tag.groupId)?.role !==
-                                'category' && (
-                                <span
+                              tag && (
+                                <TagBadge
                                   key={id}
+                                  name={tag.name}
+                                  color={tag.color}
                                   title={data.tagGroups.find((g) => g.id === tag.groupId)?.name}
-                                >
-                                  #{tag.name}
-                                </span>
+                                />
                               )
                             );
                           })}
@@ -1050,17 +1051,17 @@ function LedgerView({
             </div>
             <label className="ledger-category-select small muted">
               요약할 태그 유형
-              <select
+              <SelectField
                 aria-label="요약할 태그 유형"
                 value={categoryGroup?.id ?? ''}
-                onChange={(e) => setSummaryGroupId(e.target.value)}
+                onValueChange={(value) => setSummaryGroupId(value)}
               >
                 {summaryGroups.map((g) => (
-                  <option key={g.id} value={g.id}>
+                  <SelectOption key={g.id} value={g.id}>
                     {g.name}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </SelectField>
             </label>
             <CategoryBars groups={groups} total={sum.expense} />
             {categoryGroup?.selectionMode === 'multiple' && (
@@ -1073,15 +1074,21 @@ function LedgerView({
   );
 }
 
-function CategoryBars({ groups, total }: { groups: [string, number][]; total: number }) {
+function CategoryBars({
+  groups,
+  total,
+}: {
+  groups: ReturnType<typeof tagGroupBreakdown>;
+  total: number;
+}) {
   return groups.length ? (
     <div className="category-bars">
-      {groups.slice(0, 5).map(([name, amount], index) => (
+      {groups.slice(0, 5).map(({ tagId, name, color, amount }, index) => (
         <div className="category-bar" key={`${index}-${name}`}>
           <div>
             <span>
               <i style={{ background: colors[index % colors.length] }} />
-              {name}
+              {tagId ? <TagBadge name={name} color={color} /> : name}
             </span>
             <strong>
               {won(amount)}

@@ -1,3 +1,5 @@
+import { SelectField, SelectOption } from './SelectField';
+import { DateField } from './DateFields';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Info, Plus, Trash2 } from 'lucide-react';
 import type {
@@ -397,13 +399,20 @@ export default function TransactionForm({
       <form
         ref={formRef}
         onSubmit={onSubmit}
-        onBlurCapture={scheduleAutoSave}
+        onBlurCapture={(event) => {
+          const field = event.target.closest('.ui-field, .date-field, .tag-field');
+          if (field?.contains(event.relatedTarget as Node)) return;
+          scheduleAutoSave();
+        }}
         onFocus={(e) =>
           presence(
             original?.id ?? null,
-            e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement
-              ? e.target.name || null
-              : null,
+            e.target.closest('[data-control-name]')?.getAttribute('data-control-name') ||
+              (e.target instanceof HTMLInputElement ||
+              e.target instanceof HTMLSelectElement ||
+              e.target instanceof HTMLButtonElement
+                ? e.target.name || null
+                : null),
           )
         }
       >
@@ -529,47 +538,46 @@ export default function TransactionForm({
             <div className="form-grid">
               <label>
                 날짜
-                <input
+                <DateField
                   name="date"
-                  type="date"
                   required
                   value={draft.date}
-                  onChange={(e) => patch({ date: e.target.value })}
+                  onValueChange={(value) => patch({ date: value })}
                 />
               </label>
             </div>
             <div className="form-grid">
               <label>
                 누구의 내역인가요?
-                <select
+                <SelectField
                   name="ownerId"
                   value={draft.ownerId}
-                  onChange={(e) =>
-                    patch({ ownerId: e.target.value as TransactionInput['ownerId'] })
+                  onValueChange={(value) =>
+                    patch({ ownerId: value as TransactionInput['ownerId'] })
                   }
                 >
                   {['shared', 'u1', 'u2'].map((id) => (
-                    <option key={id} value={id}>
+                    <SelectOption key={id} value={id}>
                       {ownerName(id)}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </SelectField>
               </label>
               <label>
                 결제수단
-                <select
+                <SelectField
                   name="paymentMethodId"
                   value={draft.paymentMethodId}
-                  onChange={(e) => patch({ paymentMethodId: e.target.value })}
+                  onValueChange={(value) => patch({ paymentMethodId: value })}
                 >
                   {data.paymentMethods
                     .filter((method) => !method.archived || method.id === original?.paymentMethodId)
                     .map((method) => (
-                      <option value={method.id} key={method.id}>
+                      <SelectOption value={method.id} key={method.id}>
                         {method.name}
-                      </option>
+                      </SelectOption>
                     ))}
-                </select>
+                </SelectField>
               </label>
             </div>
             <TagFields
@@ -610,19 +618,19 @@ export default function TransactionForm({
                 <div className="allocation-row" key={index}>
                   <label>
                     {draft.type === 'income' ? '입금 자산' : '출금 자산'} {index + 1}
-                    <select
+                    <SelectField
                       name="allocationAsset"
                       required
                       value={allocation.assetId}
-                      onChange={(e) =>
+                      onValueChange={(value) =>
                         patch({
                           allocations: draft.allocations.map((row, i) =>
-                            i === index ? { ...row, assetId: e.target.value } : row,
+                            i === index ? { ...row, assetId: value } : row,
                           ),
                         })
                       }
                     >
-                      <option value="">선택해 주세요</option>
+                      <SelectOption value="">선택해 주세요</SelectOption>
                       {assets
                         .filter(
                           (asset) =>
@@ -630,12 +638,12 @@ export default function TransactionForm({
                             !draft.allocations.some((row) => row.assetId === asset.id),
                         )
                         .map((asset) => (
-                          <option value={asset.id} key={asset.id}>
+                          <SelectOption value={asset.id} key={asset.id}>
                             {asset.name}
                             {asset.trackSavings ? ' · 저축 집계' : ''}
-                          </option>
+                          </SelectOption>
                         ))}
-                    </select>
+                    </SelectField>
                   </label>
                   <label>
                     배분 금액 {index + 1}

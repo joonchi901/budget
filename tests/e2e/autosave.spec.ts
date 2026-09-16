@@ -1,10 +1,11 @@
+import { chooseDate, chooseMonth, selectChoice } from './helpers/controls';
 import { expect, test, type Page } from '@playwright/test';
 import type { Bootstrap, Transaction } from '../../src/shared/types';
 async function login(page: Page, name = '나') {
   await page.goto('/');
   await page.getByRole('button', { name: new RegExp(`${name}로 시작하기`) }).click();
   await expect(page.getByRole('heading', { name: /우리의 일상/ })).toBeVisible();
-  await page.getByLabel('조회 월').fill('2026-09');
+  await chooseMonth(page.getByLabel('조회 월'), '2026-09');
   await expect(page.getByTestId('connection')).toHaveText('실시간 연결됨');
 }
 async function snapshot(page: Page): Promise<Bootstrap> {
@@ -17,8 +18,8 @@ async function fillNew(page: Page, description: string, amount = '1234') {
   const form = page.getByRole('dialog');
   await form.getByLabel('내용', { exact: true }).fill(description);
   await form.getByLabel('금액', { exact: true }).fill(amount);
-  await form.getByLabel('날짜', { exact: true }).fill('2026-09-13');
-  await form.getByRole('combobox', { name: '결제수단', exact: true }).selectOption('cash');
+  await chooseDate(form.getByLabel('날짜', { exact: true }), '2026-09-13');
+  await selectChoice(form.getByRole('combobox', { name: '결제수단', exact: true }), 'cash');
   return form;
 }
 async function create(page: Page, name: string): Promise<Transaction> {

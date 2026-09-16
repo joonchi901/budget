@@ -1,3 +1,4 @@
+import { chooseDate, chooseMonth, selectChoice } from './helpers/controls';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import type { Bootstrap } from '../../src/shared/types';
@@ -6,7 +7,7 @@ async function login(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: '나로 시작하기' }).click();
   await expect(page.getByRole('heading', { name: '우리의 일상' })).toBeVisible();
-  await page.getByLabel('조회 월').fill('2026-09');
+  await chooseMonth(page.getByLabel('조회 월'), '2026-09');
 }
 async function snapshot(page: Page): Promise<Bootstrap> {
   const response = await page.request.get('/api/bootstrap');
@@ -32,9 +33,9 @@ async function transaction(
   if (income) await form.getByRole('button', { name: '수입', exact: true }).click();
   await form.getByLabel('내용', { exact: true }).fill(name);
   await form.getByLabel('금액', { exact: true }).fill(amount);
-  await form.getByLabel('날짜', { exact: true }).fill(date);
+  await chooseDate(form.getByLabel('날짜', { exact: true }), date);
   if (paymentId)
-    await form.getByRole('combobox', { name: '결제수단', exact: true }).selectOption(paymentId);
+    await selectChoice(form.getByRole('combobox', { name: '결제수단', exact: true }), paymentId);
   if (food) {
     await form.getByRole('button', { name: '분류 선택', exact: true }).click();
     await form.getByRole('option', { name: '식비', exact: true }).click();
@@ -78,7 +79,7 @@ test('users create, edit, archive and restore their own accounts and cards with 
   await form.getByLabel('은행', { exact: true }).fill('검증은행');
   await form.getByLabel('통장 종류', { exact: true }).fill('입출금');
   await form.getByLabel('계좌번호', { exact: true }).fill('000-000-0000');
-  await form.getByRole('combobox', { name: '연결 자산', exact: true }).selectOption('checking');
+  await selectChoice(form.getByRole('combobox', { name: '연결 자산', exact: true }), 'checking');
   await save(page);
   const account = (await snapshot(page)).paymentMethods.find((p) => p.name === '관리 검증 통장')!;
   expect(account).toMatchObject({
@@ -106,7 +107,7 @@ test('users create, edit, archive and restore their own accounts and cards with 
   await form.getByLabel('카드사', { exact: true }).fill('검증카드');
   await form.getByLabel('사용 마감일', { exact: true }).fill('31');
   await form.getByLabel('대금 납부일', { exact: true }).fill('15');
-  await form.getByRole('combobox', { name: '결제 통장', exact: true }).selectOption(account.id);
+  await selectChoice(form.getByRole('combobox', { name: '결제 통장', exact: true }), account.id);
   await form.getByLabel('월 사용 예산 (원)', { exact: true }).fill('300000');
   await form.getByLabel('연회비 (원)', { exact: true }).fill('12000');
   await form.getByLabel('혜택 · 실적 제외 조건', { exact: true }).fill('대중교통 혜택 기록');
@@ -121,7 +122,7 @@ test('users create, edit, archive and restore their own accounts and cards with 
   await page.getByRole('button', { name: '가계부', exact: true }).click();
   await transaction(page, '관리 검증 카드 사용', '26400', false, card.id);
   await page.getByRole('button', { name: '카드 · 통장', exact: true }).click();
-  await page.getByLabel('조회 월').fill('2026-10');
+  await chooseMonth(page.getByLabel('조회 월'), '2026-10');
   const cardView = page.locator('.payment-card').filter({ hasText: '관리 검증 카드' });
   await expect(cardView.locator('.bill-amount')).toHaveText('26,400원');
   await expect(cardView).toContainText('2026-10-15');
@@ -192,12 +193,12 @@ test('a purpose ledger supports monthly/category/weekly budgets, goals, payroll,
   await budgetTransactions.locator('summary').click();
   await expect(budgetTransactions.getByText('계획 검증 식비', { exact: false })).toBeVisible();
   form = await newPlan(page, '예산', '검증 주 예산', '30000');
-  await form.getByRole('combobox', { name: '예산 기간', exact: true }).selectOption('week');
-  await form.getByLabel('종료일', { exact: true }).fill('2026-09-07');
+  await selectChoice(form.getByRole('combobox', { name: '예산 기간', exact: true }), 'week');
+  await chooseDate(form.getByLabel('종료일', { exact: true }), '2026-09-07');
   await save(page, '계획 저장');
   await expect(planCard(page, '검증 주 예산')).toContainText('남은 예산 10,000원');
   form = await newPlan(page, '예산', '검증 식비 예산', '25000');
-  await form.getByRole('combobox', { name: '예산 범위', exact: true }).selectOption('category');
+  await selectChoice(form.getByRole('combobox', { name: '예산 범위', exact: true }), 'category');
   await form.getByLabel('식비', { exact: true }).check();
   await save(page, '계획 저장');
   await expect(planCard(page, '검증 식비 예산')).toContainText('남은 예산 5,000원');
@@ -231,25 +232,26 @@ test('a purpose ledger supports monthly/category/weekly budgets, goals, payroll,
   await form.getByRole('button', { name: '배분 항목 추가', exact: true }).click();
   await form.getByLabel('1. 배분 항목', { exact: true }).fill('생활비');
   await form.getByLabel('배분 금액', { exact: true }).fill('23456');
-  await form
-    .getByRole('combobox', { name: '배분 금액 계산', exact: true })
-    .selectOption('ceil10000');
+  await selectChoice(
+    form.getByRole('combobox', { name: '배분 금액 계산', exact: true }),
+    'ceil10000',
+  );
   await expect(form).toContainText('잔여금 90,000원');
   await save(page, '계획 저장');
   await expect(planCard(page, '검증 급여 배분')).toContainText('90,000원');
   await expect(planCard(page, '검증 급여 배분')).toContainText('조건에 맞는 실제 수입120,000원');
   form = await newPlan(page, '행사', '검증 가족 행사', '50000');
-  await form.getByRole('combobox', { name: '실적 기록 방식', exact: true }).selectOption('manual');
+  await selectChoice(form.getByRole('combobox', { name: '실적 기록 방식', exact: true }), 'manual');
   await form.getByLabel('행사 실제 금액', { exact: true }).fill('35000');
   await form.getByLabel('결산·평가', { exact: true }).fill('예산보다 1만 5천 원 절약');
   await save(page, '계획 저장');
   await expect(planCard(page, '검증 가족 행사')).toContainText('남은 예산 15,000원');
   form = await newPlan(page, '결제 일정', '검증 보험 일정', '45000');
-  await form.getByRole('combobox', { name: '결제 반복', exact: true }).selectOption('monthly');
-  await form.getByLabel('시작일', { exact: true }).fill('2026-09-15');
-  await form.getByLabel('마지막 결제일', { exact: true }).fill('2026-12-15');
+  await selectChoice(form.getByRole('combobox', { name: '결제 반복', exact: true }), 'monthly');
+  await chooseDate(form.getByLabel('시작일', { exact: true }), '2026-09-15');
+  await chooseDate(form.getByLabel('마지막 결제일', { exact: true }), '2026-12-15');
   await form.getByRole('button', { name: '납부 확인 추가', exact: true }).click();
-  await form.getByLabel('실제 납부일', { exact: true }).fill('2026-09-15');
+  await chooseDate(form.getByLabel('실제 납부일', { exact: true }), '2026-09-15');
   await form.getByLabel('실제 납부액', { exact: true }).fill('44000');
   await save(page, '계획 저장');
   await expect(planCard(page, '검증 보험 일정')).toContainText('44,000원 납부 확인');
@@ -284,9 +286,9 @@ test('loan terms and date-based asset adjustments preserve historical month-end 
   await page.getByRole('button', { name: '자산 추가', exact: true }).click();
   let form = page.getByRole('dialog');
   await form.getByLabel('자산 이름', { exact: true }).fill('검증 대출');
-  await form.getByRole('combobox', { name: '종류', exact: true }).selectOption('liability');
+  await selectChoice(form.getByRole('combobox', { name: '종류', exact: true }), 'liability');
   await form.getByLabel('금융기관', { exact: true }).fill('검증은행');
-  await form.getByLabel(/^최초 잔액 기준일/).fill('2026-08-01');
+  await chooseDate(form.getByLabel(/^최초 잔액 기준일/), '2026-08-01');
   await form.getByRole('spinbutton', { name: /^최초 잔액/ }).fill('500000');
   await form.getByLabel('최초 원금', { exact: true }).fill('500000');
   await form.getByLabel('금리 (%)', { exact: true }).fill('3.75');
@@ -318,14 +320,14 @@ test('loan terms and date-based asset adjustments preserve historical month-end 
   await card.getByRole('button', { name: /잔액/ }).click();
   form = page.getByRole('dialog');
   await form.getByLabel('맞출 잔액', { exact: true }).fill('450000');
-  await form.getByLabel('날짜', { exact: true }).fill('2026-09-15');
+  await chooseDate(form.getByLabel('날짜', { exact: true }), '2026-09-15');
   await form.getByLabel('조정 사유', { exact: true }).fill('9월 대출 잔액 확인');
   const before = await snapshot(page);
   await save(page);
   await expect(page.getByTestId(`asset-${created.id}`)).toHaveText('450,000원');
-  await page.getByLabel('조회 월').fill('2026-08');
+  await chooseMonth(page.getByLabel('조회 월'), '2026-08');
   await expect(page.getByTestId(`asset-${created.id}`)).toHaveText('500,000원');
-  await page.getByLabel('조회 월').fill('2026-09');
+  await chooseMonth(page.getByLabel('조회 월'), '2026-09');
   await page.getByRole('button', { name: '검증 대출 설정', exact: true }).click();
   await page
     .getByRole('dialog')
