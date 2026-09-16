@@ -100,7 +100,7 @@ export class HouseholdRoom extends DurableObject<Env> {
     if (transactionId) {
       const transaction = await this.env.DB.prepare(
         `SELECT ledger_id FROM transactions
-        WHERE household_id = ? AND id = ? AND deleted_at IS NULL`,
+        WHERE household_id = ? AND id = ? AND deleted_at IS NULL AND type IN ('income','expense')`,
       )
         .bind(attachment.householdId, transactionId)
         .first<{ ledger_id: string }>();

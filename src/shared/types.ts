@@ -1,7 +1,5 @@
-export type TransactionType = 'expense' | 'income' | 'saving' | 'transfer';
+export type TransactionType = 'expense' | 'income';
 export type OwnerId = 'u1' | 'u2' | 'shared';
-export type RuleType = 'asset-expense' | 'asset-income' | 'saving' | 'transfer';
-
 export interface User {
   id: 'u1' | 'u2';
   name: string;
@@ -19,6 +17,10 @@ export interface Ledger {
   archived: boolean;
   version: number;
 }
+export interface Allocation {
+  assetId: string;
+  amount: number;
+}
 export interface Transaction {
   id: string;
   ledgerId: string;
@@ -26,15 +28,33 @@ export interface Transaction {
   description: string;
   amount: number;
   type: TransactionType;
-  category: string;
   ownerId: OwnerId;
   paymentMethodId: string;
   tagIds: string[];
-  assetId: string | null;
-  toAssetId: string | null;
+  allocations: Allocation[];
   version: number;
   updatedAt: string;
   updatedBy: string;
+}
+export interface TagGroup {
+  id: string;
+  name: string;
+  selectionMode: 'single' | 'multiple';
+  appliesTo: 'transaction' | 'asset';
+  role: 'category' | 'regular';
+  ledgerIds: string[] | null;
+  sortOrder: number;
+  archived: boolean;
+  version: number;
+}
+export interface Tag {
+  id: string;
+  groupId: string;
+  name: string;
+  color: string;
+  sortOrder: number;
+  archived: boolean;
+  version: number;
 }
 export interface Asset {
   id: string;
@@ -43,6 +63,35 @@ export interface Asset {
   openingBalance: number;
   balance: number;
   color: string;
+  tagIds: string[];
+  trackSavings: boolean;
+  version: number;
+}
+export interface AssetOperation {
+  id: string;
+  type: 'transfer' | 'adjustment';
+  date: string;
+  description: string;
+  fromAssetId: string | null;
+  toAssetId: string | null;
+  assetId: string | null;
+  amount: number;
+  targetBalance: number | null;
+  version: number;
+  createdBy: string;
+  createdAt: string;
+  deletedAt: string | null;
+}
+export interface AssetMovement {
+  id: string;
+  assetId: string;
+  transactionId: string | null;
+  operationId: string | null;
+  date: string;
+  description: string;
+  amount: number;
+  savingsAmount: number;
+  actorId: string;
 }
 export interface PaymentMethod {
   id: string;
@@ -52,17 +101,6 @@ export interface PaymentMethod {
   closingDay: number | null;
   paymentDay: number | null;
 }
-export interface Tag {
-  id: string;
-  name: string;
-  color: string;
-}
-export interface Rule {
-  id: string;
-  tagId: string;
-  name: string;
-  type: RuleType;
-}
 export interface Bootstrap {
   user: User;
   users: User[];
@@ -70,8 +108,10 @@ export interface Bootstrap {
   transactions: Transaction[];
   assets: Asset[];
   paymentMethods: PaymentMethod[];
+  tagGroups: TagGroup[];
   tags: Tag[];
-  rules: Rule[];
+  assetOperations: AssetOperation[];
+  assetMovements: AssetMovement[];
   revision: number;
   mode: 'demo' | 'production';
 }
@@ -87,6 +127,10 @@ export interface MutationResult {
   revision: number;
   transaction?: Transaction;
   ledger?: Ledger;
+  asset?: Asset;
+  tagGroup?: TagGroup;
+  tag?: Tag;
+  assetOperation?: AssetOperation;
   replayed?: boolean;
 }
 export interface Presence {

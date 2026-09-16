@@ -16,22 +16,33 @@ INSERT OR IGNORE INTO payment_methods (id, household_id, name, type, owner_id, c
   ('card-w', 'home', '와이프의 카드', 'card', 'u2', 31, 12),
   ('account', 'home', '생활 통장', 'account', 'shared', NULL, NULL),
   ('cash', 'home', '현금', 'cash', 'shared', NULL, NULL);
-INSERT OR IGNORE INTO tags (id, household_id, name, color) VALUES
-  ('daily', 'home', '일상', '#7972e8'),
-  ('together', 'home', '함께', '#d9779b'),
-  ('travel', 'home', '여행', '#e9ac56'),
-  ('asset-use', 'home', '자산 사용', '#4b9a83'),
-  ('asset-in', 'home', '자산 입금', '#6a9fbd'),
-  ('save', 'home', '저축', '#70a08e'),
-  ('move', 'home', '이체', '#9c91c7');
-INSERT OR IGNORE INTO rules (id, household_id, tag_id, name, type) VALUES
-  ('rule-expense', 'home', 'asset-use', '선택한 자산에서 지출 차감', 'asset-expense'),
-  ('rule-income', 'home', 'asset-in', '선택한 자산에 수입 반영', 'asset-income'),
-  ('rule-saving', 'home', 'save', '출금 자산에서 저축 자산으로 이동', 'saving'),
-  ('rule-transfer', 'home', 'move', '두 자산 사이 이체', 'transfer');
+INSERT OR IGNORE INTO tag_groups(id,household_id,name,selection_mode,applies_to,role,sort_order) VALUES
+ ('group-category-home','home','분류','single','transaction','category',0),
+ ('group-detail-home','home','상세 태그','multiple','transaction','regular',1),
+ ('group-asset-home','home','자산 목적','multiple','asset','regular',2);
+INSERT OR IGNORE INTO tags (id, household_id, name, color, group_id) VALUES
+  ('daily', 'home', '일상', '#7972e8', 'group-detail-home'),
+  ('together', 'home', '함께', '#d9779b', 'group-detail-home'),
+  ('travel', 'home', '여행', '#e9ac56', 'group-detail-home'),
+  ('asset-use', 'home', '자산 사용', '#4b9a83', 'group-detail-home'),
+  ('asset-in', 'home', '자산 입금', '#6a9fbd', 'group-detail-home'),
+  ('save', 'home', '저축', '#70a08e', 'group-detail-home'),
+  ('move', 'home', '이체', '#9c91c7', 'group-detail-home');
+INSERT OR IGNORE INTO tags(id,household_id,name,color,group_id,sort_order) VALUES
+ ('category-home-eab889ec97ac','home','급여','#7972e8','group-category-home',0),
+ ('category-home-ec8b9debb984','home','식비','#7972e8','group-category-home',1),
+ ('category-home-ecb9b4ed8e98','home','카페','#7972e8','group-category-home',2),
+ ('category-home-ec99b8ec8b9d','home','외식','#7972e8','group-category-home',3),
+ ('category-home-eab590ed86b5','home','교통','#7972e8','group-category-home',4),
+ ('category-home-ec839ded999c','home','생활','#7972e8','group-category-home',5),
+ ('category-home-ec87bced9591','home','쇼핑','#7972e8','group-category-home',6),
+ ('category-home-eca3bceab1b0','home','주거','#7972e8','group-category-home',7),
+ ('category-home-ebacb8ed9994','home','문화','#7972e8','group-category-home',8),
+ ('category-home-eab1b4eab095','home','건강','#7972e8','group-category-home',9),
+ ('category-home-eab8b0ed8380','home','기타','#7972e8','group-category-home',10);
 INSERT OR IGNORE INTO transactions (id, household_id, ledger_id, date, description, amount, type, category, owner_id, payment_method_id, tag_ids, updated_at, updated_by) VALUES
-  ('demo-salary', 'home', 'main', '2026-09-01', '9월 월급', 4200000, 'income', '급여', 'u1', 'account', '[]', '2026-09-01T09:00:00.000Z', 'u1'),
-  ('demo-market', 'home', 'main', '2026-09-14', '주말 장보기', 68400, 'expense', '식비', 'shared', 'card-j', '["daily","together"]', '2026-09-14T09:00:00.000Z', 'u1'),
-  ('demo-coffee', 'home', 'main', '2026-09-15', '출근길 커피', 4800, 'expense', '카페', 'u2', 'card-w', '["daily"]', '2026-09-15T09:00:00.000Z', 'u2'),
-  ('demo-dinner', 'home', 'main', '2026-09-15', '둘이서 저녁', 42000, 'expense', '외식', 'shared', 'card-j', '["together"]', '2026-09-15T11:00:00.000Z', 'u1'),
-  ('demo-flight', 'home', 'trip', '2026-09-12', '제주 왕복 항공권', 268000, 'expense', '교통', 'shared', 'card-w', '["travel"]', '2026-09-12T09:00:00.000Z', 'u2');
+  ('demo-salary', 'home', 'main', '2026-09-01', '9월 월급', 4200000, 'income', '급여', 'u1', 'account', '["category-home-eab889ec97ac"]', '2026-09-01T09:00:00.000Z', 'u1'),
+  ('demo-market', 'home', 'main', '2026-09-14', '주말 장보기', 68400, 'expense', '식비', 'shared', 'card-j', '["daily","together","category-home-ec8b9debb984"]', '2026-09-14T09:00:00.000Z', 'u1'),
+  ('demo-coffee', 'home', 'main', '2026-09-15', '출근길 커피', 4800, 'expense', '카페', 'u2', 'card-w', '["daily","category-home-ecb9b4ed8e98"]', '2026-09-15T09:00:00.000Z', 'u2'),
+  ('demo-dinner', 'home', 'main', '2026-09-15', '둘이서 저녁', 42000, 'expense', '외식', 'shared', 'card-j', '["together","category-home-ec99b8ec8b9d"]', '2026-09-15T11:00:00.000Z', 'u1'),
+  ('demo-flight', 'home', 'trip', '2026-09-12', '제주 왕복 항공권', 268000, 'expense', '교통', 'shared', 'card-w', '["travel","category-home-eab590ed86b5"]', '2026-09-12T09:00:00.000Z', 'u2');

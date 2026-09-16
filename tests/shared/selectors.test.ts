@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { cardStatement, totals, visibleTransactions } from '../../src/shared/selectors';
-import type { Bootstrap, Ledger, PaymentMethod, Transaction } from '../../src/shared/types';
+import {
+  cardStatement,
+  categoryNames,
+  savingsSummary,
+  tagFilteredTransactions,
+  tagGroupBreakdown,
+  tagsForTransaction,
+  totals,
+  visibleTransactions,
+} from '../../src/shared/selectors';
+import type {
+  AssetMovement,
+  Bootstrap,
+  Ledger,
+  PaymentMethod,
+  Tag,
+  TagGroup,
+  Transaction,
+} from '../../src/shared/types';
 
 function transaction(id: string, overrides: Partial<Transaction> = {}): Transaction {
   return {
@@ -10,12 +27,10 @@ function transaction(id: string, overrides: Partial<Transaction> = {}): Transact
     description: id,
     amount: 100,
     type: 'expense',
-    category: '식비',
     ownerId: 'shared',
     paymentMethodId: 'card',
     tagIds: [],
-    assetId: null,
-    toAssetId: null,
+    allocations: [],
     version: 1,
     updatedAt: '2026-10-01T00:00:00.000Z',
     updatedBy: 'u1',
@@ -39,7 +54,7 @@ function ledger(id: string, overrides: Partial<Ledger> = {}): Ledger {
   };
 }
 
-function bootstrap(transactions: Transaction[], ledgers: Ledger[]): Bootstrap {
+function bootstrap(transactions: Transaction[] = [], ledgers: Ledger[] = []): Bootstrap {
   const user = { id: 'u1', name: '나', color: '#000' } as const;
   return {
     user,
@@ -48,10 +63,74 @@ function bootstrap(transactions: Transaction[], ledgers: Ledger[]): Bootstrap {
     transactions,
     assets: [],
     paymentMethods: [],
+    tagGroups: [],
     tags: [],
-    rules: [],
+    assetOperations: [],
+    assetMovements: [],
     revision: 0,
     mode: 'demo',
+  };
+}
+
+function tagGroup(id: string, overrides: Partial<TagGroup> = {}): TagGroup {
+  return {
+    id,
+    name: id,
+    selectionMode: 'multiple',
+    appliesTo: 'transaction',
+    role: 'regular',
+    ledgerIds: null,
+    sortOrder: 0,
+    archived: false,
+    version: 1,
+    ...overrides,
+  };
+}
+
+function tag(id: string, groupId: string, overrides: Partial<Tag> = {}): Tag {
+  return {
+    id,
+    groupId,
+    name: id,
+    color: '#31725f',
+    sortOrder: 0,
+    archived: false,
+    version: 1,
+    ...overrides,
+  };
+}
+
+function tagData(): Bootstrap {
+  const data = bootstrap();
+  data.tagGroups = [
+    tagGroup('category', { role: 'category', selectionMode: 'single', sortOrder: 0 }),
+    tagGroup('occasion', { sortOrder: 1 }),
+    tagGroup('asset-category', { appliesTo: 'asset', role: 'category', sortOrder: 2 }),
+  ];
+  data.tags = [
+    tag('restaurant', 'category', { name: '외식', sortOrder: 1 }),
+    tag('grocery', 'category', { name: '식비', sortOrder: 0 }),
+    tag('travel', 'occasion', { name: '여행', sortOrder: 1 }),
+    tag('together', 'occasion', { name: '함께', sortOrder: 0 }),
+    tag('old', 'occasion', { name: '옛 기록', sortOrder: 2, archived: true }),
+    tag('unused', 'occasion', { name: '미사용', sortOrder: 3 }),
+    tag('cash-asset', 'asset-category', { name: '현금성 자산' }),
+  ];
+  return data;
+}
+
+function movement(id: string, overrides: Partial<AssetMovement> = {}): AssetMovement {
+  return {
+    id,
+    assetId: 'savings',
+    transactionId: null,
+    operationId: 'operation',
+    date: '2026-09-15',
+    description: id,
+    amount: 0,
+    savingsAmount: 0,
+    actorId: 'u1',
+    ...overrides,
   };
 }
 
@@ -111,19 +190,167 @@ describe('visibleTransactions', () => {
 });
 
 describe('totals', () => {
-  it('keeps saving and transfer separate from expenses and deduplicates only by original ID', () => {
-    const expense = transaction('expense', { amount: 20000, tagIds: ['a', 'b'] });
+  it('counts income and expense once despite multiple tags or asset allocations', () => {
+    const expense = transaction('expense', {
+      amount: 20000,
+      tagIds: ['a', 'b'],
+      allocations: [
+        { assetId: 'checking', amount: 15000 },
+        { assetId: 'savings', amount: 5000 },
+      ],
+    });
     expect(
       totals([
         expense,
         { ...expense },
         transaction('other-expense', { amount: 20000 }),
         transaction('income', { type: 'income', amount: 500000 }),
-        transaction('saving', { type: 'saving', amount: 100000 }),
-        transaction('transfer', { type: 'transfer', amount: 30000 }),
       ]),
-    ).toEqual({ income: 500000, expense: 40000, saving: 100000, transfer: 30000 });
-    expect(totals([])).toEqual({ income: 0, expense: 0, saving: 0, transfer: 0 });
+    ).toEqual({ income: 500000, expense: 40000 });
+    expect(totals([])).toEqual({ income: 0, expense: 0 });
+  });
+});
+
+describe('transaction tags and categories', () => {
+  it('resolves category roles, preserves archived history, and orders groups and options', () => {
+    const data = tagData();
+    data.tagGroups[0].archived = true;
+    data.tags.find((item) => item.id === 'restaurant')!.archived = true;
+    const entry = transaction('entry', {
+      tagIds: ['old', 'cash-asset', 'travel', 'restaurant', 'restaurant', 'missing', 'together'],
+    });
+    expect(tagsForTransaction(data, entry).map((item) => item.id)).toEqual([
+      'restaurant',
+      'together',
+      'travel',
+      'old',
+    ]);
+    expect(categoryNames(data, entry)).toEqual(['외식']);
+    expect(categoryNames(data, transaction('empty'))).toEqual([]);
+  });
+});
+
+describe('tagFilteredTransactions', () => {
+  it('uses OR within each group and AND between groups without double counting', () => {
+    const data = tagData();
+    const one = transaction('one', { tagIds: ['grocery', 'together', 'travel'] });
+    const two = transaction('two', { tagIds: ['restaurant', 'travel'] });
+    const missingCategory = transaction('missing-category', { tagIds: ['travel'] });
+    const missingOccasion = transaction('missing-occasion', { tagIds: ['grocery'] });
+    const source = [one, { ...one }, two, missingCategory, missingOccasion];
+    expect(
+      tagFilteredTransactions(data, source, [
+        'grocery',
+        'restaurant',
+        'travel',
+        'together',
+        'travel',
+      ]),
+    ).toEqual([one, two]);
+    expect(tagFilteredTransactions(data, source, ['together', 'travel'])).toEqual([
+      one,
+      two,
+      missingCategory,
+    ]);
+    expect(tagFilteredTransactions(data, source, [])).toEqual([
+      one,
+      two,
+      missingCategory,
+      missingOccasion,
+    ]);
+  });
+
+  it('keeps archived options and groups searchable, without broadening invalid selections', () => {
+    const data = tagData();
+    data.tagGroups.find((group) => group.id === 'occasion')!.archived = true;
+    const historical = transaction('old', { tagIds: ['old'] });
+    const source = [historical, transaction('current', { tagIds: ['travel'] })];
+    expect(tagFilteredTransactions(data, source, ['old'])).toEqual([historical]);
+    expect(tagFilteredTransactions(data, source, ['old', 'missing'])).toEqual([]);
+    expect(tagFilteredTransactions(data, source, ['cash-asset'])).toEqual([]);
+  });
+});
+
+describe('tagGroupBreakdown', () => {
+  it('counts each expense per selected option and puts only unmatched expenses in unclassified', () => {
+    const data = tagData();
+    const shared = transaction('shared', {
+      amount: 20000,
+      tagIds: ['together', 'travel', 'travel'],
+    });
+    const source = [
+      shared,
+      { ...shared },
+      transaction('same-amount', { amount: 20000, tagIds: ['travel'] }),
+      transaction('historical', { amount: 3000, tagIds: ['old'] }),
+      transaction('category-only', { amount: 5000, tagIds: ['grocery'] }),
+      transaction('unknown-only', { amount: 2000, tagIds: ['missing'] }),
+      transaction('salary', { type: 'income', amount: 90000, tagIds: ['together'] }),
+    ];
+    const result = tagGroupBreakdown(data, source, 'occasion');
+    expect(
+      result.map(({ tagId, name, amount, count }) => ({ tagId, name, amount, count })),
+    ).toEqual([
+      { tagId: 'together', name: '함께', amount: 20000, count: 1 },
+      { tagId: 'travel', name: '여행', amount: 40000, count: 2 },
+      { tagId: 'old', name: '옛 기록', amount: 3000, count: 1 },
+      { tagId: 'unused', name: '미사용', amount: 0, count: 0 },
+      { tagId: null, name: '미분류', amount: 7000, count: 2 },
+    ]);
+    expect(result.reduce((sum, item) => sum + item.amount, 0)).toBe(70000);
+    expect(totals(source).expense).toBe(50000);
+  });
+
+  it('includes an empty unclassified row, preserves archived groups, and ignores asset groups', () => {
+    const data = tagData();
+    data.tagGroups[0].archived = true;
+    expect(
+      tagGroupBreakdown(data, [], 'category').map((row) => [row.tagId, row.amount, row.count]),
+    ).toEqual([
+      ['grocery', 0, 0],
+      ['restaurant', 0, 0],
+      [null, 0, 0],
+    ]);
+    expect(tagGroupBreakdown(data, [], 'missing')).toEqual([]);
+    expect(tagGroupBreakdown(data, [], 'asset-category')).toEqual([]);
+    data.tags = [];
+    expect(tagGroupBreakdown(data, [transaction('unclassified')], 'occasion')).toEqual([
+      { tagId: null, name: '미분류', color: '#a5ad9f', amount: 100, count: 1 },
+    ]);
+  });
+});
+
+describe('savingsSummary', () => {
+  it('uses recorded savings effects for the movement month and deduplicates only movement IDs', () => {
+    const data = bootstrap();
+    const deposit = movement('deposit', { amount: 50000, savingsAmount: 50000 });
+    data.assetMovements = [
+      deposit,
+      { ...deposit },
+      movement('second-deposit', { amount: 50000, savingsAmount: 50000 }),
+      movement('spending', { amount: -20000, savingsAmount: -5000, transactionId: 'expense' }),
+      movement('previous-month', { date: '2026-08-31', amount: 70000, savingsAmount: 70000 }),
+      movement('next-month', { date: '2026-10-01', amount: -90000, savingsAmount: -90000 }),
+      movement('adjustment', { amount: 1000000, savingsAmount: 0, operationId: 'adjustment' }),
+      movement('opening', { amount: 8000000, savingsAmount: 0, operationId: null }),
+    ];
+    expect(savingsSummary(data, '2026-09')).toEqual({ inflow: 100000, outflow: 5000, net: 95000 });
+    expect(savingsSummary(data, '2026-08')).toEqual({ inflow: 70000, outflow: 0, net: 70000 });
+    expect(savingsSummary(data, '2026-10')).toEqual({ inflow: 0, outflow: 90000, net: -90000 });
+    expect(savingsSummary(data, '2026-11')).toEqual({ inflow: 0, outflow: 0, net: 0 });
+  });
+
+  it('keeps both inflow and outflow zero for recorded internal savings transfers', () => {
+    const data = bootstrap();
+    data.assetMovements = [
+      movement('from-savings', { assetId: 'old-savings', amount: -30000, savingsAmount: 0 }),
+      movement('to-savings', { assetId: 'new-savings', amount: 30000, savingsAmount: 0 }),
+      movement('ordinary-transfer-out', { assetId: 'checking', amount: -10000, savingsAmount: 0 }),
+      movement('ordinary-transfer-in', { assetId: 'cash', amount: 10000, savingsAmount: 0 }),
+    ];
+    expect(savingsSummary(data, '2026-09')).toEqual({ inflow: 0, outflow: 0, net: 0 });
+    expect(totals(data.transactions)).toEqual({ income: 0, expense: 0 });
+    expect(() => savingsSummary(data, '2026-9')).toThrow(RangeError);
   });
 });
 
@@ -138,9 +365,7 @@ describe('cardStatement', () => {
       transaction('before', { date: '2026-07-31' }),
       transaction('after', { date: '2026-09-01' }),
       transaction('other-card', { date: '2026-08-15', paymentMethodId: 'other' }),
-      ...(['income', 'saving', 'transfer'] as const).map((type) =>
-        transaction(type, { date: '2026-08-15', type }),
-      ),
+      transaction('income', { date: '2026-08-15', type: 'income' }),
     ];
     const original = structuredClone(source);
     expect(cardStatement(source, card, '2026-09')).toEqual({

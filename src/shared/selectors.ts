@@ -1,4 +1,4 @@
-import type { Bootstrap, PaymentMethod, Transaction } from './types';
+import type { Bootstrap, PaymentMethod, Tag, Transaction } from './types';
 
 interface CalendarMonth {
   year: number;
@@ -62,13 +62,138 @@ export function visibleTransactions(
 export function totals(transactions: Transaction[]): {
   income: number;
   expense: number;
-  saving: number;
-  transfer: number;
 } {
-  const result = { income: 0, expense: 0, saving: 0, transfer: 0 };
+  const result = { income: 0, expense: 0 };
   for (const transaction of uniqueTransactions(transactions))
     result[transaction.type] += transaction.amount;
   return result;
+}
+
+/** Resolve historical selections too; archiving prevents new selection, not past display. */
+export function tagsForTransaction(data: Bootstrap, transaction: Transaction): Tag[] {
+  const groups = new Map(
+    data.tagGroups
+      .filter((group) => group.appliesTo === 'transaction')
+      .map((group) => [group.id, group]),
+  );
+  const selected = new Set(transaction.tagIds);
+  return data.tags
+    .filter((tag) => selected.has(tag.id) && groups.has(tag.groupId))
+    .sort(
+      (a, b) =>
+        groups.get(a.groupId)!.sortOrder - groups.get(b.groupId)!.sortOrder ||
+        a.groupId.localeCompare(b.groupId) ||
+        a.sortOrder - b.sortOrder ||
+        a.id.localeCompare(b.id),
+    );
+}
+
+export function categoryNames(data: Bootstrap, transaction: Transaction): string[] {
+  const categoryGroups = new Set(
+    data.tagGroups.filter((group) => group.role === 'category').map((group) => group.id),
+  );
+  return tagsForTransaction(data, transaction)
+    .filter((tag) => categoryGroups.has(tag.groupId))
+    .map((tag) => tag.name);
+}
+
+/** Use the effect recorded at save time, not today's asset tags or savings settings. */
+export function savingsSummary(
+  data: Bootstrap,
+  month: string,
+): {
+  inflow: number;
+  outflow: number;
+  net: number;
+} {
+  parseMonth(month);
+  const seen = new Set<string>();
+  let inflow = 0;
+  let outflow = 0;
+  for (const movement of data.assetMovements) {
+    if (seen.has(movement.id)) continue;
+    seen.add(movement.id);
+    if (!movement.date.startsWith(`${month}-`)) continue;
+    if (movement.savingsAmount > 0) inflow += movement.savingsAmount;
+    else outflow -= movement.savingsAmount;
+  }
+  return { inflow, outflow, net: inflow - outflow };
+}
+
+/** OR within a group, AND between groups. Unknown selections fail closed. */
+export function tagFilteredTransactions(
+  data: Bootstrap,
+  transactions: Transaction[],
+  selectedIds: string[],
+): Transaction[] {
+  const groups = new Set(
+    data.tagGroups.filter((group) => group.appliesTo === 'transaction').map((group) => group.id),
+  );
+  const tags = new Map(data.tags.map((tag) => [tag.id, tag]));
+  const selectedGroups = new Map<string, Set<string>>();
+  for (const id of selectedIds) {
+    const tag = tags.get(id);
+    if (!tag || !groups.has(tag.groupId)) return [];
+    const selection = selectedGroups.get(tag.groupId) ?? new Set<string>();
+    selection.add(id);
+    selectedGroups.set(tag.groupId, selection);
+  }
+  return uniqueTransactions(transactions).filter((transaction) =>
+    [...selectedGroups.values()].every((selection) =>
+      transaction.tagIds.some((id) => selection.has(id)),
+    ),
+  );
+}
+
+export interface TagGroupBreakdownItem {
+  tagId: string | null;
+  name: string;
+  color: string;
+  amount: number;
+  count: number;
+}
+
+/**
+ * Each expense contributes once to each matching option, so multiple selections can
+ * make option totals exceed the unique expense total. The last row is unclassified.
+ * Zero-value and archived options remain available for a stable historical display.
+ */
+export function tagGroupBreakdown(
+  data: Bootstrap,
+  transactions: Transaction[],
+  groupId: string,
+): TagGroupBreakdownItem[] {
+  if (!data.tagGroups.some((group) => group.id === groupId && group.appliesTo === 'transaction')) {
+    return [];
+  }
+  const options: TagGroupBreakdownItem[] = data.tags
+    .filter((tag) => tag.groupId === groupId)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id))
+    .map((tag) => ({ tagId: tag.id, name: tag.name, color: tag.color, amount: 0, count: 0 }));
+  const byId = new Map(options.map((option) => [option.tagId, option]));
+  const uncategorized: TagGroupBreakdownItem = {
+    tagId: null,
+    name: '미분류',
+    color: '#a5ad9f',
+    amount: 0,
+    count: 0,
+  };
+  for (const transaction of uniqueTransactions(transactions)) {
+    if (transaction.type !== 'expense') continue;
+    let classified = false;
+    for (const id of new Set(transaction.tagIds)) {
+      const option = byId.get(id);
+      if (!option) continue;
+      option.amount += transaction.amount;
+      option.count += 1;
+      classified = true;
+    }
+    if (!classified) {
+      uncategorized.amount += transaction.amount;
+      uncategorized.count += 1;
+    }
+  }
+  return [...options, uncategorized];
 }
 
 /**

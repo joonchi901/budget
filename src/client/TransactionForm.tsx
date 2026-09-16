@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { ArrowRight, Info, Trash2 } from 'lucide-react';
+import { Info, Plus, Trash2 } from 'lucide-react';
 import type {
   Bootstrap,
   Transaction,
@@ -9,6 +9,7 @@ import type {
 } from '../shared/types';
 import { RequestError, request } from './api';
 import { Dialog, labels, ownerName, useUnsavedGuard, won } from './components';
+import { TagFields } from './TagFields';
 
 interface Props {
   data: Bootstrap;
@@ -16,6 +17,7 @@ interface Props {
   month: string;
   original?: Transaction;
   onClose(): void;
+  onChanged(): Promise<void>;
   onSaved(message: string): void;
   presence(id: string | null, field: string | null): void;
 }
@@ -27,6 +29,7 @@ export default function TransactionForm({
   onClose,
   onSaved,
   presence,
+  onChanged,
 }: Props) {
   const today = new Date();
   const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -39,12 +42,10 @@ export default function TransactionForm({
           description: '',
           amount: 0,
           type: 'expense',
-          category: '식비',
           ownerId: 'shared',
           paymentMethodId: data.paymentMethods[0]?.id ?? '',
           tagIds: [],
-          assetId: null,
-          toAssetId: null,
+          allocations: [],
         },
   );
   const [version, setVersion] = useState(original?.version);
@@ -59,34 +60,15 @@ export default function TransactionForm({
   const pending = useRef<{ url: string; method: string; body: unknown; deleting: boolean } | null>(
     null,
   );
-  const rule = data.rules.find((rule) => draft.tagIds.includes(rule.tagId));
+  const [tagPending, setTagPending] = useState(false);
   const assets = data.assets.filter((asset) => asset.kind === 'asset');
-  const ordinaryTags = data.tags.filter((tag) => !data.rules.some((rule) => rule.tagId === tag.id));
-  const matchingRule = data.rules.find(
-    (rule) =>
-      rule.type ===
-      { expense: 'asset-expense', income: 'asset-income', saving: 'saving', transfer: 'transfer' }[
-        draft.type
-      ],
-  );
-  const dual = draft.type === 'saving' || draft.type === 'transfer';
-  const locked = busy || uncertain;
+  const allocated = draft.allocations.reduce((sum, row) => sum + row.amount, 0);
+  const locked = busy || uncertain || tagPending;
   const patch = (next: Partial<TransactionInput>) => {
     setDraft((old) => ({ ...old, ...next }));
     setError('');
   };
-  const switchType = (type: TransactionType) => {
-    const tagIds = draft.tagIds.filter((id) => ordinaryTags.some((tag) => tag.id === id));
-    const action = data.rules.find((rule) => rule.type === type);
-    if (action) tagIds.push(action.tagId);
-    patch({
-      type,
-      tagIds,
-      assetId: null,
-      toAssetId: null,
-      category: { expense: '식비', income: '급여', saving: '저축', transfer: '이체' }[type],
-    });
-  };
+  const switchType = (type: TransactionType) => patch({ type });
   async function submit(deleting = false) {
     if (!pending.current)
       pending.current = deleting
@@ -121,9 +103,18 @@ export default function TransactionForm({
         pending.current = null;
         setUncertain(false);
         if (e.status === 409) {
-          if (e.current && typeof e.current === 'object' && 'description' in e.current)
+          if (
+            e.current &&
+            typeof e.current === 'object' &&
+            'allocations' in e.current &&
+            (e.current as Transaction).version !== version
+          )
             setConflict(e.current as Transaction);
-          else setDeleted(true);
+          else if (original && !e.current && e.code === 'VERSION_CONFLICT') setDeleted(true);
+          else {
+            await onChanged();
+            setError('태그나 자산 설정이 변경되었어요. 입력을 확인한 뒤 다시 저장해 주세요.');
+          }
         }
         if (e.status === 404) setDeleted(true);
       } else setUncertain(true);
@@ -133,10 +124,13 @@ export default function TransactionForm({
   }
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!conflict && !deleted) void submit();
+    if (locked || conflict || deleted) return;
+    if (draft.allocations.length && allocated !== draft.amount) {
+      setError('자산에 나눈 금액의 합계가 내역 금액과 같아야 해요.');
+      return;
+    }
+    void submit();
   };
-  const sourceName = data.assets.find((a) => a.id === draft.assetId)?.name ?? '자산 미선택';
-  const destName = data.assets.find((a) => a.id === draft.toAssetId)?.name ?? '자산 미선택';
   return (
     <Dialog
       title={original ? '내역 수정' : '새 내역'}
@@ -197,7 +191,7 @@ export default function TransactionForm({
               주세요.
             </div>
           )}
-          <fieldset disabled={locked || deleted}>
+          <fieldset disabled={busy || uncertain || deleted}>
             <div className="segmented" aria-label="거래 종류">
               {(Object.keys(labels) as TransactionType[]).map((type) => (
                 <button
@@ -253,34 +247,6 @@ export default function TransactionForm({
                   onChange={(e) => patch({ date: e.target.value })}
                 />
               </label>
-              <label>
-                분류
-                <input
-                  name="category"
-                  list="categories"
-                  required
-                  maxLength={80}
-                  value={draft.category}
-                  onChange={(e) => patch({ category: e.target.value })}
-                />
-                <datalist id="categories">
-                  {[
-                    '식비',
-                    '외식',
-                    '카페',
-                    '교통',
-                    '생활',
-                    '주거',
-                    '문화',
-                    '여행',
-                    '급여',
-                    '저축',
-                    '이체',
-                  ].map((name) => (
-                    <option key={name}>{name}</option>
-                  ))}
-                </datalist>
-              </label>
             </div>
             <div className="form-grid">
               <label>
@@ -314,117 +280,123 @@ export default function TransactionForm({
                 </select>
               </label>
             </div>
-            <div className="field-label">분석 태그</div>
-            <div className="tag-options">
-              {ordinaryTags.map((tag) => (
+            <TagFields
+              data={data}
+              value={draft.tagIds}
+              onChange={(tagIds) => patch({ tagIds })}
+              appliesTo="transaction"
+              ledgerId={ledgerId}
+              disabled={busy || uncertain}
+              onChanged={onChanged}
+              onPendingChange={setTagPending}
+            />
+            <div className="rule-section">
+              <div className="panel-title">
+                <div className="field-label">
+                  {draft.type === 'income' ? '입금할 자산' : '사용한 자산'}
+                </div>
                 <button
                   type="button"
-                  key={tag.id}
-                  className={`tag-option ${draft.tagIds.includes(tag.id) ? 'active' : ''}`}
-                  aria-pressed={draft.tagIds.includes(tag.id)}
+                  className="text-button"
+                  disabled={draft.allocations.length >= assets.length}
                   onClick={() =>
                     patch({
-                      tagIds: draft.tagIds.includes(tag.id)
-                        ? draft.tagIds.filter((id) => id !== tag.id)
-                        : [...draft.tagIds, tag.id],
+                      allocations: [
+                        ...draft.allocations,
+                        { assetId: '', amount: Math.max(0, draft.amount - allocated) },
+                      ],
                     })
                   }
                 >
-                  # {tag.name}
+                  <Plus size={14} /> 자산 배분 추가
                 </button>
-              ))}
-            </div>
-            <div className="rule-section">
-              <div className="field-label">자산 반영 규칙</div>
-              {!dual && matchingRule && (
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    name="assetRule"
-                    checked={Boolean(rule)}
-                    onChange={(e) =>
-                      patch({
-                        tagIds: e.target.checked
-                          ? [...draft.tagIds, matchingRule.tagId]
-                          : draft.tagIds.filter((id) => id !== matchingRule.tagId),
-                        assetId: null,
-                        toAssetId: null,
-                      })
-                    }
-                  />
-                  {matchingRule.name}
-                </label>
-              )}
-              {dual && (
-                <p className="small">
-                  #{data.tags.find((tag) => tag.id === matchingRule?.tagId)?.name} 규칙으로 두 자산
-                  사이의 금액을 이동해요.
-                </p>
-              )}
-              {rule && (
-                <>
-                  <div className="form-grid">
-                    <label>
-                      {draft.type === 'income' ? '입금 자산' : '출금 자산'}
-                      <select
-                        name="assetId"
-                        required
-                        value={draft.assetId ?? ''}
-                        onChange={(e) => patch({ assetId: e.target.value || null })}
-                      >
-                        <option value="">선택해 주세요</option>
-                        {assets.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name}
+              </div>
+              <p className="small muted">
+                자산을 선택하면 잔액에도 함께 반영해요. 여러 자산으로 금액을 나눌 수 있어요.
+              </p>
+              {draft.allocations.map((allocation, index) => (
+                <div className="allocation-row" key={index}>
+                  <label>
+                    {draft.type === 'income' ? '입금 자산' : '출금 자산'} {index + 1}
+                    <select
+                      name="allocationAsset"
+                      required
+                      value={allocation.assetId}
+                      onChange={(e) =>
+                        patch({
+                          allocations: draft.allocations.map((row, i) =>
+                            i === index ? { ...row, assetId: e.target.value } : row,
+                          ),
+                        })
+                      }
+                    >
+                      <option value="">선택해 주세요</option>
+                      {assets
+                        .filter(
+                          (asset) =>
+                            asset.id === allocation.assetId ||
+                            !draft.allocations.some((row) => row.assetId === asset.id),
+                        )
+                        .map((asset) => (
+                          <option value={asset.id} key={asset.id}>
+                            {asset.name}
+                            {asset.trackSavings ? ' · 저축 집계' : ''}
                           </option>
                         ))}
-                      </select>
-                    </label>
-                    {dual && (
-                      <label>
-                        입금 자산
-                        <select
-                          name="toAssetId"
-                          required
-                          value={draft.toAssetId ?? ''}
-                          onChange={(e) => patch({ toAssetId: e.target.value || null })}
-                        >
-                          <option value="">선택해 주세요</option>
-                          {assets
-                            .filter((a) => a.id !== draft.assetId)
-                            .map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.name}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                    )}
-                  </div>
-                  <div className="effect-preview">
-                    <Info size={16} />
-                    <span>
-                      이 거래의 자산 반영
+                    </select>
+                  </label>
+                  <label>
+                    배분 금액 {index + 1}
+                    <input
+                      name="allocationAmount"
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      max="1000000000000"
+                      step="1"
+                      required
+                      value={allocation.amount || ''}
+                      onChange={(e) =>
+                        patch({
+                          allocations: draft.allocations.map((row, i) =>
+                            i === index ? { ...row, amount: Number(e.target.value) } : row,
+                          ),
+                        })
+                      }
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`자산 배분 ${index + 1} 삭제`}
+                    onClick={() =>
+                      patch({ allocations: draft.allocations.filter((_, i) => i !== index) })
+                    }
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+              ))}
+              <div className="effect-preview">
+                <Info size={16} />
+                <span>
+                  {draft.allocations.length ? (
+                    <>
+                      배분 합계 <strong>{won(allocated)}원</strong> / 내역 {won(draft.amount)}원
                       <br />
-                      <strong>
-                        {sourceName} {draft.type === 'income' ? '+' : '−'}
-                        {won(draft.amount)}원
-                        {dual && (
-                          <>
-                            {' '}
-                            <ArrowRight size={13} /> {destName} +{won(draft.amount)}원
-                          </>
-                        )}
-                      </strong>
-                    </span>
-                  </div>
-                </>
-              )}
-              {!rule && (
-                <p className="small muted">
-                  이 내역은 수입·지출에만 집계돼요. 자산 금액은 바뀌지 않아요.
-                </p>
-              )}
+                      {allocated !== draft.amount
+                        ? `남은 배분 ${won(draft.amount - allocated)}원`
+                        : '내역은 한 번만 집계하고, 자산별 잔액을 반영해요.'}
+                    </>
+                  ) : (
+                    '자산 배분을 추가하지 않으면 수입·지출만 기록해요.'
+                  )}
+                </span>
+              </div>
+              <p className="small muted">
+                태그 이름이나 선택만으로 잔액이 바뀌지는 않아요. 자산 간 이동과 잔액 조정은 자산
+                화면에서 기록해요.
+              </p>
             </div>
           </fieldset>
         </div>
@@ -433,7 +405,7 @@ export default function TransactionForm({
             <button
               type="button"
               className="danger-link"
-              disabled={busy || deleted || Boolean(conflict)}
+              disabled={locked || deleted || Boolean(conflict)}
               onClick={() => setConfirmDelete(!confirmDelete)}
             >
               <Trash2 size={16} />
@@ -457,7 +429,7 @@ export default function TransactionForm({
               <button
                 className="primary"
                 type="submit"
-                disabled={busy || Boolean(conflict) || deleted}
+                disabled={locked || Boolean(conflict) || deleted}
               >
                 {busy ? '저장 중…' : '저장'}
               </button>
@@ -467,7 +439,7 @@ export default function TransactionForm({
         {confirmDelete && !uncertain && (
           <div className="delete-confirm">
             <span>이 내역과 연결된 자산 반영을 삭제할까요?</span>
-            <button type="button" disabled={busy} onClick={() => void submit(true)}>
+            <button type="button" disabled={locked} onClick={() => void submit(true)}>
               삭제 확인
             </button>
           </div>

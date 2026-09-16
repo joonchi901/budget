@@ -14,17 +14,27 @@ import {
   Plus,
   Search,
   Sparkles,
+  Tags,
   Wallet,
   WifiOff,
 } from 'lucide-react';
 import type { Bootstrap, Ledger, Transaction, TransactionType } from '../shared/types';
-import { cardStatement, totals, visibleTransactions } from '../shared/selectors';
+import {
+  cardStatement,
+  categoryNames,
+  tagFilteredTransactions,
+  tagGroupBreakdown,
+  totals,
+  visibleTransactions,
+} from '../shared/selectors';
 import { request, useBudget } from './api';
 import { Dialog, Empty, Stat, fieldName, labels, ownerName, won } from './components';
 import TransactionForm from './TransactionForm';
 import LedgerForm from './LedgerForm';
+import AssetsView from './AssetsView';
+import TagManager from './TagManager';
 
-type Page = 'ledger' | 'assets' | 'payments' | 'analytics';
+type Page = 'ledger' | 'assets' | 'payments' | 'analytics' | 'tags';
 const monthLabel = (month: string) => `${month.slice(0, 4)}년 ${Number(month.slice(5))}월`;
 const currentMonth = () => {
   const d = new Date();
@@ -173,6 +183,7 @@ export default function App() {
     assets: '우리의 자산',
     payments: '카드와 통장',
     analytics: '기록으로 보는 우리',
+    tags: '우리만의 태그',
   }[page];
   return (
     <div className="app-shell">
@@ -207,6 +218,7 @@ export default function App() {
               { id: 'assets', label: '자산', icon: Wallet },
               { id: 'payments', label: '카드 · 통장', icon: CreditCard },
               { id: 'analytics', label: '통계', icon: BarChart3 },
+              { id: 'tags', label: '태그 설정', icon: Tags },
             ] as const
           ).map((item) => (
             <button
@@ -332,11 +344,13 @@ export default function App() {
                     ? '어디에 얼마가 있는지, 우리의 자산을 함께 살펴보세요.'
                     : page === 'payments'
                       ? '사용 내역과 앞으로 나갈 카드 대금을 확인해요.'
-                      : '태그로 기록을 모아, 소비의 흐름을 발견해 보세요.'}
+                      : page === 'tags'
+                        ? '태그 유형과 옵션을 우리 생활에 맞게 구성해요.'
+                        : '태그로 기록을 모아, 소비의 흐름을 발견해 보세요.'}
               </p>
             </div>
             <div className="heading-actions">
-              {page !== 'assets' && (
+              {page !== 'tags' && (
                 <div className="month-picker">
                   <button
                     className="icon-button"
@@ -415,7 +429,10 @@ export default function App() {
               linkBusy={linkBusy}
             />
           )}
-          {page === 'assets' && <AssetsView data={data} />}
+          {page === 'assets' && (
+            <AssetsView data={data} month={month} onChanged={state.refresh} onNotice={notice} />
+          )}
+          {page === 'tags' && <TagManager data={data} onChanged={state.refresh} />}
           {page === 'payments' && <PaymentsView data={data} month={month} />}
           {page === 'analytics' && (
             <AnalyticsView
@@ -453,6 +470,7 @@ export default function App() {
             void state.refresh();
           }}
           presence={state.presence}
+          onChanged={state.refresh}
         />
       )}
       {newLedger && (
@@ -475,8 +493,8 @@ export default function App() {
             </p>
             <h3>태그와 자산 반영</h3>
             <p>
-              분석 태그로 원하는 내역을 모아보세요. 자산 사용·입금 규칙을 선택한 경우에만 지정한
-              자산 금액도 바뀌어요. 저축과 이체는 두 자산 사이의 이동으로 기록해요.
+              태그 설정에서 유형과 옵션을 만들고 기록에 붙여보세요. 수입·지출을 자산에 배분하면
+              잔액에도 반영돼요. 자산 이동과 잔액 조정, 저축 집계는 자산 화면에서 관리해요.
             </p>
             <h3>카드 지출은 사용한 날 한 번</h3>
             <p>
@@ -490,7 +508,7 @@ export default function App() {
             </p>
             <p className="small muted">
               현재는 예시 계정으로 사용하는 첫 미리보기예요. 직접 저장 버튼으로 저장하며, 실제
-              로그인·자동 입력 저장·설정 편집은 후속 개발 범위예요.
+              로그인·자동 입력 저장은 후속 개발 범위예요.
             </p>
           </div>
         </Dialog>
@@ -533,12 +551,18 @@ function LedgerView({
   const budgetExpense = ledger.kind === 'main' ? sum.expense : lifetime.expense;
   const remaining = ledger.budget - budgetExpense;
   const percent = ledger.budget > 0 ? Math.round((budgetExpense / ledger.budget) * 100) : 0;
-  const groups = categoryGroups(entries);
+  const categoryGroup = data.tagGroups.find((g) => g.role === 'category');
+  const groups = categoryGroup
+    ? tagGroupBreakdown(data, entries, categoryGroup.id)
+        .filter((row) => row.count > 0)
+        .sort((a, b) => b.amount - a.amount)
+        .map((row) => [row.name, row.amount] as [string, number])
+    : [];
   const filtered = entries
     .filter(
       (tx) =>
         (type === 'all' || tx.type === type) &&
-        `${tx.description} ${tx.category} ${tx.tagIds.map((id) => data.tags.find((t) => t.id === id)?.name).join(' ')}`
+        `${tx.description} ${categoryNames(data, tx).join(' ')} ${tx.tagIds.map((id) => data.tags.find((t) => t.id === id)?.name).join(' ')}`
           .toLocaleLowerCase()
           .includes(search.toLocaleLowerCase()),
     )
@@ -568,7 +592,11 @@ function LedgerView({
           amount={sum.expense}
           hint={ledger.kind === 'main' ? '연결된 가계부 포함' : '이 가계부의 월 지출'}
         />
-        <Stat label="이번 달 저축" amount={sum.saving} hint="자산 사이의 저축 이동" />
+        <Stat
+          label="수입 − 지출"
+          amount={sum.income - sum.expense}
+          hint="자산 이동·잔액 조정은 포함하지 않아요"
+        />
         <Stat
           label={ledger.kind === 'main' ? '이번 달 남은 예산' : '가계부 전체 남은 예산'}
           amount={remaining}
@@ -636,6 +664,9 @@ function LedgerView({
             <span className="muted small">이번 달 지출</span>
           </div>
           <CategoryBars groups={groups} total={sum.expense} />
+          {categoryGroup?.selectionMode === 'multiple' && (
+            <p className="small muted">한 내역에 여러 옵션이 있으면 각 옵션에 포함돼요.</p>
+          )}
         </section>
       </div>
       <section className="panel transactions-panel">
@@ -717,11 +748,24 @@ function LedgerView({
                       </div>
                     </td>
                     <td>
-                      <span className="category-name">{tx.category}</span>
+                      <span className="category-name">
+                        {categoryNames(data, tx).join(' · ') || '미분류'}
+                      </span>
                       <div className="row-tags">
                         {tx.tagIds.map((id) => {
                           const tag = data.tags.find((t) => t.id === id);
-                          return tag && <span key={id}>#{tag.name}</span>;
+                          return (
+                            tag &&
+                            data.tagGroups.find((g) => g.id === tag.groupId)?.role !==
+                              'category' && (
+                              <span
+                                key={id}
+                                title={data.tagGroups.find((g) => g.id === tag.groupId)?.name}
+                              >
+                                #{tag.name}
+                              </span>
+                            )
+                          );
                         })}
                       </div>
                     </td>
@@ -779,17 +823,11 @@ function LedgerView({
   );
 }
 
-function categoryGroups(entries: Transaction[]) {
-  const values = new Map<string, number>();
-  for (const tx of entries)
-    if (tx.type === 'expense') values.set(tx.category, (values.get(tx.category) ?? 0) + tx.amount);
-  return [...values].sort((a, b) => b[1] - a[1]);
-}
 function CategoryBars({ groups, total }: { groups: [string, number][]; total: number }) {
   return groups.length ? (
     <div className="category-bars">
       {groups.slice(0, 5).map(([name, amount], index) => (
-        <div className="category-bar" key={name}>
+        <div className="category-bar" key={`${index}-${name}`}>
           <div>
             <span>
               <i style={{ background: colors[index % colors.length] }} />
@@ -813,98 +851,6 @@ function CategoryBars({ groups, total }: { groups: [string, number][]; total: nu
     </div>
   ) : (
     <Empty>지출을 기록하면 흐름이 보여요.</Empty>
-  );
-}
-
-function AssetsView({ data }: { data: Bootstrap }) {
-  const assets = data.assets.filter((a) => a.kind === 'asset');
-  const debt = data.assets.filter((a) => a.kind === 'liability');
-  const total = assets.reduce((s, a) => s + a.balance, 0);
-  const liability = debt.reduce((s, a) => s + a.balance, 0);
-  return (
-    <>
-      <div className="asset-hero">
-        <div>
-          <span className="eyebrow">OUR NET WORTH</span>
-          <h2>우리의 순자산</h2>
-          <strong>
-            {won(total - liability)}
-            <small>원</small>
-          </strong>
-          <p>현재 자산에서 부채를 뺀 금액이에요.</p>
-        </div>
-        <div className="asset-hero-detail">
-          <span>
-            전체 자산 <strong>{won(total)}원</strong>
-          </span>
-          <span>
-            전체 부채 <strong>{won(liability)}원</strong>
-          </span>
-          <div className="asset-stack">
-            {assets.map((a) => (
-              <span
-                key={a.id}
-                style={{ width: `${total ? (a.balance / total) * 100 : 0}%`, background: a.color }}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="section-heading">
-        <h2>자산 항목</h2>
-        <span className="muted small">기준 금액 + 연결된 거래 변동</span>
-      </div>
-      <div className="asset-grid">
-        {assets.map((a) => (
-          <section className="panel asset-card" key={a.id}>
-            <span className="asset-icon" style={{ background: `${a.color}18`, color: a.color }}>
-              <Wallet size={21} />
-            </span>
-            <h3>{a.name}</h3>
-            <strong className="asset-balance" data-testid={`asset-${a.id}`}>
-              {won(a.balance)}
-              <small>원</small>
-            </strong>
-            <div className="asset-detail">
-              <span>기준 금액</span>
-              <span>{won(a.openingBalance)}원</span>
-            </div>
-            <div className="asset-detail">
-              <span>거래 변동</span>
-              <span className={a.balance - a.openingBalance >= 0 ? 'positive' : ''}>
-                {a.balance - a.openingBalance > 0 ? '+' : ''}
-                {won(a.balance - a.openingBalance)}원
-              </span>
-            </div>
-          </section>
-        ))}
-      </div>
-      <div className="section-heading">
-        <h2>부채</h2>
-        <span className="muted small">등록된 기준 금액</span>
-      </div>
-      <div className="panel liability-list">
-        {debt.map((a) => (
-          <div key={a.id}>
-            <span className="asset-icon">
-              <Wallet size={20} />
-            </span>
-            <div>
-              <strong>{a.name}</strong>
-              <span>대출 상세·상환 관리는 준비 중이에요</span>
-            </div>
-            <strong>{won(a.balance)}원</strong>
-          </div>
-        ))}
-      </div>
-      <div className="inline-note">
-        <CircleHelp size={17} />
-        <p>
-          예비금·투자금·전세금은 각각의 자산 항목이에요. 가계부 예산과 별개로 관리되며, 선택한 자산
-          반영 규칙이 있는 거래만 금액에 반영돼요.
-        </p>
-      </div>
-    </>
   );
 }
 
@@ -1012,11 +958,22 @@ function AnalyticsView({
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const entries = visibleTransactions(data, ledgerId, month);
-  const filtered = entries.filter(
-    (tx) => !selected.length || selected.some((id) => tx.tagIds.includes(id)),
-  );
+  const tagGroups = data.tagGroups
+    .filter((g) => g.appliesTo === 'transaction')
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const [groupId, setGroupId] = useState('');
+  const group =
+    tagGroups.find((g) => g.id === groupId) ??
+    tagGroups.find((g) => g.role === 'category') ??
+    tagGroups[0];
+  const filtered = tagFilteredTransactions(data, entries, selected);
   const sum = totals(filtered);
-  const categories = categoryGroups(filtered);
+  const categories: [string, number][] = group
+    ? tagGroupBreakdown(data, filtered, group.id)
+        .filter((row) => row.count > 0)
+        .sort((a, b) => b.amount - a.amount)
+        .map((row) => [row.name, row.amount])
+    : [];
   return (
     <>
       <section className="panel analytics-filter">
@@ -1034,50 +991,79 @@ function AnalyticsView({
             ))}
           </select>
         </div>
-        <div className="tag-options">
-          <button
-            className={`tag-option ${!selected.length ? 'active' : ''}`}
-            onClick={() => setSelected([])}
-          >
-            전체 태그
-          </button>
-          {data.tags.map((tag) => (
-            <button
-              key={tag.id}
-              className={`tag-option ${selected.includes(tag.id) ? 'active' : ''}`}
-              aria-pressed={selected.includes(tag.id)}
-              onClick={() =>
-                setSelected((ids) =>
-                  ids.includes(tag.id) ? ids.filter((id) => id !== tag.id) : [...ids, tag.id],
+        <button className="text-button" onClick={() => setSelected([])}>
+          태그 선택 초기화
+        </button>
+        {tagGroups.map((g) => (
+          <div key={g.id} className="analytics-tag-group">
+            <div className="field-label">
+              {g.name}
+              {g.archived ? ' · 보관됨' : ''}
+            </div>
+            <div className="tag-options">
+              {data.tags
+                .filter(
+                  (t) =>
+                    t.groupId === g.id &&
+                    (!t.archived ||
+                      selected.includes(t.id) ||
+                      entries.some((tx) => tx.tagIds.includes(t.id))),
                 )
-              }
-            >
-              # {tag.name}
-            </button>
-          ))}
-        </div>
+                .sort((a, b) => a.sortOrder - b.sortOrder)
+                .map((tag) => (
+                  <button
+                    key={tag.id}
+                    className={`tag-option ${selected.includes(tag.id) ? 'active' : ''}`}
+                    aria-pressed={selected.includes(tag.id)}
+                    onClick={() =>
+                      setSelected((ids) =>
+                        ids.includes(tag.id) ? ids.filter((id) => id !== tag.id) : [...ids, tag.id],
+                      )
+                    }
+                  >
+                    # {tag.name}
+                    {tag.archived ? ' (보관)' : ''}
+                  </button>
+                ))}
+            </div>
+          </div>
+        ))}
         <p className="small muted">
-          선택한 태그 중 하나라도 포함된 내역을 모아요. 여러 태그가 겹쳐도 같은 내역은 한 번만
-          합산해요.
+          같은 유형에서는 선택한 옵션 중 하나만 있으면 포함해요. 서로 다른 유형은 모두 충족하는
+          내역을 모아요. 합계에는 같은 내역을 한 번만 더해요.
         </p>
       </section>
-      <section className="stats-grid">
+      <section className="stats-grid two">
         <Stat
           label="선택한 기록의 수입"
           amount={sum.income}
           hint={`${filtered.length}건의 기록 기준`}
         />
         <Stat label="선택한 기록의 지출" amount={sum.expense} hint={monthLabel(month)} accent />
-        <Stat label="선택한 기록의 저축" amount={sum.saving} hint="수입·지출과 별도 집계" />
-        <Stat label="선택한 기록의 이체" amount={sum.transfer} hint="수입·지출과 별도 집계" />
       </section>
       <div className="overview-grid">
         <section className="panel">
           <div className="panel-title">
-            <h2>분류별 지출</h2>
-            <span className="muted small">상위 5개</span>
+            <h2>유형별 지출</h2>
+            <select
+              aria-label="집계할 태그 유형"
+              value={group?.id ?? ''}
+              onChange={(e) => setGroupId(e.target.value)}
+            >
+              {tagGroups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
           </div>
           <CategoryBars groups={categories} total={sum.expense} />
+          <p className="small muted">
+            상위 5개 옵션을 보여요.
+            {group?.selectionMode === 'multiple'
+              ? ' 복수 선택한 내역은 각 옵션에 포함되어 옵션별 금액의 합이 전체 지출보다 클 수 있어요.'
+              : ''}
+          </p>
         </section>
         <section className="panel">
           <div className="panel-title">

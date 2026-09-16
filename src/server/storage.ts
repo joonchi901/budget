@@ -1,156 +1,132 @@
 import type {
   Asset,
+  AssetOperation,
   Bootstrap,
   Ledger,
   MutationResult,
-  PaymentMethod,
-  Rule,
   Tag,
+  TagGroup,
   Transaction,
-  User,
 } from '../shared/types';
 import type { Session } from './auth';
 import { ApiError } from './errors';
 
-type Row = Record<string, unknown>;
-export interface StoredRule extends Rule {
-  version: number;
+export type Binding = string | number | null;
+type Entity = 'transaction' | 'ledger' | 'asset' | 'tagGroup' | 'tag' | 'assetOperation';
+type EntityMap = {
+  transaction: Transaction;
+  ledger: Ledger;
+  asset: Asset;
+  tagGroup: TagGroup;
+  tag: Tag;
+  assetOperation: AssetOperation;
+};
+const boolean = (column: string) => `json(CASE ${column} WHEN 1 THEN 'true' ELSE 'false' END)`;
+const definitions: Record<Entity, { table: string; json: string; filter?: string }> = {
+  transaction: {
+    table: 'transactions',
+    filter: " AND t.deleted_at IS NULL AND t.type IN ('income','expense')",
+    json: `json_object('id',t.id,'ledgerId',t.ledger_id,'date',t.date,'description',t.description,'amount',t.amount,'type',t.type,'ownerId',t.owner_id,'paymentMethodId',t.payment_method_id,'tagIds',json(t.tag_ids),'allocations',json(t.allocations_json),'version',t.version,'updatedAt',t.updated_at,'updatedBy',t.updated_by)`,
+  },
+  ledger: {
+    table: 'ledgers',
+    json: `json_object('id',t.id,'name',t.name,'icon',t.icon,'kind',t.kind,'parentId',t.parent_id,'budget',t.budget,'startDate',t.start_date,'endDate',t.end_date,'archived',${boolean('t.archived')},'version',t.version)`,
+  },
+  asset: {
+    table: 'assets',
+    json: `json_object('id',t.id,'name',t.name,'kind',t.kind,'openingBalance',t.opening_balance,'balance',t.opening_balance+COALESCE((SELECT SUM(e.amount) FROM asset_effects e WHERE e.household_id=t.household_id AND e.asset_id=t.id),0),'color',t.color,'tagIds',json(t.tag_ids),'trackSavings',${boolean('t.track_savings')},'version',t.version)`,
+  },
+  tagGroup: {
+    table: 'tag_groups',
+    json: `json_object('id',t.id,'name',t.name,'selectionMode',t.selection_mode,'appliesTo',t.applies_to,'role',t.role,'ledgerIds',json(t.ledger_ids),'sortOrder',t.sort_order,'archived',${boolean('t.archived')},'version',t.version)`,
+  },
+  tag: {
+    table: 'tags',
+    json: `json_object('id',t.id,'groupId',t.group_id,'name',t.name,'color',t.color,'sortOrder',t.sort_order,'archived',${boolean('t.archived')},'version',t.version)`,
+  },
+  assetOperation: {
+    table: 'asset_operations',
+    json: `json_object('id',t.id,'type',t.type,'date',t.date,'description',t.description,'fromAssetId',t.from_asset_id,'toAssetId',t.to_asset_id,'assetId',t.asset_id,'amount',t.amount,'targetBalance',t.target_balance,'version',t.version,'createdBy',t.created_by,'createdAt',t.created_at,'deletedAt',t.deleted_at)`,
+  },
+};
+function selection(entity: Entity) {
+  const d = definitions[entity];
+  return `SELECT ${d.json} AS payload FROM ${d.table} t WHERE t.household_id=?${d.filter ?? ''}`;
 }
-
-export const TX_COLUMNS = `id, ledger_id, date, description, amount, type, category, owner_id,
-  payment_method_id, tag_ids, asset_id, to_asset_id, version, updated_at, updated_by`;
-const TX_JSON = `json_object('id', id, 'ledgerId', ledger_id, 'date', date, 'description', description,
-  'amount', amount, 'type', type, 'category', category, 'ownerId', owner_id,
-  'paymentMethodId', payment_method_id, 'tagIds', json(tag_ids), 'assetId', asset_id,
-  'toAssetId', to_asset_id, 'version', version, 'updatedAt', updated_at, 'updatedBy', updated_by)`;
-const LEDGER_JSON = `json_object('id', id, 'name', name, 'icon', icon, 'kind', kind,
-  'parentId', parent_id, 'budget', budget, 'startDate', start_date, 'endDate', end_date,
-  'archived', json(CASE archived WHEN 1 THEN 'true' ELSE 'false' END), 'version', version)`;
-
-export function transactionFromRow(r: Row): Transaction {
-  return {
-    id: String(r.id),
-    ledgerId: String(r.ledger_id),
-    date: String(r.date),
-    description: String(r.description),
-    amount: Number(r.amount),
-    type: r.type as Transaction['type'],
-    category: String(r.category),
-    ownerId: r.owner_id as Transaction['ownerId'],
-    paymentMethodId: String(r.payment_method_id),
-    tagIds: JSON.parse(String(r.tag_ids)),
-    assetId: r.asset_id === null ? null : String(r.asset_id),
-    toAssetId: r.to_asset_id === null ? null : String(r.to_asset_id),
-    version: Number(r.version),
-    updatedAt: String(r.updated_at),
-    updatedBy: String(r.updated_by),
-  };
-}
-
-export function ledgerFromRow(r: Row): Ledger {
-  return {
-    id: String(r.id),
-    name: String(r.name),
-    icon: String(r.icon),
-    kind: r.kind as Ledger['kind'],
-    parentId: r.parent_id === null ? null : String(r.parent_id),
-    budget: Number(r.budget),
-    startDate: r.start_date === null ? null : String(r.start_date),
-    endDate: r.end_date === null ? null : String(r.end_date),
-    archived: Boolean(r.archived),
-    version: Number(r.version),
-  };
-}
-
-export async function transactionById(
+export async function entityById<K extends Entity>(
   db: D1Database,
-  householdId: string,
+  h: string,
+  entity: K,
   id: string,
-): Promise<Transaction | null> {
+): Promise<EntityMap[K] | null> {
   const row = await db
-    .prepare(
-      `SELECT ${TX_COLUMNS} FROM transactions WHERE household_id = ? AND id = ? AND deleted_at IS NULL`,
-    )
-    .bind(householdId, id)
-    .first<Row>();
-  return row ? transactionFromRow(row) : null;
+    .prepare(`${selection(entity)} AND t.id=?`)
+    .bind(h, id)
+    .first<{ payload: string }>();
+  return row ? JSON.parse(row.payload) : null;
 }
-
-export async function ledgerById(
-  db: D1Database,
-  householdId: string,
-  id: string,
-): Promise<Ledger | null> {
-  const row = await db
-    .prepare('SELECT * FROM ledgers WHERE household_id = ? AND id = ?')
-    .bind(householdId, id)
-    .first<Row>();
-  return row ? ledgerFromRow(row) : null;
+export const transactionById = (db: D1Database, h: string, id: string) =>
+  entityById(db, h, 'transaction', id);
+export const ledgerById = (db: D1Database, h: string, id: string) =>
+  entityById(db, h, 'ledger', id);
+export async function getRevision(db: D1Database, h: string): Promise<number> {
+  return (
+    (await db
+      .prepare('SELECT revision FROM households WHERE id=?')
+      .bind(h)
+      .first<number>('revision')) ?? 0
+  );
 }
-
-export async function getRevision(db: D1Database, householdId: string): Promise<number> {
-  const row = await db
-    .prepare('SELECT revision FROM households WHERE id = ?')
-    .bind(householdId)
-    .first<{ revision: number }>();
-  return row?.revision ?? 0;
-}
-
 export async function bootstrap(db: D1Database, session: Session): Promise<Bootstrap> {
   const h = session.householdId;
-  // A single D1 batch gives the client a snapshot and a matching revision.
-  const results = await db.batch<Row>([
-    db.prepare('SELECT id, name, color FROM users WHERE household_id = ? ORDER BY id').bind(h),
-    db.prepare('SELECT * FROM ledgers WHERE household_id = ? ORDER BY kind, name').bind(h),
+  const keys: Entity[] = ['ledger', 'transaction', 'asset', 'tagGroup', 'tag', 'assetOperation'];
+  const queries = keys.map((k) =>
     db
       .prepare(
-        `SELECT ${TX_COLUMNS} FROM transactions WHERE household_id = ? AND deleted_at IS NULL ORDER BY date DESC, updated_at DESC`,
+        selection(k) +
+          (k === 'transaction'
+            ? ' ORDER BY t.date DESC,t.updated_at DESC'
+            : k === 'tag' || k === 'tagGroup'
+              ? ' ORDER BY t.sort_order,t.rowid'
+              : ' ORDER BY t.rowid'),
+      )
+      .bind(h),
+  );
+  const results = await db.batch<{ payload: string }>([
+    ...queries,
+    db
+      .prepare(
+        "SELECT json_object('id',id,'name',name,'color',color) AS payload FROM users WHERE household_id=? ORDER BY id",
       )
       .bind(h),
     db
       .prepare(
-        `SELECT a.*, a.opening_balance + COALESCE(SUM(m.amount), 0) AS balance
-      FROM assets a LEFT JOIN asset_movements m ON m.household_id = a.household_id AND m.asset_id = a.id
-      WHERE a.household_id = ? GROUP BY a.id ORDER BY a.rowid`,
+        "SELECT json_object('id',id,'name',name,'type',type,'ownerId',owner_id,'closingDay',closing_day,'paymentDay',payment_day) AS payload FROM payment_methods WHERE household_id=? ORDER BY rowid",
       )
       .bind(h),
-    db.prepare('SELECT * FROM payment_methods WHERE household_id = ? ORDER BY rowid').bind(h),
-    db.prepare('SELECT id, name, color FROM tags WHERE household_id = ? ORDER BY rowid').bind(h),
     db
       .prepare(
-        'SELECT id, tag_id AS tagId, name, type FROM rules WHERE household_id = ? ORDER BY rowid',
+        "SELECT json_object('id',id,'assetId',asset_id,'transactionId',transaction_id,'operationId',operation_id,'date',date,'description',description,'amount',amount,'savingsAmount',savings_amount,'actorId',actor_id) AS payload FROM asset_effects WHERE household_id=? ORDER BY date DESC,rowid DESC",
       )
       .bind(h),
-    db.prepare('SELECT revision FROM households WHERE id = ?').bind(h),
+    db.prepare('SELECT revision AS payload FROM households WHERE id=?').bind(h),
   ]);
+  const rows = (i: number) => results[i].results.map((r) => JSON.parse(r.payload));
   return {
     user: session.user,
-    users: results[0].results as unknown as User[],
-    ledgers: results[1].results.map(ledgerFromRow),
-    transactions: results[2].results.map(transactionFromRow),
-    assets: results[3].results.map((r) => ({
-      id: String(r.id),
-      name: String(r.name),
-      kind: r.kind as Asset['kind'],
-      openingBalance: Number(r.opening_balance),
-      balance: Number(r.balance),
-      color: String(r.color),
-    })),
-    paymentMethods: results[4].results.map((r) => ({
-      id: String(r.id),
-      name: String(r.name),
-      type: r.type as PaymentMethod['type'],
-      ownerId: r.owner_id as PaymentMethod['ownerId'],
-      closingDay: r.closing_day === null ? null : Number(r.closing_day),
-      paymentDay: r.payment_day === null ? null : Number(r.payment_day),
-    })),
-    tags: results[5].results as unknown as Tag[],
-    rules: results[6].results as unknown as Rule[],
-    revision: Number(results[7].results[0].revision),
+    ledgers: rows(0),
+    transactions: rows(1),
+    assets: rows(2),
+    tagGroups: rows(3),
+    tags: rows(4),
+    assetOperations: rows(5),
+    users: rows(6),
+    paymentMethods: rows(7),
+    assetMovements: rows(8),
+    revision: Number(results[9].results[0].payload),
     mode: 'demo',
   };
 }
-
 export async function replay(
   db: D1Database,
   session: Session,
@@ -159,8 +135,7 @@ export async function replay(
 ): Promise<MutationResult | null> {
   const row = await db
     .prepare(
-      `SELECT request_hash, result_json FROM mutation_receipts
-    WHERE household_id = ? AND user_id = ? AND mutation_id = ?`,
+      'SELECT request_hash,result_json FROM mutation_receipts WHERE household_id=? AND user_id=? AND mutation_id=?',
     )
     .bind(session.householdId, session.user.id, mutationId)
     .first<{ request_hash: string; result_json: string | null }>();
@@ -175,84 +150,88 @@ export async function replay(
     );
   return { ...JSON.parse(row.result_json), replayed: true };
 }
-
+export interface Guard {
+  sql: string;
+  bindings: Binding[];
+}
+export const existsGuard = (
+  table: string,
+  h: string,
+  id: string,
+  version: number,
+  extra = '',
+): Guard => ({
+  sql: `EXISTS(SELECT 1 FROM ${table} WHERE household_id=? AND id=? AND version=?${extra})`,
+  bindings: [h, id, version],
+});
+export function combineGuards(guards: Guard[]): { guardSql: string; guardBindings: Binding[] } {
+  return {
+    guardSql: `SELECT CASE WHEN ${guards.map((g) => `(${g.sql})`).join(' AND ') || '1'} THEN 1 ELSE 0 END`,
+    guardBindings: guards.flatMap((g) => g.bindings),
+  };
+}
 interface Commit {
   mutationId: string;
   requestHash: string;
   entityId: string;
-  entityType: 'transaction' | 'ledger' | 'deleted-transaction';
+  entityType: Entity | 'deleted-transaction';
   ledgerId: string | null;
   guardSql: string;
-  guardBindings: (string | number | null)[];
+  guardBindings: Binding[];
   statements: D1PreparedStatement[];
+  conflictAssets?: string[];
 }
-
 export async function commit(
   db: D1Database,
   session: Session,
-  operation: Commit,
+  op: Commit,
 ): Promise<MutationResult> {
-  const h = session.householdId;
-  const u = session.user.id;
-  const now = new Date().toISOString();
-  const selectEntity =
-    operation.entityType === 'transaction'
-      ? `, 'transaction', json((SELECT ${TX_JSON} FROM transactions WHERE household_id = ? AND id = ?))`
-      : operation.entityType === 'ledger'
-        ? `, 'ledger', json((SELECT ${LEDGER_JSON} FROM ledgers WHERE household_id = ? AND id = ?))`
-        : '';
-  const resultBindings: (string | number | null)[] = [h];
-  if (selectEntity) resultBindings.push(h, operation.entityId);
-  resultBindings.push(h, u, operation.mutationId);
+  const h = session.householdId,
+    u = session.user.id,
+    now = new Date().toISOString();
+  const entity = op.entityType === 'deleted-transaction' ? null : op.entityType;
+  const extra = entity ? `, '${entity}',json((${selection(entity)} AND t.id=?))` : '';
+  const bindings: Binding[] = [h];
+  if (entity) bindings.push(h, op.entityId);
+  bindings.push(h, u, op.mutationId);
   const statements = [
     db
       .prepare(
-        `INSERT INTO mutation_receipts
-      (household_id, user_id, mutation_id, request_hash, entity_id, created_at, guard_valid)
-      VALUES (?, ?, ?, ?, ?, ?, (${operation.guardSql}))`,
+        `INSERT INTO mutation_receipts(household_id,user_id,mutation_id,request_hash,entity_id,created_at,guard_valid) VALUES(?,?,?,?,?,?,(${op.guardSql}))`,
       )
-      .bind(
-        h,
-        u,
-        operation.mutationId,
-        operation.requestHash,
-        operation.entityId,
-        now,
-        ...operation.guardBindings,
-      ),
-    ...operation.statements,
-    db.prepare('UPDATE households SET revision = revision + 1 WHERE id = ?').bind(h),
+      .bind(h, u, op.mutationId, op.requestHash, op.entityId, now, ...op.guardBindings),
+    ...op.statements,
+    db.prepare('UPDATE households SET revision=revision+1 WHERE id=?').bind(h),
     db
       .prepare(
-        `INSERT INTO changes (household_id, revision, entity_type, entity_id, ledger_id, actor_id, created_at)
-      SELECT id, revision, ?, ?, ?, ?, ? FROM households WHERE id = ?`,
+        'INSERT INTO changes(household_id,revision,entity_type,entity_id,ledger_id,actor_id,created_at) SELECT id,revision,?,?,?,?,? FROM households WHERE id=?',
       )
-      .bind(operation.entityType, operation.entityId, operation.ledgerId, u, now, h),
+      .bind(op.entityType, op.entityId, op.ledgerId, u, now, h),
     db
       .prepare(
-        `UPDATE mutation_receipts SET result_json = json_object(
-      'revision', (SELECT revision FROM households WHERE id = ?)${selectEntity})
-      WHERE household_id = ? AND user_id = ? AND mutation_id = ?`,
+        `UPDATE mutation_receipts SET result_json=json_object('revision',(SELECT revision FROM households WHERE id=?)${extra}) WHERE household_id=? AND user_id=? AND mutation_id=?`,
       )
-      .bind(...resultBindings),
+      .bind(...bindings),
     db
       .prepare(
-        'SELECT result_json FROM mutation_receipts WHERE household_id = ? AND user_id = ? AND mutation_id = ?',
+        'SELECT result_json FROM mutation_receipts WHERE household_id=? AND user_id=? AND mutation_id=?',
       )
-      .bind(h, u, operation.mutationId),
+      .bind(h, u, op.mutationId),
   ];
   try {
     const results = await db.batch<{ result_json: string }>(statements);
-    return JSON.parse(results.at(-1)!.results[0].result_json) as MutationResult;
+    return JSON.parse(results.at(-1)!.results[0].result_json);
   } catch (error) {
-    // A simultaneous duplicate may have committed after the early replay check.
-    const previous = await replay(db, session, operation.mutationId, operation.requestHash);
+    const previous = await replay(db, session, op.mutationId, op.requestHash);
     if (previous) return previous;
     if (String(error).includes('mutation_version_guard')) {
-      const current =
-        operation.entityType === 'ledger'
-          ? await ledgerById(db, h, operation.entityId)
-          : await transactionById(db, h, operation.entityId);
+      const current = op.conflictAssets
+        ? {
+            assets: await Promise.all(
+              op.conflictAssets.map((id) => entityById(db, h, 'asset', id)),
+            ),
+          }
+        : await entityById(db, h, entity ?? 'transaction', op.entityId);
       throw new ApiError(
         409,
         'VERSION_CONFLICT',
@@ -260,6 +239,8 @@ export async function commit(
         current,
       );
     }
+    if (String(error).includes('tags.household_id, tags.group_id, tags.name'))
+      throw new ApiError(409, 'DUPLICATE_TAG', '같은 태그 유형에 같은 이름이 있습니다.');
     throw error;
   }
 }

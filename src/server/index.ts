@@ -10,6 +10,8 @@ import {
   saveTransaction,
 } from './mutations';
 import { bootstrap, getRevision } from './storage';
+import { createTagGroup, patchTagGroup, createTag, patchTag } from './tags';
+import { createAsset, patchAsset, createAssetOperation, deleteAssetOperation } from './assets';
 
 export { HouseholdRoom } from '../realtime/HouseholdRoom';
 
@@ -83,6 +85,23 @@ export default {
           await readBody(request),
         );
       }
+      const id = decodeURIComponent(url.pathname.split('/').at(-1)!);
+      if (url.pathname === '/api/tag-groups' && request.method === 'POST')
+        result = await createTagGroup(env.DB, session, await readBody(request));
+      else if (/^\/api\/tag-groups\/[^/]+$/.test(url.pathname) && request.method === 'PATCH')
+        result = await patchTagGroup(env.DB, session, id, await readBody(request));
+      else if (url.pathname === '/api/tags' && request.method === 'POST')
+        result = await createTag(env.DB, session, await readBody(request));
+      else if (/^\/api\/tags\/[^/]+$/.test(url.pathname) && request.method === 'PATCH')
+        result = await patchTag(env.DB, session, id, await readBody(request));
+      else if (url.pathname === '/api/assets' && request.method === 'POST')
+        result = await createAsset(env.DB, session, await readBody(request));
+      else if (/^\/api\/assets\/[^/]+$/.test(url.pathname) && request.method === 'PATCH')
+        result = await patchAsset(env.DB, session, id, await readBody(request));
+      else if (url.pathname === '/api/asset-operations' && request.method === 'POST')
+        result = await createAssetOperation(env.DB, session, await readBody(request));
+      else if (/^\/api\/asset-operations\/[^/]+$/.test(url.pathname) && request.method === 'DELETE')
+        result = await deleteAssetOperation(env.DB, session, id, await readBody(request));
       if (!result) throw new ApiError(404, 'NOT_FOUND', '요청한 경로를 찾을 수 없습니다.');
       ctx.waitUntil(notify(env, session, result));
       return json(result);

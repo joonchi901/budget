@@ -2,16 +2,17 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 export const won = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
-export const labels = { expense: '지출', income: '수입', saving: '저축', transfer: '이체' };
+export const labels = { expense: '지출', income: '수입' };
 export const fieldName = (field: string | null) =>
   ({
     amount: '금액',
     description: '내용',
     date: '날짜',
-    category: '분류',
+    tagIds: '태그',
     ownerId: '귀속',
     paymentMethodId: '결제수단',
-    assetRule: '자산 규칙',
+    allocationAsset: '배분 자산',
+    allocationAmount: '배분 금액',
     assetId: '출금 자산',
     toAssetId: '입금 자산',
   })[field ?? ''] ?? '내역';
