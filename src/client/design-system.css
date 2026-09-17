@@ -1,35 +1,56 @@
 /* Shared visual tokens and interaction rules. Reference: docs/ui-ux-design.md. */
 :root {
-  --blue: #3182f6;
-  --blue-strong: #1b64da;
-  --blue-soft: #e8f3ff;
-  --text: #191f28;
-  --ink: var(--text);
-  --text-secondary: #4e5968;
-  --muted: #6b7684;
-  --subtle: #8b95a1;
-  --canvas: #f2f4f6;
-  --surface: #fff;
-  --line: #e5e8eb;
-  --danger: #d22030;
-  --green: var(--blue-strong);
-  --green-dark: #1957c2;
-  --sage: var(--blue-soft);
-  --shadow: 0 2px 8px #00204704;
-  --radius-card: 20px;
-  --radius-control: 12px;
-  color: var(--text);
-  background: var(--canvas);
+  /* Compatibility aliases. The board and app share brand/tokens.css. */
+  --accent: var(--brand-accent);
+  --accent-soft: var(--brand-accent-soft);
+  --accent-hover: var(--brand-accent-hover);
+  --accent-line: var(--brand-accent-line);
+  --text: var(--brand-text);
+  --ink: var(--brand-text);
+  --text-secondary: var(--brand-text-secondary);
+  --muted: var(--brand-muted);
+  --subtle: var(--brand-subtle);
+  --canvas: var(--brand-canvas);
+  --surface: var(--brand-surface);
+  --surface-subtle: var(--brand-surface-subtle);
+  --surface-muted: var(--brand-surface-muted);
+  --surface-glass: var(--brand-surface-glass);
+  --line: var(--brand-line);
+  --line-strong: var(--brand-line-strong);
+  --danger: var(--brand-danger);
+  --danger-soft: var(--brand-danger-soft);
+  --danger-line: var(--brand-danger-line);
+  --success: var(--brand-success);
+  --success-soft: var(--brand-success-soft);
+  --warning: var(--brand-warning);
+  --warning-soft: var(--brand-warning-soft);
+  --focus-ring: var(--brand-focus-ring);
+  --focus-soft: var(--brand-focus-soft);
+  --backdrop: var(--brand-backdrop);
+  --shadow-color: var(--brand-shadow-color);
+  --shadow-deep: var(--brand-shadow-deep);
+  --shadow: var(--brand-shadow-card);
+  --radius-card: var(--brand-radius-card);
+  --radius-control: var(--brand-radius-control);
+  --blue: var(--brand-accent);
+  --blue-strong: var(--brand-primary);
+  --blue-soft: var(--brand-accent-soft);
+  --green: var(--brand-success);
+  --green-dark: var(--brand-primary-hover);
+  --sage: var(--brand-success-soft);
+  color: var(--brand-text);
+  background: var(--brand-canvas);
   font-size: 16px;
-  line-height: 1.5;
-  letter-spacing: -0.025em;
+  line-height: var(--brand-line-height-body);
+  letter-spacing: var(--brand-letter-spacing-body);
 }
+
 html {
   font-size: 16px;
   scroll-padding-top: 24px;
 }
 body {
-  font-size: 0.9375rem;
+  font-size: var(--brand-font-size-body);
 }
 .skip-link {
   position: fixed;
@@ -37,22 +58,22 @@ body {
   left: 12px;
   z-index: 200;
   padding: 12px 20px;
-  border-radius: 12px;
+  border-radius: var(--brand-radius-control);
   background: var(--blue-strong);
-  color: #fff;
+  color: var(--brand-on-primary);
   transform: translateY(-150%);
 }
 .skip-link:focus {
   transform: translateY(0);
 }
 h1 {
-  font-size: 1.875rem;
+  font-size: var(--brand-font-size-title);
   line-height: 1.35;
   letter-spacing: -0.045em;
   font-weight: 750;
 }
 h2 {
-  font-size: 1.1875rem;
+  font-size: var(--brand-font-size-section);
   line-height: 1.45;
   letter-spacing: -0.03em;
   font-weight: 700;
@@ -80,14 +101,14 @@ textarea {
   outline-color: var(--blue);
 }
 :is(button, a, input, select, textarea, summary):focus-visible {
-  outline: 3px solid #3182f680;
-  outline-offset: 3px;
+  outline: var(--brand-focus-width) solid var(--brand-focus-ring);
+  outline-offset: var(--brand-focus-offset);
 }
 button {
   transition:
-    background-color 150ms ease,
-    color 150ms ease,
-    box-shadow 150ms ease;
+    background-color var(--brand-motion-normal) var(--brand-ease),
+    color var(--brand-motion-normal) var(--brand-ease),
+    box-shadow var(--brand-motion-normal) var(--brand-ease);
 }
 button:active:not(:disabled) {
   filter: brightness(0.97);
@@ -118,22 +139,22 @@ textarea {
 }
 .primary {
   background: var(--blue-strong);
-  color: white;
+  color: var(--brand-on-primary);
   border: 1px solid transparent;
 }
 .primary:hover:not(:disabled) {
-  background: #1957c2;
+  background: var(--brand-primary-hover);
 }
 .primary:active:not(:disabled) {
-  background: #194aa6;
+  background: var(--brand-primary-active);
 }
 .secondary {
-  background: #f2f4f6;
+  background: var(--surface-muted);
   border: 1px solid transparent;
   color: var(--text-secondary);
 }
 .secondary:hover:not(:disabled) {
-  background: #e5e8eb;
+  background: var(--line);
 }
 .text-button {
   min-height: 44px;
@@ -143,11 +164,11 @@ textarea {
 .icon-button {
   width: 44px;
   height: 44px;
-  border-radius: 12px;
+  border-radius: var(--brand-radius-control);
   color: var(--muted);
 }
 .icon-button:hover:not(:disabled) {
-  background: #f2f4f6;
+  background: var(--surface-muted);
   color: var(--text);
 }
 .demo-chip,
@@ -159,7 +180,7 @@ textarea {
 }
 .demo-chip,
 .pill {
-  background: #f2f4f6;
+  background: var(--surface-muted);
   color: var(--muted);
 }
 .badge,
@@ -168,13 +189,13 @@ textarea {
   color: var(--blue-strong);
 }
 .count {
-  background: #f2f4f6;
+  background: var(--surface-muted);
   color: var(--muted);
   font-size: 0.8125rem;
   padding: 2px 7px;
 }
 .panel {
-  background: white;
+  background: var(--surface);
   border: 0;
   border-radius: var(--radius-card);
   box-shadow: var(--shadow);
@@ -214,7 +235,7 @@ textarea {
 }
 .sidebar {
   padding: 30px 16px 20px;
-  background: white;
+  background: var(--surface);
   border-color: var(--line);
 }
 .sidebar > .brand {
@@ -223,7 +244,7 @@ textarea {
 .brand-mark {
   width: 36px;
   height: 36px;
-  border-radius: 12px;
+  border-radius: var(--brand-radius-control);
   background: var(--blue);
 }
 .brand > strong {
@@ -235,13 +256,13 @@ textarea {
   padding: 16px 12px;
   border: 0;
   border-radius: 14px;
-  background: #f9fafb;
+  background: var(--surface-subtle);
   gap: 10px;
 }
 .household-icon {
   width: 36px;
   height: 36px;
-  border-radius: 12px;
+  border-radius: var(--brand-radius-control);
   display: grid;
   place-items: center;
   color: var(--blue);
@@ -267,9 +288,9 @@ textarea {
 .main-nav button {
   min-height: 50px;
   padding: 13px 16px;
-  font-size: 0.9375rem;
+  font-size: var(--brand-font-size-body);
   gap: 13px;
-  border-radius: 12px;
+  border-radius: var(--brand-radius-control);
   color: var(--text-secondary);
 }
 .main-nav button.active {
@@ -277,7 +298,7 @@ textarea {
   color: var(--blue-strong);
 }
 .main-nav button:hover:not(.active) {
-  background: #f2f4f6;
+  background: var(--surface-muted);
   color: var(--text);
 }
 .main-nav button:nth-last-child(2) {
@@ -301,7 +322,7 @@ textarea {
 .ledger-nav > button.active,
 .ledger-nav > button:hover {
   color: var(--blue-strong);
-  background: #f2f6fc;
+  background: var(--accent-soft);
 }
 .ledger-nav > button > svg {
   color: var(--subtle);
@@ -315,7 +336,7 @@ textarea {
   min-height: 44px;
 }
 .help-button:hover {
-  background: #f2f4f6;
+  background: var(--surface-muted);
   color: var(--text);
 }
 .profile strong {
@@ -351,7 +372,7 @@ textarea {
   height: 6px;
 }
 .live-status.live i {
-  background: #03b26c;
+  background: var(--success);
 }
 .main-content {
   max-width: 1530px;
@@ -362,7 +383,7 @@ textarea {
   gap: 20px;
 }
 .page-heading h1 {
-  font-size: 1.875rem;
+  font-size: var(--brand-font-size-title);
   gap: 10px;
 }
 .heading-emoji {
@@ -379,8 +400,8 @@ textarea {
 .month-picker {
   height: 44px;
   border: 0;
-  border-radius: 12px;
-  background: white;
+  border-radius: var(--brand-radius-control);
+  background: var(--surface);
 }
 .month-picker input {
   width: 166px;
@@ -409,8 +430,8 @@ textarea {
 .page-ledger .stats-grid {
   margin: 0 0 24px;
   gap: 0;
-  background: white;
-  border-radius: 20px;
+  background: var(--surface);
+  border-radius: var(--brand-radius-card);
   padding: 26px 0;
   box-shadow: var(--shadow);
 }
@@ -433,7 +454,7 @@ textarea {
 .stat > strong,
 .stat.accent > strong {
   color: var(--text);
-  font-size: clamp(1.5rem, 2.05vw, 1.875rem);
+  font-size: clamp(1.5rem, 2.3vw, var(--brand-font-size-amount));
   font-weight: 750;
   line-height: 1.35;
   margin: 10px 0 8px;
@@ -506,7 +527,7 @@ textarea {
 }
 .progress-track {
   height: 8px;
-  background: #f2f4f6;
+  background: var(--surface-muted);
   border-radius: 10px;
 }
 .progress-track > div {
@@ -539,7 +560,7 @@ textarea {
 .budget-note {
   color: var(--muted);
   font-size: 0.75rem;
-  background: #f9fafb;
+  background: var(--surface-subtle);
 }
 .ledger-category-select {
   display: block;
@@ -553,7 +574,7 @@ textarea {
   padding: 10px 12px;
   border: 0;
   border-radius: 10px;
-  background: #f2f4f6;
+  background: var(--surface-muted);
   color: var(--text-secondary);
   font-size: 0.875rem;
 }
@@ -569,7 +590,7 @@ textarea {
   color: var(--muted);
 }
 .mini-track {
-  background: #f2f4f6;
+  background: var(--surface-muted);
   height: 5px;
 }
 .transactions-heading {
@@ -583,9 +604,9 @@ textarea {
 .search {
   min-height: 44px;
   width: 218px;
-  background: #f2f4f6;
+  background: var(--surface-muted);
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--brand-radius-control);
   color: var(--subtle);
   padding: 10px 13px;
 }
@@ -594,7 +615,7 @@ textarea {
   font-size: 0.8125rem;
 }
 .search:focus-within {
-  background: white;
+  background: var(--surface);
   border-color: var(--blue);
   box-shadow: 0 0 0 3px var(--blue-soft);
 }
@@ -610,7 +631,7 @@ textarea {
   max-width: 100%;
   min-height: 38px;
   border: 0;
-  background: #f9fafb;
+  background: var(--surface-subtle);
   color: var(--text-secondary);
   border-radius: 8px;
   padding: 7px 10px;
@@ -632,7 +653,7 @@ textarea {
   background: var(--blue-soft);
 }
 .transaction-tabs > button:hover:not(.active) {
-  background: #f2f4f6;
+  background: var(--surface-muted);
   color: var(--text);
 }
 .transactions {
@@ -640,14 +661,14 @@ textarea {
 }
 .transactions th {
   color: var(--muted);
-  background: #f9fafb;
+  background: var(--surface-subtle);
   padding: 12px 8px;
-  border-color: #f2f4f6;
+  border-color: var(--surface-muted);
   font-size: 0.75rem;
 }
 .transactions td {
   padding: 20px 8px;
-  border-color: #f2f4f6;
+  border-color: var(--surface-muted);
   font-size: 0.8125rem;
 }
 .transactions th:first-child,
@@ -661,7 +682,7 @@ textarea {
   width: 62px;
 }
 .transactions tbody tr:hover {
-  background: #f9fafb;
+  background: var(--surface-subtle);
 }
 .transactions tbody tr.peer-editing {
   background: var(--blue-soft);
@@ -708,7 +729,7 @@ textarea {
   min-height: 44px;
 }
 .row-action:hover {
-  background: #f2f4f6;
+  background: var(--surface-muted);
   color: var(--blue-strong);
 }
 .owner-badge {
@@ -716,7 +737,7 @@ textarea {
   border-radius: 6px;
 }
 .owner-badge.shared {
-  background: #f2f4f6;
+  background: var(--surface-muted);
   color: var(--text-secondary);
 }
 .table-summary {
@@ -724,14 +745,14 @@ textarea {
   font-size: 0.75rem;
   color: var(--muted);
   padding: 18px 24px;
-  background: #fff;
+  background: var(--surface);
 }
 .table-summary b {
   font-size: 0.8125rem;
   color: var(--text-secondary);
 }
 .purpose-info {
-  background: white;
+  background: var(--surface);
   border-radius: 14px;
   padding: 14px 18px;
   font-size: 0.8125rem;
@@ -757,13 +778,13 @@ textarea {
 .dialog {
   width: min(620px, calc(100% - 40px));
   border: 0;
-  border-radius: 24px;
+  border-radius: var(--brand-radius-dialog);
   color: var(--text);
-  box-shadow: 0 24px 80px #001b3733;
+  box-shadow: 0 24px 80px var(--shadow-deep);
   max-height: calc(100dvh - 56px);
 }
 .dialog::backdrop {
-  background: #191f2866;
+  background: var(--backdrop);
   backdrop-filter: blur(2px);
 }
 .dialog-heading {
@@ -796,11 +817,11 @@ textarea {
 .form-body textarea {
   width: 100%;
   min-height: 50px;
-  border: 1px solid #e5e8eb;
-  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--brand-radius-control);
   padding: 12px 14px;
   margin-top: 8px;
-  background: #f9fafb;
+  background: var(--surface-subtle);
   color: var(--text);
   font-size: 1rem;
   font-weight: 400;
@@ -809,38 +830,38 @@ textarea {
 .form-body select:focus,
 .form-body textarea:focus {
   border-color: var(--blue);
-  background: #fff;
+  background: var(--surface);
 }
 .form-grid {
   gap: 16px;
 }
 .segmented {
   display: flex;
-  border-radius: 12px;
+  border-radius: var(--brand-radius-control);
   padding: 4px;
-  background: #f2f4f6;
+  background: var(--surface-muted);
 }
 .segmented button {
   flex: 1;
   min-height: 42px;
   border-radius: 9px;
-  font-size: 0.9375rem;
+  font-size: var(--brand-font-size-body);
   color: var(--muted);
 }
 .segmented button.selected {
-  background: #fff;
+  background: var(--surface);
   color: var(--text);
-  box-shadow: 0 2px 6px #001b3712;
+  box-shadow: 0 2px 6px var(--shadow-color);
 }
 .segmented button:hover:not(.selected):not(:disabled) {
-  background: #e5e8eb;
+  background: var(--line);
 }
 .amount-field > div {
-  border-color: #e5e8eb;
+  border-color: var(--line);
   padding: 8px 0 12px;
 }
 .amount-field input {
-  font-size: 2.5rem;
+  font-size: var(--brand-font-size-amount);
   font-weight: 700;
   color: var(--text);
 }
@@ -849,7 +870,7 @@ textarea {
   font-size: 1.25rem;
 }
 .rule-section {
-  background: #f9fafb;
+  background: var(--surface-subtle);
   border: 0;
   padding: 20px;
   border-radius: 16px;
@@ -859,11 +880,11 @@ textarea {
   color: var(--muted);
 }
 .effect-preview {
-  background: #f2f4f6;
+  background: var(--surface-muted);
   border: 0;
   color: var(--muted);
   padding: 14px 16px;
-  border-radius: 12px;
+  border-radius: var(--brand-radius-control);
   font-size: 0.8125rem;
 }
 .effect-preview strong {
@@ -900,8 +921,8 @@ textarea {
 }
 .form-footer {
   padding: 18px 28px;
-  border-color: #f2f4f6;
-  background: #fffffff5;
+  border-color: var(--surface-muted);
+  background: var(--surface-glass);
 }
 .footer-actions {
   gap: 8px;
@@ -915,7 +936,7 @@ textarea {
   min-height: 44px;
 }
 .delete-confirm {
-  background: #ffeeee;
+  background: var(--danger-soft);
   color: var(--danger);
   font-size: 0.8125rem;
   padding: 18px 28px;
@@ -927,23 +948,23 @@ textarea {
   font-size: 0.8125rem;
 }
 .conflict {
-  color: #946200;
-  background: #fff9e7;
+  color: var(--warning);
+  background: var(--warning-soft);
   border: 0;
   border-radius: 14px;
   font-size: 0.875rem;
 }
 .alert {
-  color: #946200;
-  background: #fff9e7;
+  color: var(--warning);
+  background: var(--warning-soft);
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--brand-radius-control);
   font-size: 0.875rem;
   padding: 16px;
 }
 .alert.error {
   color: var(--danger);
-  background: #ffeeee;
+  background: var(--danger-soft);
   border: 0;
 }
 .alert button {
@@ -951,16 +972,16 @@ textarea {
   min-height: 40px;
 }
 .toast {
-  background: #333d4b;
+  background: var(--brand-primary);
   border: 0;
   border-radius: 14px;
-  color: white;
+  color: var(--brand-on-primary);
   font-size: 0.875rem;
   padding: 12px 12px 12px 20px;
-  box-shadow: 0 8px 30px #001b3726;
+  box-shadow: 0 8px 30px var(--shadow-deep);
 }
 .toast > button {
-  color: #fff;
+  color: var(--brand-on-primary);
   width: 40px;
   height: 40px;
 }
@@ -974,7 +995,7 @@ textarea {
   color: var(--muted);
 }
 .emoji-options button {
-  background: #f9fafb;
+  background: var(--surface-subtle);
   border-color: var(--line);
 }
 .emoji-options button.active {
@@ -993,7 +1014,7 @@ textarea {
 
 /* A quiet welcome screen, using the same surfaces and actions as the app. */
 .login-art {
-  background: #e8f3ff;
+  background: var(--accent-soft);
   padding: 70px clamp(32px, 6vw, 100px);
 }
 .login-art::before {
@@ -1007,14 +1028,14 @@ textarea {
 .login-art > p,
 .art-bottom {
   color: var(--text-secondary);
-  font-size: 0.9375rem;
+  font-size: var(--brand-font-size-body);
   letter-spacing: -0.02em;
 }
 .art-ledger {
-  background: white;
+  background: var(--surface);
   border: 0;
   border-left: 10px solid var(--blue);
-  box-shadow: 0 12px 40px #3182f61a;
+  box-shadow: 0 12px 40px var(--focus-soft);
 }
 .art-ledger > span {
   color: var(--text-secondary);
@@ -1030,11 +1051,11 @@ textarea {
 }
 .login-content > p {
   color: var(--muted);
-  font-size: 0.9375rem;
+  font-size: var(--brand-font-size-body);
 }
 .login-users button {
   border: 0;
-  background: #f2f4f6;
+  background: var(--surface-muted);
   border-radius: 16px;
   min-height: 84px;
   box-shadow: none;
@@ -1088,7 +1109,7 @@ textarea {
     margin-inline: 4px;
   }
   .brand > strong {
-    font-size: 0.9375rem;
+    font-size: var(--brand-font-size-body);
   }
   .main-nav button {
     font-size: 0.875rem;
@@ -1111,7 +1132,7 @@ textarea {
   .topbar {
     height: 56px;
     padding: 0 20px;
-    background: white;
+    background: var(--surface);
     gap: 8px;
   }
   .breadcrumb {
@@ -1159,7 +1180,7 @@ textarea {
     font-size: 0.875rem;
   }
   .month-picker input {
-    font-size: 0.9375rem;
+    font-size: var(--brand-font-size-body);
   }
   .page-ledger .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1242,7 +1263,7 @@ textarea {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 4px 10px;
     padding: 18px 20px;
-    border-top: 1px solid #f2f4f6;
+    border-top: 1px solid var(--surface-muted);
   }
   .transactions td,
   .transactions td:first-child,
@@ -1263,7 +1284,7 @@ textarea {
     grid-row: 2;
   }
   .transaction-name {
-    font-size: 0.9375rem;
+    font-size: var(--brand-font-size-body);
     white-space: normal;
   }
   .transactions .money-cell {
@@ -1273,7 +1294,7 @@ textarea {
     text-align: right;
   }
   .money-cell strong {
-    font-size: 0.9375rem;
+    font-size: var(--brand-font-size-body);
   }
   .money-cell small {
     font-size: 0.6875rem;
@@ -1302,7 +1323,7 @@ textarea {
     min-height: 44px;
     padding: 10px 12px;
     font-size: 0.8125rem;
-    background: #f2f4f6;
+    background: var(--surface-muted);
   }
   .table-summary {
     padding: 18px 20px;
@@ -1320,8 +1341,8 @@ textarea {
     right: 0;
     z-index: 20;
     justify-content: space-around;
-    border-top: 1px solid #e5e8eb;
-    background: #fffffff5;
+    border-top: 1px solid var(--line);
+    background: var(--surface-glass);
     backdrop-filter: blur(12px);
     padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   }
@@ -1336,14 +1357,14 @@ textarea {
     padding: 4px 0;
     color: var(--subtle);
     font-size: 0.6875rem;
-    border-radius: 12px;
+    border-radius: var(--brand-radius-control);
   }
   .mobile-navigation button.active {
     color: var(--blue-strong);
     font-weight: 650;
   }
   .mobile-navigation button:hover {
-    background: #f2f4f6;
+    background: var(--surface-muted);
   }
   .mobile-menu-grid {
     display: grid;
@@ -1359,7 +1380,7 @@ textarea {
     padding: 18px 4px;
     min-height: 90px;
     border-radius: 16px;
-    background: #f9fafb;
+    background: var(--surface-subtle);
     color: var(--text-secondary);
     font-size: 0.8125rem;
   }
@@ -1380,7 +1401,7 @@ textarea {
     min-height: 56px;
     padding: 12px 0;
     text-align: left;
-    font-size: 0.9375rem;
+    font-size: var(--brand-font-size-body);
   }
   .mobile-ledger-list strong {
     flex: 1;
@@ -1393,7 +1414,7 @@ textarea {
     max-width: 100%;
     max-height: calc(100dvh - 20px);
     margin: auto 0 0;
-    border-radius: 24px 24px 0 0;
+    border-radius: var(--brand-radius-dialog) var(--brand-radius-dialog) 0 0;
   }
   .dialog-heading {
     padding: 22px 22px 18px;
@@ -1423,7 +1444,7 @@ textarea {
   }
   .form-footer .primary,
   .form-footer .secondary {
-    font-size: 0.9375rem;
+    font-size: var(--brand-font-size-body);
     min-height: 48px;
   }
   .form-footer .primary {
@@ -1448,7 +1469,7 @@ textarea {
     padding: 36px 24px;
   }
   .login-art h1 {
-    font-size: 1.875rem;
+    font-size: var(--brand-font-size-title);
   }
   .login-art > p {
     font-size: 0.8125rem;
@@ -1472,5 +1493,273 @@ textarea {
   *::after {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+/* Approved Uga SVG assets: preserve their proportions, including small icons. */
+.uga-icon,
+.uga-avatar,
+.uga-mascot,
+.uga-logo,
+.uga-illustration {
+  display: inline-block;
+  flex: 0 0 auto;
+  object-fit: contain;
+  vertical-align: middle;
+}
+.uga-mascot,
+.uga-logo,
+.uga-illustration {
+  max-width: 100%;
+}
+.avatar:has(> .uga-avatar) {
+  overflow: hidden;
+}
+.avatar > .uga-avatar {
+  width: 100%;
+  height: 100%;
+}
+.sidebar > .brand {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 8px 24px;
+  border-radius: var(--brand-radius-control);
+}
+.sidebar > .brand > .uga-logo {
+  width: 170px;
+  height: 78px;
+}
+.household-icon {
+  background: var(--brand-sand);
+}
+.main-nav button.active {
+  color: var(--brand-primary);
+  box-shadow: inset 3px 0 0 var(--brand-coral);
+}
+.main-nav button > .uga-icon {
+  width: 27px;
+  height: 27px;
+}
+.ledger-nav > button > :is(.uga-icon, .uga-avatar):first-child {
+  margin-left: 0;
+}
+.ledger-nav > button > :is(.uga-icon, .uga-avatar):first-child + span {
+  flex: 1;
+  min-width: 0;
+}
+.heading-emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.positive,
+.money-cell.income strong {
+  color: var(--brand-success);
+}
+.badge.green {
+  color: var(--brand-success);
+  background: var(--brand-success-soft);
+}
+.progress-track > div,
+.analysis-share-track > span {
+  background: var(--brand-coral);
+}
+.primary {
+  box-shadow: var(--brand-shadow-button);
+}
+.emoji-options button {
+  display: inline-grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--brand-radius-control);
+}
+.emoji-options button.active {
+  box-shadow: inset 0 0 0 1px var(--brand-accent-line);
+}
+
+/* The welcome card follows the board specimen and stays in the supporting rail. */
+.ledger-body-grid > .overview-grid > .brand-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  padding: 16px 20px 20px;
+  border-radius: var(--brand-radius-card);
+  background: var(--brand-surface-subtle);
+  box-shadow: var(--brand-shadow-card);
+  text-align: center;
+}
+.brand-welcome > .uga-illustration {
+  width: 132px;
+  height: 66px;
+}
+.brand-welcome strong {
+  display: block;
+  margin: 2px 0 5px;
+  color: var(--brand-brown);
+  font-size: var(--brand-font-size-md);
+  line-height: var(--brand-line-height-heading);
+}
+.brand-welcome p {
+  color: var(--brand-muted);
+  font-size: var(--brand-font-size-caption);
+  line-height: var(--brand-line-height-caption);
+}
+.empty.uga-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.uga-empty > .uga-illustration {
+  margin: 0 0 4px;
+}
+.uga-guide {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  border-radius: var(--brand-radius-card);
+  background: var(--brand-surface-subtle);
+}
+.uga-guide > .uga-mascot {
+  width: 80px;
+  height: 80px;
+}
+.guide .uga-guide p {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-sm);
+}
+.page-footer > span:has(.uga-icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Authentication introduces the complete lockup; working views use its compact form. */
+.login-page {
+  background: var(--brand-surface);
+}
+.login-art {
+  background: var(--brand-surface-subtle);
+}
+.login-art h1 {
+  color: var(--brand-brown);
+}
+.login-brand-hero {
+  display: block;
+  align-self: center;
+  width: 230px;
+  height: 320px;
+  margin: 0 0 12px;
+}
+.login-brand-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-sm);
+  line-height: var(--brand-line-height-caption);
+}
+.login-brand-message > span {
+  min-width: 0;
+}
+.login-content .brand {
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 32px;
+}
+.login-content .brand > .uga-logo {
+  width: 180px;
+  height: 83px;
+}
+.login-content .login-note {
+  line-height: 1.7;
+}
+
+@media (min-width: 761px) and (max-width: 1350px) {
+  .ledger-body-grid > .overview-grid > .brand-welcome {
+    flex-direction: row;
+    justify-content: center;
+    gap: 20px;
+    padding: 12px 24px;
+    text-align: left;
+  }
+}
+@media (max-width: 760px) {
+  .mobile-navigation button.active {
+    background: var(--brand-accent-soft);
+    color: var(--brand-primary);
+  }
+  .mobile-navigation button .uga-icon {
+    width: 25px;
+    height: 25px;
+  }
+  .mobile-menu-grid button > .uga-icon {
+    width: 28px;
+    height: 28px;
+  }
+  .ledger-body-grid > .overview-grid > .brand-welcome {
+    flex-direction: row;
+    gap: 10px;
+    padding: 14px 16px;
+    text-align: left;
+  }
+  .brand-welcome > .uga-illustration {
+    width: 100px;
+    height: 55px;
+  }
+  .brand-welcome p {
+    font-size: var(--brand-font-size-xs);
+  }
+  .login-art {
+    min-height: 0;
+    padding: 24px;
+  }
+  .login-art h1 {
+    margin: 14px 0 10px;
+    font-size: 1.5rem;
+    line-height: 1.4;
+  }
+  .login-brand-hero {
+    width: 110px;
+    height: 153px;
+    margin: 0;
+  }
+  .login-brand-message {
+    margin-top: 16px;
+  }
+  .login-content {
+    padding-top: 24px;
+  }
+  .login-content .brand {
+    display: none;
+  }
+}
+@media (max-width: 360px) {
+  .brand-welcome > .uga-illustration {
+    width: 80px;
+    height: 50px;
+  }
+  .brand-welcome strong {
+    font-size: var(--brand-font-size-sm);
+  }
+  .uga-guide {
+    padding: 14px;
+    gap: 12px;
+  }
+  .uga-guide > .uga-mascot {
+    width: 60px;
+    height: 60px;
   }
 }

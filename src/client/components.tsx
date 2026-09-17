@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { UgaIllustration, UgaMascot } from './brand/Uga';
 
 export const won = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
 export const labels = { expense: '지출', income: '수입' };
@@ -98,10 +99,20 @@ export function Dialog({
     </dialog>
   );
 }
-export function Empty({ children }: { children: ReactNode }) {
+export function Empty({
+  children,
+  illustration = 'empty',
+}: {
+  children: ReactNode;
+  illustration?: 'empty' | 'search';
+}) {
   return (
-    <div className="empty">
-      <span>✦</span>
+    <div className="empty uga-empty">
+      {illustration === 'search' ? (
+        <UgaMascot pose="search" size={92} />
+      ) : (
+        <UgaIllustration name="empty-state" size={120} />
+      )}
       <p>{children}</p>
     </div>
   );

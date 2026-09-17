@@ -11,9 +11,9 @@
   padding: 9px 12px;
   border: 0;
   border-radius: 9px;
-  background: var(--text, #191f28);
-  color: white;
-  box-shadow: 0 4px 14px #191f2826;
+  background: var(--text);
+  color: var(--brand-on-primary);
+  box-shadow: 0 4px 14px var(--shadow-deep);
   font-family: inherit;
   font-size: 12px;
   font-weight: 450;

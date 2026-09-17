@@ -6,6 +6,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 20px;
   padding: 4px 0 8px;
 }
@@ -35,13 +36,13 @@
   display: grid;
   grid-template-columns: minmax(205px, 29%) minmax(0, 1fr);
   border: 1px solid var(--line);
-  border-radius: 24px;
+  border-radius: var(--brand-radius-card);
   overflow: hidden;
-  background: white;
+  background: var(--surface);
   box-shadow: none;
 }
 .tag-group-list {
-  background: #f9fafb;
+  background: var(--surface-subtle);
   border-right: 1px solid var(--line);
   padding: 12px;
   display: flex;
@@ -59,11 +60,11 @@
   width: 100%;
 }
 .tag-group-item:hover:not(:disabled) {
-  background: #f2f4f6;
+  background: var(--surface-muted);
 }
 .tag-group-item.selected {
-  background: #e8f3ff;
-  color: #1b64da;
+  background: var(--accent-soft);
+  color: var(--brand-primary);
 }
 .tag-group-item > span:nth-child(2) {
   flex: 1;
@@ -82,6 +83,7 @@
   color: var(--muted);
   margin-top: 3px;
   font-weight: 400;
+  overflow-wrap: anywhere;
 }
 .tag-group-item > svg {
   flex-shrink: 0;
@@ -92,9 +94,9 @@
   place-items: center;
   width: 33px;
   height: 33px;
-  border: 1px solid #e5e8eb;
-  background: white;
-  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: var(--brand-radius-control);
   flex-shrink: 0;
 }
 .tag-group-detail {
@@ -140,7 +142,7 @@
   margin-bottom: 9px;
 }
 .tag-option-heading > span:first-child {
-  color: var(--text, #191f28);
+  color: var(--text);
   font-weight: 600;
 }
 .tag-managed-options {
@@ -164,6 +166,7 @@
 .tag-managed-label > small {
   color: var(--muted);
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
 .tag-option-actions {
   display: flex;
@@ -183,8 +186,8 @@
   padding: 9px 12px;
   margin-top: 8px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #f9fafb;
+  border-radius: var(--brand-radius-control);
+  background: var(--surface-subtle);
 }
 .tag-color-options {
   display: flex;
@@ -196,7 +199,7 @@
 .tag-color-options > button {
   width: 37px;
   height: 37px;
-  border-radius: 12px;
+  border-radius: var(--brand-radius-control);
   display: grid;
   place-items: center;
   color: white;
@@ -204,7 +207,7 @@
   box-shadow: 0 0 0 1px var(--line);
 }
 .tag-color-options > button[aria-pressed='true'] {
-  box-shadow: 0 0 0 2px var(--blue, #3182f6);
+  box-shadow: 0 0 0 2px var(--blue);
 }
 .tag-custom-color {
   display: flex !important;
@@ -226,7 +229,7 @@
   gap: 12px;
   margin-top: 15px;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--surface-subtle);
   border-radius: 7px;
 }
 .tag-fields {
@@ -246,12 +249,12 @@
   margin-bottom: 7px;
   font-size: 14px;
   font-weight: 550;
-  color: #4e5968;
+  color: var(--text-secondary);
 }
 .tag-field-label small {
   font-size: 14px;
   font-weight: 400;
-  color: #8b95a1;
+  color: var(--subtle);
 }
 .tag-field-label-actions {
   display: flex;
@@ -262,7 +265,7 @@
   padding: 4px 0 4px 6px;
   min-height: 28px;
   font-size: 14px;
-  color: var(--blue, #3182f6);
+  color: var(--blue);
 }
 .tag-field-clear:hover:not(:disabled) {
   text-decoration: underline;
@@ -276,19 +279,19 @@
   width: 100%;
   min-height: 44px;
   text-align: left;
-  border: 1px solid #e5e8eb;
-  border-radius: 12px;
-  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--brand-radius-control);
+  background: var(--surface);
   padding: 8px 10px;
 }
 .tag-field-trigger:hover:not(:disabled),
 .tag-field-trigger.is-open {
-  border-color: #3182f6;
-  background: #f9fafb;
+  border-color: var(--accent);
+  background: var(--surface-subtle);
 }
 .tag-field-trigger:disabled {
   opacity: 0.8;
-  background: #f9fafb;
+  background: var(--surface-subtle);
 }
 .tag-field-values {
   display: flex;
@@ -299,11 +302,11 @@
 }
 .tag-placeholder {
   font-size: 14px;
-  color: #8b95a1;
+  color: var(--subtle);
 }
 .tag-field-trigger > svg {
   flex-shrink: 0;
-  color: #8b95a1;
+  color: var(--subtle);
 }
 .tag-field-note {
   font-size: 14px;
@@ -312,7 +315,7 @@
 }
 .tag-popover {
   min-width: 0;
-  background: var(--surface, #fff);
+  background: var(--surface);
   overflow: hidden;
 }
 .ui-popover.tag-popover-shell[popover] {
@@ -326,14 +329,14 @@
   max-height: 132px;
   padding: 12px;
   overflow-y: auto;
-  border-bottom: 1px solid var(--line, #e5e8eb);
+  border-bottom: 1px solid var(--line);
 }
 .tag-choice-heading {
   margin: 0;
   padding: 13px 14px 6px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--muted, #6b7684);
+  color: var(--muted);
 }
 .tag-choice-content {
   display: flex;
@@ -344,7 +347,7 @@
 }
 .tag-choice-content > small {
   font-size: 12px;
-  color: var(--muted, #6b7684);
+  color: var(--muted);
 }
 .tag-choice-check {
   display: inline-flex;
@@ -353,7 +356,7 @@
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: var(--blue-strong, #1b64da);
+  color: var(--blue-strong);
 }
 .tag-search {
   display: flex;
@@ -361,7 +364,7 @@
   gap: 7px;
   padding: 4px 8px 4px 12px;
   border-bottom: 1px solid var(--line);
-  color: #8b95a1;
+  color: var(--subtle);
 }
 .tag-search input {
   flex: 1;
@@ -371,7 +374,7 @@
   background: transparent;
   outline-offset: -2px;
   font-size: 14px;
-  color: var(--text, #191f28);
+  color: var(--text);
 }
 .tag-search .icon-button {
   width: 34px;
@@ -393,14 +396,14 @@
   min-height: 44px;
   padding: 6px 8px;
   border-radius: 6px;
-  color: var(--blue, #3182f6);
+  color: var(--blue);
 }
 .tag-choice:hover:not(:disabled),
 .tag-choice:focus-visible {
-  background: #f2f4f6;
+  background: var(--surface-muted);
 }
 .tag-choice[aria-selected='true'] {
-  background: var(--canvas, #f2f4f6);
+  background: var(--canvas);
 }
 .tag-no-options {
   padding: 14px 8px;
@@ -416,7 +419,7 @@
   min-height: 44px;
   padding: 10px 13px;
   border-top: 1px solid var(--line);
-  color: var(--blue, #3182f6);
+  color: var(--blue);
   font-size: 14px;
   overflow-wrap: anywhere;
 }
@@ -424,18 +427,18 @@
   min-width: 0;
 }
 .tag-create-option:hover:not(:disabled) {
-  background: #e8f3ff;
+  background: var(--accent-soft);
 }
 .tag-picker-error {
   padding: 10px 12px;
-  color: #d14343;
-  background: #fff3f2;
+  color: var(--danger);
+  background: var(--danger-soft);
   font-size: 13px;
 }
 .tag-picker-retry {
   padding: 10px 12px;
   font-size: 13px;
-  background: #f9fafb;
+  background: var(--surface-subtle);
 }
 .tag-picker-retry .secondary {
   margin-top: 8px;
@@ -445,7 +448,7 @@
 .tag-popover > .tag-field-note {
   padding: 8px 12px;
 }
-@media (max-width: 760px) {
+@media (max-width: 1000px) {
   .tag-manager-heading {
     align-items: flex-start;
   }
@@ -518,11 +521,11 @@
 .tag-manager-intro {
   margin: 0 0 6px;
   font-size: 15px !important;
-  color: #4e5968 !important;
+  color: var(--text-secondary) !important;
   line-height: 1.6;
 }
 .tag-manager-helper {
-  color: var(--muted, #8b95a1);
+  color: var(--muted);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -567,10 +570,10 @@
   height: 40px;
   border-radius: 14px;
   border: 0;
-  color: #6b7684;
+  color: var(--muted);
 }
 .tag-group-item.selected .tag-group-icon {
-  background: #3182f6;
+  background: var(--accent);
   color: white;
 }
 .tag-group-detail {
@@ -607,16 +610,16 @@
   flex-shrink: 0;
 }
 .tag-detail-actions > .icon-button {
-  background: #f2f4f6;
-  border-radius: 12px;
+  background: var(--surface-muted);
+  border-radius: var(--brand-radius-control);
 }
 .tag-selection-badge {
   display: inline-block;
   margin-top: 8px;
   padding: 5px 9px;
   border-radius: 8px;
-  background: #f2f4f6;
-  color: #6b7684;
+  background: var(--surface-muted);
+  color: var(--muted);
   font-size: 12px;
 }
 .tag-option-heading {
@@ -630,9 +633,9 @@
   margin: 0;
   padding: 10px 14px;
   border: 0;
-  border-radius: 12px;
-  background: #e8f3ff;
-  color: #1b64da;
+  border-radius: var(--brand-radius-control);
+  background: var(--accent-soft);
+  color: var(--brand-primary);
   font-size: 14px;
 }
 .tag-managed-option {
@@ -648,17 +651,17 @@
 .tag-parent-label {
   display: block;
   flex-basis: 100%;
-  color: var(--muted, #8b95a1);
+  color: var(--muted);
   font-size: 12px !important;
 }
 .tag-option-actions {
   margin-left: auto;
   gap: 2px;
-  color: #6b7684;
+  color: var(--muted);
 }
 .tag-option-actions .icon-button:hover:not(:disabled) {
-  background: #f2f4f6;
-  color: var(--text, #191f28);
+  background: var(--surface-muted);
+  color: var(--text);
 }
 .tag-management-note {
   margin-top: 24px;
@@ -672,13 +675,13 @@
 .tag-save-status {
   margin: 0;
   padding: 12px 16px;
-  border-radius: 12px;
-  background: #e8f3ff;
+  border-radius: var(--brand-radius-control);
+  background: var(--accent-soft);
   font-size: 14px;
 }
 .tag-field-trigger {
   min-height: 48px;
-  border-radius: 12px;
+  border-radius: var(--brand-radius-control);
   padding: 10px 14px;
 }
 .tag-field-label {
@@ -725,7 +728,7 @@
   min-height: 44px;
   height: 44px;
 }
-@media (max-width: 760px) {
+@media (max-width: 1000px) {
   .tag-manager {
     gap: 20px;
   }

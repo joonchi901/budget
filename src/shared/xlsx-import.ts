@@ -151,6 +151,13 @@ export async function buildWorkbookImport(
       icon: '📒',
       kind: 'purpose',
       parent_id: null,
+      sort_order:
+        Math.max(
+          -1,
+          ...tables.ledgers
+            .filter((item) => item.parent_id == null)
+            .map((item) => Number(item.sort_order ?? 0)),
+        ) + 1,
       budget: 0,
       start_date: null,
       end_date: null,
@@ -652,18 +659,6 @@ export async function buildWorkbookImport(
     );
   }
   for (const entry of plans.plans) {
-    const isMain = tables.ledgers.find((l) => l.id === ledgerId)?.kind === 'main';
-    if (entry.plan.kind === 'goal' && entry.plan.metric === 'savings' && !isMain) {
-      await source(
-        `plan:${entry.key}`,
-        entry.source,
-        'plan',
-        entry,
-        '저축 목표는 공동 자산 전체 기준입니다. 메인 가계부의 계획에서 등록해 주세요.',
-        'pending',
-      );
-      continue;
-    }
     if (
       !(await source(
         `plan:${entry.key}`,
@@ -679,7 +674,7 @@ export async function buildWorkbookImport(
       plan = {
         ...entry.plan,
         ledgerId,
-        includeLinked: isMain,
+        includeLinked: true,
         tagIds: await tagsFor(entry.tagNames ?? {}),
       };
     add('planning_records', {

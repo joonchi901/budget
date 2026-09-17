@@ -2,6 +2,7 @@ import type { Bootstrap, Transaction } from './types';
 import { transactionForLedger } from './classification';
 import { accountingPeriod } from './planning';
 import { tagFilteredTransactions, totals } from './selectors';
+import { ALL_LEDGERS_ID, ledgerDescendantIds, sortedLedgerChildren } from './hierarchy';
 
 const uniqueTransactions = (rows: Transaction[]) => {
   const seen = new Set<string>();
@@ -15,6 +16,7 @@ const uniqueTransactions = (rows: Transaction[]) => {
 export interface AnalysisFilter {
   ledgerId: string;
   sourceLedgerId?: string;
+  includeDescendants?: boolean;
   startDate: string;
   endDate: string;
   ownerId?: string;
@@ -29,18 +31,22 @@ export function mappedTransaction(data: Bootstrap, ledgerId: string, tx: Transac
   return transactionForLedger(data.ledgers, ledgerId, tx);
 }
 export function analysisTransactions(data: Bootstrap, filter: AnalysisFilter): Transaction[] {
-  const ledger = data.ledgers.find((l) => l.id === filter.ledgerId);
-  const ids = new Set([
-    filter.ledgerId,
-    ...(ledger?.kind === 'main'
-      ? data.ledgers.filter((l) => l.parentId === ledger.id).map((l) => l.id)
-      : []),
-  ]);
+  const ids =
+    filter.includeDescendants === false
+      ? new Set(
+          data.ledgers.filter((ledger) => ledger.id === filter.ledgerId).map((ledger) => ledger.id),
+        )
+      : ledgerDescendantIds(data.ledgers, filter.ledgerId);
+  const sourceIds = filter.sourceLedgerId
+    ? filter.includeDescendants === false
+      ? new Set([filter.sourceLedgerId])
+      : ledgerDescendantIds(data.ledgers, filter.sourceLedgerId)
+    : null;
   const rows = data.transactions
     .filter(
       (tx) =>
-        ids.has(tx.ledgerId) &&
-        (!filter.sourceLedgerId || tx.ledgerId === filter.sourceLedgerId) &&
+        (filter.ledgerId === ALL_LEDGERS_ID || ids.has(tx.ledgerId)) &&
+        (!sourceIds || sourceIds.has(tx.ledgerId)) &&
         tx.date >= filter.startDate &&
         tx.date <= filter.endDate &&
         (!filter.ownerId || tx.ownerId === filter.ownerId) &&
@@ -218,23 +224,34 @@ export function paymentAnalysis(data: Bootstrap, rows: Transaction[]) {
   });
 }
 export function ledgerAnalysis(data: Bootstrap, rows: Transaction[], ledgerId: string) {
-  const unique = uniqueTransactions(rows);
   const viewer = data.ledgers.find((ledger) => ledger.id === ledgerId);
+  const scope = ledgerDescendantIds(data.ledgers, ledgerId);
+  const unique = uniqueTransactions(rows).filter(
+    (row) => ledgerId === ALL_LEDGERS_ID || scope.has(row.ledgerId),
+  );
   const expense = totals(unique).expense;
-  return data.ledgers
-    .filter(
-      (ledger) =>
-        ledger.id === ledgerId || (viewer?.kind === 'main' && ledger.parentId === ledgerId),
-    )
-    .map((ledger) => {
-      const summary = analysisMetrics(unique.filter((tx) => tx.ledgerId === ledger.id));
-      return {
-        id: ledger.id,
-        name: `${ledger.name}${ledger.id === ledgerId && viewer?.kind === 'main' ? ' · 직접 기록' : ''}${ledger.archived ? ' (보관)' : ''}`,
-        ...summary,
-        expenseShare: expense ? summary.expense / expense : null,
-      };
-    });
+  // Direct records plus each immediate child's subtree form disjoint reporting rows.
+  const ledgers =
+    ledgerId === ALL_LEDGERS_ID
+      ? [...sortedLedgerChildren(data.ledgers, null), ...data.ledgers]
+      : viewer
+        ? [viewer, ...sortedLedgerChildren(data.ledgers, ledgerId)]
+        : [];
+  const covered = new Set<string>();
+  return ledgers.flatMap((ledger) => {
+    if (covered.has(ledger.id)) return [];
+    const ids =
+      ledger.id === ledgerId ? new Set([ledgerId]) : ledgerDescendantIds(data.ledgers, ledger.id);
+    for (const id of covered) ids.delete(id);
+    for (const id of ids) covered.add(id);
+    const summary = analysisMetrics(unique.filter((tx) => ids.has(tx.ledgerId)));
+    return {
+      id: ledger.id,
+      name: `${ledger.name}${ledger.id === ledgerId ? ' · 직접 기록' : ''}${ledger.archived ? ' (보관)' : ''}`,
+      ...summary,
+      expenseShare: expense ? summary.expense / expense : null,
+    };
+  });
 }
 export function transactionsCsv(data: Bootstrap, rows: Transaction[]) {
   // Spreadsheet formula injection is possible in labels entered by another editor.

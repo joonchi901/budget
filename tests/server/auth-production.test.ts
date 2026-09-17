@@ -211,6 +211,10 @@ describe('production Google OIDC with local cryptographic issuer fixtures', () =
     const body = (await (await call('/api/bootstrap', { cookie })).json()) as Bootstrap;
     expect(body.mode).toBe('production');
     expect(body.user.id).toBe('u1');
+    expect(body.users.map(({ id, role }) => ({ id, role }))).toEqual([
+      { id: 'u1', role: 'admin' },
+      { id: 'u2', role: 'user' },
+    ]);
     expect(body.users.map((user) => user.id)).toEqual(['u1', 'u2']);
     expect(body.ledgers).toHaveLength(1);
     expect(body.ledgers[0]).toMatchObject({ id: 'main', kind: 'main', budget: 0 });
@@ -233,6 +237,32 @@ describe('production Google OIDC with local cryptographic issuer fixtures', () =
     expect(await db.prepare('SELECT COUNT(*) AS count FROM auth_identities').first('count')).toBe(
       2,
     );
+  });
+
+  it('preserves reorganized ledgers, replaced payment methods and changed roles on later logins', async () => {
+    expect((await finish(await start())).status).toBe(303);
+    await db.prepare("DELETE FROM ledgers WHERE id='main'").run();
+    await db.prepare("DELETE FROM payment_methods WHERE id='cash'").run();
+    await db
+      .prepare(
+        "INSERT INTO ledgers(id,household_id,name,icon,kind) VALUES('year','home','2026','📒','purpose')",
+      )
+      .run();
+    await db
+      .prepare(
+        "INSERT INTO payment_methods(id,household_id,name,type,owner_id) VALUES('restored-cash','home','복원한 현금','cash','shared')",
+      )
+      .run();
+    await db.prepare("UPDATE users SET role=CASE id WHEN 'u2' THEN 'admin' ELSE 'user' END").run();
+    const again = await finish(await start());
+    expect(again.status).toBe(303);
+    const body = (await (
+      await call('/api/bootstrap', { cookie: appCookie(again) })
+    ).json()) as Bootstrap;
+    expect(body.ledgers.map((l) => l.id)).toEqual(['year']);
+    expect(body.paymentMethods.map((p) => p.id)).toEqual(['restored-cash']);
+    expect(body.user.role).toBe('user');
+    expect(body.users.find((u) => u.id === 'u2')?.role).toBe('admin');
   });
 
   it('uses browser-bound one-time state, nonce and S256 PKCE and never exposes the verifier in redirects', async () => {

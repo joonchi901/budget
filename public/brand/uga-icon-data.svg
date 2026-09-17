@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="우가 기능 아이콘 — data">
+  <title>우가 기능 아이콘 — data</title>
+  <g stroke="#39251b" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+    <path fill="#cfb494" d="M12 11c12-3 27-3 40 0l-1 45H13Z" />
+    <path fill="#fff4df" d="M21 10c6-1 17-1 22 0l1 16-11-4-11 4Z" />
+    <path d="M21 37h21m-21 9h14" fill="none" stroke="#997551" stroke-width="3" />
+    <path fill="#94bc80" d="m45 40 11 3-3 13-12-3Z" stroke-width="3" />
+  </g>
+</svg>

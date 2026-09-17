@@ -1,7 +1,8 @@
 import { SelectField, SelectOption } from './SelectField';
 import { FileField } from './FileField';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Archive, Download, FileSpreadsheet, History, Inbox, Upload } from 'lucide-react';
+import { Download, Upload } from 'lucide-react';
+import { UgaIcon } from './brand/Uga';
 import type { Bootstrap } from '../shared/types';
 import {
   backupTables,
@@ -29,11 +30,11 @@ interface Props {
 }
 type DataTab = 'excel' | 'review' | 'backup' | 'csv' | 'history';
 const dataTabs = [
-  { id: 'excel', label: '엑셀 가져오기', icon: FileSpreadsheet },
-  { id: 'review', label: '원본 검토함', icon: Inbox },
-  { id: 'backup', label: '백업·복원', icon: Archive },
-  { id: 'csv', label: 'CSV 가져오기', icon: Upload },
-  { id: 'history', label: '변경 이력', icon: History },
+  { id: 'excel', label: '엑셀 가져오기', icon: 'ledger' },
+  { id: 'review', label: '원본 검토함', icon: 'tags' },
+  { id: 'backup', label: '백업·복원', icon: 'data' },
+  { id: 'csv', label: 'CSV 가져오기', icon: 'data' },
+  { id: 'history', label: '변경 이력', icon: 'planning' },
 ] as const;
 const tableNames: Record<string, string> = {
   ledgers: '가계부',
@@ -60,6 +61,7 @@ function download(name: string, content: string, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export default function DataView({ data, onChanged, onNotice, excelImport }: Props) {
+  const isAdmin = data.user.role === 'admin';
   const [activeTab, setActiveTab] = useState<DataTab>(excelImport ? 'excel' : 'backup');
   const tabs = dataTabs.filter((tab) => tab.id !== 'excel' || excelImport);
   const [backup, setBackup] = useState<BudgetBackup | null>(null),
@@ -136,7 +138,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
     }
   }
   async function previewJson() {
-    if (!backup) return;
+    if (!backup || !isAdmin) return;
     setBusy(true);
     setError('');
     setReplaceConfirmed(false);
@@ -194,6 +196,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
   }
   async function apply(kind: 'restore' | 'import') {
     if (busy) return;
+    if (kind === 'restore' && !isAdmin) return;
     if (!pending.current) {
       if (kind === 'restore' && restore && backup && replaceConfirmed)
         pending.current = {
@@ -254,7 +257,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
         setImportPreview(null);
         setReplaceConfirmed(false);
         setImportConfirmed(false);
-        if (e.status === 409) await onChanged();
+        if (e.status === 409 || e.status === 403) await onChanged();
       } else setUncertain(true);
     } finally {
       setBusy(false);
@@ -268,7 +271,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
         <span>탭을 바꿔도 작성 중인 내용은 유지돼요.</span>
       </div>
       <div className="data-tabs" role="tablist" aria-label="데이터 관리 작업">
-        {tabs.map(({ id, label, icon: Icon }, index) => (
+        {tabs.map(({ id, label, icon }, index) => (
           <button
             key={id}
             type="button"
@@ -296,7 +299,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
               document.getElementById(`data-tab-${tabs[next].id}`)?.focus();
             }}
           >
-            <Icon size={18} aria-hidden="true" />
+            <UgaIcon name={icon} size={22} />
             {label}
           </button>
         ))}
@@ -333,7 +336,8 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
           type="button"
           onClick={() => setActiveTab('review')}
         >
-          <Inbox size={18} /> 가져온 원본 검토하기 <span>날짜·분류가 미확정인 자료를 확인해요</span>
+          <UgaIcon name="tags" size={22} /> 가져온 원본 검토하기{' '}
+          <span>날짜·분류가 미확정인 자료를 확인해요</span>
         </button>
       </div>
       <div
@@ -392,7 +396,13 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
             </div>
             <Upload size={20} />
           </div>
-          <fieldset disabled={locked}>
+          {!isAdmin && (
+            <p className="small muted">
+              가계부 구조도 교체하는 백업 복원은 관리자만 할 수 있어요. 현재 자료는 백업하거나 CSV로
+              내보낼 수 있어요.
+            </p>
+          )}
+          <fieldset disabled={locked || !isAdmin}>
             <label>
               복원할 JSON 파일
               <FileField
@@ -666,7 +676,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
         <section className="panel data-panel">
           <div className="section-heading">
             <h2>
-              <History size={18} /> 최근 변경 이력
+              <UgaIcon name="planning" size={22} /> 최근 변경 이력
             </h2>
             <span className="small muted">최근 100건</span>
           </div>

@@ -1,7 +1,9 @@
+import { ALL_LEDGERS_ID, ledgerPath } from '../shared/hierarchy';
 import { SelectField, SelectOption } from './SelectField';
+import { UgaIcon, UgaLedgerIcon } from './brand/Uga';
 import { DateField } from './DateFields';
-import { useRef, useState, type FormEvent } from 'react';
-import { CalendarDays, Plus, Settings2 } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Plus, Settings2 } from 'lucide-react';
 import type { Bootstrap } from '../shared/types';
 import {
   accountingPeriod,
@@ -68,7 +70,7 @@ function initialPlan(data: Bootstrap, ledgerId: string, month: string, kind: Pla
     tagIds: [],
     paymentMethodId: null,
     ownerId: null,
-    includeLinked: ledger?.kind === 'main',
+    includeLinked: true,
     notes: '',
     archived: false,
   };
@@ -90,12 +92,29 @@ export default function PlanningView({ data, month, ledgerId, onChanged, onNotic
   const [editor, setEditor] = useState<Plan | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [allDates, setAllDates] = useState(false);
-  const [selectedLedger, setSelectedLedger] = useState(ledgerId);
-  const ledger =
-    data.ledgers.find((l) => l.id === selectedLedger) ??
-    data.ledgers.find((l) => l.id === ledgerId) ??
-    data.ledgers[0];
-  if (!ledger) return <Empty>가계부를 만든 뒤 계획을 등록해 주세요.</Empty>;
+  const [selectedLedger, setSelectedLedger] = useState(ledgerId === ALL_LEDGERS_ID ? '' : ledgerId);
+  useEffect(() => setSelectedLedger(ledgerId === ALL_LEDGERS_ID ? '' : ledgerId), [ledgerId]);
+  const ledger = data.ledgers.find((l) => l.id === selectedLedger);
+  if (!ledger)
+    return (
+      <section className="panel">
+        <h2>계획할 가계부를 선택해 주세요</h2>
+        <p className="small muted">계획과 예산은 선택한 원본 가계부에 저장돼요.</p>
+        <label>
+          계획 가계부
+          <SelectField value="" onValueChange={setSelectedLedger}>
+            <SelectOption value="">가계부 선택</SelectOption>
+            {data.ledgers
+              .filter((item) => !item.archived)
+              .map((item) => (
+                <SelectOption key={item.id} value={item.id}>
+                  {ledgerPath(data.ledgers, item.id)}
+                </SelectOption>
+              ))}
+          </SelectField>
+        </label>
+      </section>
+    );
   const period = accountingPeriod(
     month,
     (ledger as { periodStartDay?: number }).periodStartDay ?? 1,
@@ -131,7 +150,7 @@ export default function PlanningView({ data, month, ledgerId, onChanged, onNotic
           <SelectField value={ledger.id} onValueChange={(value) => setSelectedLedger(value)}>
             {data.ledgers.map((l) => (
               <SelectOption key={l.id} value={l.id}>
-                {l.icon} {l.name}
+                <UgaLedgerIcon value={l.icon} size={20} /> {ledgerPath(data.ledgers, l.id)}
                 {l.archived ? ' · 보관됨' : ''}
               </SelectOption>
             ))}
@@ -285,7 +304,7 @@ function PlanCard({
         </button>
       </div>
       <p className="small muted">
-        <CalendarDays size={13} /> {plan.startDate} ~ {plan.endDate}
+        <UgaIcon name="planning" size={18} /> {plan.startDate} ~ {plan.endDate}
       </p>
       {(plan.tagIds.length > 0 || plan.ownerId || plan.paymentMethodId) && (
         <div className="planning-condition planning-condition-badges">
@@ -704,6 +723,12 @@ function PlanEditor({
               )}
               {draft.kind === 'goal' && (
                 <>
+                  {draft.metric === 'savings' && (
+                    <p className="small muted">
+                      저축 목표는 이 가계부에 보관하지만 실적은 가구 전체 자산 이동으로 계산해요.
+                      가계부별 수입·지출 집계와는 별개예요.
+                    </p>
+                  )}
                   <div className="form-grid">
                     <label>
                       목표 대상
@@ -721,9 +746,7 @@ function PlanEditor({
                       >
                         <SelectOption value="income">수입</SelectOption>
                         <SelectOption value="expense">지출</SelectOption>
-                        {ledger?.kind === 'main' && (
-                          <SelectOption value="savings">순저축</SelectOption>
-                        )}
+                        <SelectOption value="savings">가구 순저축</SelectOption>
                       </SelectField>
                     </label>
                     <label>
@@ -1084,14 +1107,14 @@ function PlanEditor({
                     </SelectField>
                   </label>
                 </div>
-                {ledger?.kind === 'main' && draft.kind !== 'schedule' && (
+                {draft.kind !== 'schedule' && !noFilters && (
                   <label className="checkbox">
                     <input
                       type="checkbox"
                       checked={draft.includeLinked}
                       onChange={(e) => update({ includeLinked: e.target.checked })}
                     />
-                    연결된 하위 가계부의 원본 거래 포함
+                    모든 단계의 하위 가계부 원본 거래 포함
                   </label>
                 )}
                 {!(draft.kind === 'budget' && draft.budgetScope === 'total') &&

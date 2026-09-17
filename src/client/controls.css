@@ -17,8 +17,8 @@ button.ui-control-trigger {
   gap: 12px;
   padding: 11px 14px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #f9fafb;
+  border-radius: var(--brand-radius-control);
+  background: var(--surface-subtle);
   color: var(--text);
   font: inherit;
   font-size: 0.9375rem;
@@ -26,12 +26,12 @@ button.ui-control-trigger {
   text-align: left;
 }
 button.ui-control-trigger:hover:not(:disabled) {
-  background: #f2f4f6;
+  background: var(--surface-muted);
 }
 button.ui-control-trigger[aria-expanded='true'] {
-  background: white;
-  border-color: #3182f6;
-  box-shadow: 0 0 0 3px #3182f61a;
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-soft);
 }
 button.ui-control-trigger[aria-invalid='true'] {
   border-color: var(--danger);
@@ -54,13 +54,13 @@ button.ui-control-trigger[aria-invalid='true'] {
   inset: auto;
   margin: 0;
   padding: 6px;
-  border: 1px solid #e5e8eb99;
+  border: 1px solid var(--line);
   border-radius: 16px;
-  background: #fff;
+  background: var(--surface);
   color: var(--text);
   box-shadow:
-    0 4px 14px #191f2812,
-    0 16px 48px #191f2824;
+    0 4px 14px var(--shadow-color),
+    0 16px 48px var(--shadow-deep);
   overflow: auto;
   overscroll-behavior: contain;
   z-index: 1000;
@@ -140,10 +140,10 @@ button.select-option[aria-selected='true'] {
 }
 button.select-option:hover:not(:disabled),
 button.select-option:focus-visible {
-  background: #f2f4f6;
+  background: var(--surface-muted);
 }
 button.select-option:focus-visible {
-  outline: 2px solid #3182f680;
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
 .select-check-hidden {
@@ -179,9 +179,9 @@ button.select-option:focus-visible {
 .dialog-validation-message {
   margin: 0 22px 18px;
   padding: 12px 14px;
-  background: #fff0f0;
+  background: var(--danger-soft);
   color: var(--danger);
-  border-radius: 12px;
+  border-radius: var(--brand-radius-control);
   font-size: 0.875rem;
 }
 .form-body label > .ui-field {
@@ -252,16 +252,16 @@ input[type='radio'] {
   min-height: 20px !important;
   padding: 0 !important;
   margin: 0;
-  border: 1.5px solid #b0b8c1;
+  border: 1.5px solid var(--line-strong);
   border-radius: 6px;
-  background-color: white;
+  background-color: var(--surface);
   background-position: center;
   background-repeat: no-repeat;
   vertical-align: middle;
   cursor: pointer;
   transition:
-    background-color 150ms ease,
-    border-color 150ms ease;
+    background-color var(--brand-motion-normal) var(--brand-ease),
+    border-color var(--brand-motion-normal) var(--brand-ease);
 }
 input[type='checkbox']:checked {
   border-color: var(--blue-strong);
@@ -325,18 +325,18 @@ details > summary:has(> svg.lucide-chevron-down)::after {
   gap: 14px;
   width: 100%;
   min-height: 72px;
-  border: 1px dashed #b0c4df;
+  border: 1px dashed var(--line-strong);
   border-radius: 14px;
-  background: #f9fafb;
+  background: var(--surface-subtle);
   padding: 14px;
   cursor: pointer;
 }
 .file-field:focus-within {
-  outline: 3px solid #3182f680;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 .file-field:hover {
-  background: #e8f3ff66;
+  background: var(--accent-soft);
   border-color: var(--blue);
 }
 .file-field input[type='file'] {

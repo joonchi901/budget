@@ -8,6 +8,7 @@ import type {
   Tag,
   TagGroup,
   Transaction,
+  User,
 } from '../shared/types';
 import type { Session } from './auth';
 import { ApiError } from './errors';
@@ -15,9 +16,11 @@ import type { Plan } from '../shared/planning';
 import { paymentDefinition } from './payments';
 import { planDefinition } from './planning';
 import { assetDefinition } from './assets';
+import { getHierarchyVersion, hierarchyConflict, requireAdmin } from './hierarchy';
 
 export type Binding = string | number | null;
 type Entity =
+  | 'user'
   | 'transaction'
   | 'ledger'
   | 'asset'
@@ -27,6 +30,7 @@ type Entity =
   | 'paymentMethod'
   | 'plan';
 type EntityMap = {
+  user: User;
   transaction: Transaction;
   ledger: Ledger;
   asset: Asset;
@@ -38,6 +42,10 @@ type EntityMap = {
 };
 const boolean = (column: string) => `json(CASE ${column} WHEN 1 THEN 'true' ELSE 'false' END)`;
 const definitions: Record<Entity, { table: string; json: string; filter?: string }> = {
+  user: {
+    table: 'users',
+    json: "json_object('id',t.id,'name',t.name,'color',t.color,'role',t.role)",
+  },
   paymentMethod: paymentDefinition,
   plan: planDefinition,
   transaction: {
@@ -47,7 +55,7 @@ const definitions: Record<Entity, { table: string; json: string; filter?: string
   },
   ledger: {
     table: 'ledgers',
-    json: `json_object('id',t.id,'name',t.name,'icon',t.icon,'kind',t.kind,'parentId',t.parent_id,'budget',t.budget,'startDate',t.start_date,'endDate',t.end_date,'archived',${boolean('t.archived')},'version',t.version,'periodStartDay',t.period_start_day,'fixedExpenseTagIds',json(t.fixed_expense_tag_ids),'tagMappings',json(t.tag_mappings))`,
+    json: `json_object('id',t.id,'name',t.name,'icon',t.icon,'kind',t.kind,'parentId',t.parent_id,'budget',t.budget,'startDate',t.start_date,'endDate',t.end_date,'archived',${boolean('t.archived')},'version',t.version,'sortOrder',t.sort_order,'periodStartDay',t.period_start_day,'fixedExpenseTagIds',json(t.fixed_expense_tag_ids),'tagMappings',json(t.tag_mappings))`,
   },
   asset: assetDefinition,
   tagGroup: {
@@ -108,7 +116,9 @@ export async function bootstrap(db: D1Database, session: Session): Promise<Boots
             ? ' ORDER BY t.date DESC,t.updated_at DESC'
             : k === 'tag' || k === 'tagGroup'
               ? ' ORDER BY t.sort_order,t.rowid'
-              : ' ORDER BY t.rowid'),
+              : k === 'ledger'
+                ? ' ORDER BY t.sort_order,t.id'
+                : ' ORDER BY t.rowid'),
       )
       .bind(h),
   );
@@ -116,7 +126,7 @@ export async function bootstrap(db: D1Database, session: Session): Promise<Boots
     ...queries,
     db
       .prepare(
-        "SELECT json_object('id',id,'name',name,'color',color) AS payload FROM users WHERE household_id=? ORDER BY id",
+        "SELECT json_object('id',id,'name',name,'color',color,'role',role) AS payload FROM users WHERE household_id=? ORDER BY id",
       )
       .bind(h),
     db.prepare(selection('paymentMethod') + ' ORDER BY t.rowid').bind(h),
@@ -127,10 +137,11 @@ export async function bootstrap(db: D1Database, session: Session): Promise<Boots
       .bind(h),
     db.prepare('SELECT revision AS payload FROM households WHERE id=?').bind(h),
     db.prepare(selection('plan') + ' ORDER BY t.rowid').bind(h),
+    db.prepare('SELECT hierarchy_version AS payload FROM households WHERE id=?').bind(h),
   ]);
   const rows = (i: number) => results[i].results.map((r) => JSON.parse(r.payload));
   return {
-    user: session.user,
+    user: rows(6).find((user: User) => user.id === session.user.id) ?? session.user,
     householdId: session.householdId,
     ledgers: rows(0),
     transactions: rows(1),
@@ -142,6 +153,7 @@ export async function bootstrap(db: D1Database, session: Session): Promise<Boots
     paymentMethods: rows(7),
     assetMovements: rows(8),
     revision: Number(results[9].results[0].payload),
+    hierarchyVersion: Number(results[11].results[0].payload),
     mode: session.authKind === 'oidc' ? 'production' : 'demo',
     plans: rows(10),
   };
@@ -199,6 +211,8 @@ interface Commit {
   guardBindings: Binding[];
   statements: D1PreparedStatement[];
   conflictAssets?: string[];
+  /** The batch also checks admin status and the shared structure version. */
+  expectedHierarchyVersion?: number;
 }
 export async function commit(
   db: D1Database,
@@ -212,7 +226,7 @@ export async function commit(
   const auditEntity = entity ?? 'transaction',
     historyId = crypto.randomUUID();
   const extra = entity ? `, '${entity}',json((${selection(entity)} AND t.id=?))` : '';
-  const bindings: Binding[] = [h];
+  const bindings: Binding[] = [h, h];
   if (entity) bindings.push(h, op.entityId);
   bindings.push(h, u, op.mutationId);
   const statements = [
@@ -251,7 +265,7 @@ export async function commit(
       .bind(op.entityType, op.entityId, op.ledgerId, u, now, h),
     db
       .prepare(
-        `UPDATE mutation_receipts SET result_json=json_object('revision',(SELECT revision FROM households WHERE id=?)${extra}) WHERE household_id=? AND user_id=? AND mutation_id=?`,
+        `UPDATE mutation_receipts SET result_json=json_object('revision',(SELECT revision FROM households WHERE id=?),'hierarchyVersion',(SELECT hierarchy_version FROM households WHERE id=?)${extra}) WHERE household_id=? AND user_id=? AND mutation_id=?`,
       )
       .bind(...bindings),
     db
@@ -267,6 +281,11 @@ export async function commit(
     const previous = await replay(db, session, op.mutationId, op.requestHash);
     if (previous) return previous;
     if (String(error).includes('mutation_version_guard')) {
+      if (op.expectedHierarchyVersion !== undefined) {
+        await requireAdmin(db, session);
+        if ((await getHierarchyVersion(db, h)) !== op.expectedHierarchyVersion)
+          await hierarchyConflict(db, session);
+      }
       const current = op.conflictAssets
         ? {
             assets: await Promise.all(

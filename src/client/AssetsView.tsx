@@ -1,10 +1,11 @@
 import { Tooltip } from './Tooltip';
+import { UgaIcon } from './brand/Uga';
 import { SelectField, SelectOption } from './SelectField';
 import { TagBadge } from './TagBadge';
 import { DateField } from './DateFields';
 import { ColorField } from './ColorField';
 import { useRef, useState, type FormEvent } from 'react';
-import { ArrowRightLeft, History, Plus, Settings2, Wallet } from 'lucide-react';
+import { ArrowRightLeft, History, Plus, Settings2 } from 'lucide-react';
 import type { Asset, AssetOperation, Bootstrap } from '../shared/types';
 import { savingsSummary } from '../shared/selectors';
 import {
@@ -163,7 +164,7 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
                       className="asset-icon"
                       style={{ background: `${a.color}18`, color: a.color }}
                     >
-                      <Wallet size={22} />
+                      <UgaIcon name="assets" size={28} />
                     </span>
                     <div>
                       <h3>
@@ -522,7 +523,7 @@ function AssetEditor({
   const asset = 'asset' in editor ? editor.asset : undefined;
   const [name, setName] = useState(asset?.name ?? '');
   const [kind, setKind] = useState<'asset' | 'liability'>(asset?.kind ?? 'asset');
-  const [color, setColor] = useState(asset?.color ?? '#3182f6');
+  const [color, setColor] = useState(asset?.color ?? '#5b4636');
   const [tagIds, setTagIds] = useState(asset?.tagIds ?? []);
   const [tracking, setTracking] = useState(asset?.trackSavings ?? false);
   const [openingDate, setOpeningDate] = useState(asset ? (asset.openingDate ?? '') : localDate());

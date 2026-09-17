@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ALL_LEDGERS_ID } from '../../src/shared/hierarchy';
 import {
   cardStatement,
   categoryNames,
@@ -144,7 +145,7 @@ const card: PaymentMethod = {
 };
 
 describe('visibleTransactions', () => {
-  it('includes main and directly linked purpose originals once, based on the transaction month', () => {
+  it('includes every descendant original once, including archived ledgers, based on the transaction month', () => {
     const trip = transaction('trip-expense', { ledgerId: 'trip', tagIds: ['a', 'b'] });
     const data = bootstrap(
       [
@@ -166,10 +167,52 @@ describe('visibleTransactions', () => {
     expect(visibleTransactions(data, 'main', '2026-09').map((item) => item.id)).toEqual([
       'main-expense',
       'trip-expense',
+      'nested-expense',
     ]);
-    expect(visibleTransactions(data, 'trip', '2026-09')).toEqual([trip]);
+    expect(visibleTransactions(data, 'trip', '2026-09').map((item) => item.id)).toEqual([
+      'trip-expense',
+      'nested-expense',
+    ]);
+    expect(visibleTransactions(data, 'trip', '2026-09', { includeDescendants: false })).toEqual([
+      trip,
+    ]);
     expect(visibleTransactions(data, 'missing', '2026-09')).toEqual([]);
     expect(visibleTransactions(data, 'main', '2026-10')).toEqual([]);
+  });
+
+  it('supports annual and configured periods and overall originals without an actual all-ledger record', () => {
+    const january = transaction('jan', { ledgerId: 'jan', date: '2026-01-10' });
+    const data = bootstrap(
+      [
+        january,
+        january,
+        transaction('dec', { ledgerId: 'dec', date: '2026-12-31' }),
+        transaction('next', { ledgerId: 'jan', date: '2027-01-01' }),
+        transaction('other-root', { ledgerId: 'other', date: '2026-09-01' }),
+      ],
+      [
+        ledger('year', { startDate: '2026-01-01', endDate: '2026-12-31' }),
+        ledger('jan', { parentId: 'year' }),
+        ledger('dec', { parentId: 'year' }),
+        ledger('other'),
+      ],
+    );
+    expect(visibleTransactions(data, 'year', '2026-09')).toEqual([]);
+    expect(
+      visibleTransactions(data, 'year', '2026-09', { period: 'year' }).map((row) => row.id),
+    ).toEqual(['jan', 'dec']);
+    expect(
+      visibleTransactions(data, 'year', '2027-01', { period: 'period' }).map((row) => row.id),
+    ).toEqual(['jan', 'dec']);
+    expect(
+      visibleTransactions(data, 'jan', '2026-09', { period: 'period' }).map((row) => row.id),
+    ).toEqual(['jan', 'next']);
+    expect(
+      visibleTransactions(data, ALL_LEDGERS_ID, '2026-09', { period: 'year' }).map((row) => row.id),
+    ).toEqual(['jan', 'dec', 'other-root']);
+    expect(visibleTransactions(data, ALL_LEDGERS_ID, '2026-09', { period: 'period' })).toHaveLength(
+      4,
+    );
   });
 
   it('changes main visibility after unlinking without changing purpose originals or totals', () => {

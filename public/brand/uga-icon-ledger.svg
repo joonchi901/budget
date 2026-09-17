@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="우가 기능 아이콘 — ledger">
+  <title>우가 기능 아이콘 — ledger</title>
+  <g stroke="#39251b" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+    <path fill="#e5cbb0" d="M13 9c10-3 27-3 39 0l3 44c-13 4-31 4-45 0Z" />
+    <path fill="#fff4df" d="M19 9c9-1 20-1 30 1l2 38c-9 2-22 2-32 1Z" />
+    <path d="m25 19 16-1m-16 10 18-1m-18 10 11-1" stroke="#b3906b" stroke-width="3" />
+    <path d="m10 18 8-1m-8 11 8-1m-8 12 8-1" />
+    <path fill="#f2bd56" d="m43 41 10-8 5 6-10 8-7 1Z" />
+  </g>
+</svg>

@@ -9,7 +9,7 @@
 | Cloudflare 계정 | OAuth 로그인과 사용자 이메일 인증 완료                                                                                                                               |
 | 운영 D1         | `budget-production`, ID `700713f0-f352-463f-aea1-a05336091a66`, APAC 생성 및 운영 설정 반영                                                                          |
 | 운영 스키마     | `0001`~`0011` 원격 migration 적용 완료. 최초 배포 전 조회에서 migration 11개와 빈 가구·사용자·거래·자산·세션 확인                                                    |
-| 운영 배포       | 소스 `1cbb067`의 최초 업로드 version `fe1fe4e5-5f00-464c-93c2-179d80bc1470`. 비밀값 등록 후 현재 활성 version `e044d481-5d20-4633-8c36-f3f6a5dc189a`                 |
+| 운영 배포       | 소스 `1cbb067`의 최초 업로드 version `fe1fe4e5-5f00-464c-93c2-179d80bc1470`. 우가 UI 적용 후 현재 활성 version `7036cc3b-5cf6-4332-9975-1b23b5a7f833`                 |
 | 공개 HTTPS 주소 | [https://our-budget-production.our-budget.workers.dev](https://our-budget-production.our-budget.workers.dev)                                                         |
 | Google OAuth    | 전용 프로젝트 `Our Budget` (`our-budget-508823`)의 `Budget Web` 웹 클라이언트 생성 완료. 운영 callback과 `openid`·`userinfo.email` 범위 저장 확인                    |
 | Worker secrets  | 사용자 승인 후 `APP_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_ALLOWED_EMAILS` 네 값 등록 완료                                                       |
@@ -63,6 +63,27 @@ npm run check:production -- https://our-budget-production.our-budget.workers.dev
 Cloudflare 로그인은 `wrangler login --scopes account:read user:read workers_scripts:write d1:write --use-keyring`으로 시작하고 사용자가 공식 브라우저 화면에서 승인한다. Google client secret과 이메일은 [Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/)로 등록하며 Git/명령 인수/공개 문서에 쓰지 않는다. 각 `secret put` 명령에도 `--env production`을 지정한다. `.env.*`, `.dev.vars.*`는 예제 파일을 제외하고 Git에서 무시한다.
 
 원격 점검 스크립트는 세션이나 금융 데이터를 입력받지 않고 비로그인 요청만 보낸다. 본인 계정의 실제 로그인·로그아웃은 위 브라우저 검사로 별도 확인했고, 배우자 로그인·2인 공동 편집 검증은 남아 있다.
+
+## 우가 UI 운영 배포 기록 — 2026-09-17
+
+사용자가 운영 배포를 요청한 뒤 현재 작업트리의 우가 디자인시스템과 클라이언트 UI를 `our-budget-production`에 배포했다. 승인된 캐릭터·로고, SVG 38종, 디자인 보드, PC·모바일 UI가 포함된다.
+
+- 이전 활성 version: `e044d481-5d20-4633-8c36-f3f6a5dc189a`.
+- 새 활성 version: `7036cc3b-5cf6-4332-9975-1b23b5a7f833`.
+- 운영 주소: [우가 · 우리의 가계부](https://our-budget-production.our-budget.workers.dev).
+- `deploy:preview` 패키징 후 `deploy:production` 업로드·trigger 배포 완료. 정적 파일 44개를 업로드했다.
+- 09:25 KST 원격 검사: 현재 `dist`의 정적 파일 44개 모두 HTTP 200이며 로컬 파일과 SHA-256이 일치했다. 앱 제목은 `우가 · 우리의 가계부`다.
+- `check:production --configured` 통과: 운영 모드, Google 설정, 비로그인 API·백업·WebSocket의 401, 원격 demo의 404 유지.
+- 비로그인 운영 브라우저에서 PC/390px 로그인 화면과 로고 렌더를 확인했다. 이미지 누락·브라우저 예외·모바일 가로 넘침이 없고 Google 로그인 버튼이 첫 화면에 보인다.
+- 검증 자료: `output/playwright/uga-production-verification.json`, `uga-production-desktop.png`, `uga-production-mobile.png`.
+- 이번 배포에서 DB migration·seed·금융 자료 입력·Worker secret 변경은 실행하지 않았다. 서버·공유 계산·스키마·의존성 소스 변경도 없다. 실제 Google 로그인과 금융자료를 사용하는 원격 2인 동작을 이번에 다시 시험한 것은 아니다.
+
+기존 암호화된 Wrangler 로그인은 키체인으로 사용했다. 기본 Node 인증서로 갱신 요청이 실패해 macOS 시스템 인증서를 사용하는 아래 환경 설정으로 정상 처리했다. 인증서 검증은 끄지 않았다.
+
+```sh
+NODE_USE_SYSTEM_CA=1 CLOUDFLARE_AUTH_USE_KEYRING=true npm run deploy:production
+NODE_USE_SYSTEM_CA=1 npm run check:production -- https://our-budget-production.our-budget.workers.dev --configured
+```
 
 ## 로그인 방식
 

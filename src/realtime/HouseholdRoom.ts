@@ -3,6 +3,7 @@ import type { Presence, RealtimeMessage } from '../shared/types';
 import { sessionByHash } from '../server/auth';
 import type { Env } from '../server/env';
 import { getRevision, ledgerById } from '../server/storage';
+import { ALL_LEDGERS_ID } from '../shared/hierarchy';
 
 interface Attachment {
   householdId: string;
@@ -45,7 +46,7 @@ export class HouseholdRoom extends DurableObject<Env> {
     if (!session || session.householdId !== householdId)
       return new Response('Unauthorized', { status: 401 });
     const ledgerId = new URL(request.url).searchParams.get('ledgerId') ?? 'main';
-    if (!(await ledgerById(this.env.DB, householdId, ledgerId)))
+    if (ledgerId !== ALL_LEDGERS_ID && !(await ledgerById(this.env.DB, householdId, ledgerId)))
       return new Response('Unknown ledger', { status: 404 });
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -93,7 +94,11 @@ export class HouseholdRoom extends DurableObject<Env> {
     }
     const ledgerId =
       typeof body.ledgerId === 'string' ? body.ledgerId : attachment.presence.ledgerId;
-    if (!(await ledgerById(this.env.DB, attachment.householdId, ledgerId))) return;
+    if (
+      ledgerId !== ALL_LEDGERS_ID &&
+      !(await ledgerById(this.env.DB, attachment.householdId, ledgerId))
+    )
+      return;
     const transactionId =
       typeof body.transactionId === 'string' && body.transactionId.length <= 100
         ? body.transactionId

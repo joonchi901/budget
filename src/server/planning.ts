@@ -145,15 +145,10 @@ async function validatePlan(
     tagIds,
     paymentMethodId,
     ownerId: ownerId as Plan['ownerId'],
-    includeLinked:
-      body.includeLinked === undefined ? ledger.kind === 'main' : bool(body.includeLinked),
+    includeLinked: body.includeLinked === undefined ? true : bool(body.includeLinked),
     notes: optionalText(body.notes, '메모'),
     archived: body.archived === undefined ? false : bool(body.archived),
   };
-  requireValue(
-    ledger.kind === 'main' || !base.includeLinked,
-    '하위 가계부의 계획은 해당 가계부 기록만 집계합니다.',
-  );
   const assetIds: string[] = [];
   let plan: PlanInput;
   if (kind === 'budget') {
@@ -220,9 +215,8 @@ async function validatePlan(
     const assetId = nullableId(body.assetId, '저축 자산');
     requireValue(body.metric === 'savings' || !assetId, '자산은 저축 목표에만 선택할 수 있습니다.');
     requireValue(
-      body.metric !== 'savings' ||
-        (ledger.kind === 'main' && !tagIds.length && !paymentMethodId && !ownerId),
-      '저축 목표는 메인 가계부에서 가구 전체 또는 선택 자산의 순저축으로 계산합니다.',
+      body.metric !== 'savings' || (!tagIds.length && !paymentMethodId && !ownerId),
+      '저축 목표는 가계부 계위와 관계없이 가구 전체 또는 선택 자산의 순저축으로 계산합니다.',
     );
     if (assetId) assetIds.push(assetId);
     plan = {

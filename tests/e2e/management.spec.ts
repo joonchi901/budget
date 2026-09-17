@@ -169,7 +169,7 @@ test('a purpose ledger supports monthly/category/weekly budgets, goals, payroll,
 }) => {
   test.setTimeout(90000);
   await login(page);
-  await page.getByRole('button', { name: '목적 가계부 추가' }).click();
+  await page.getByRole('button', { name: '가계부 추가' }).click();
   await page.getByLabel('가계부 이름', { exact: true }).fill('계획 검증 가계부');
   await page.getByLabel('전체 예산 (원)', { exact: true }).fill('900000');
   await page.getByRole('button', { name: '가계부 만들기', exact: true }).click();

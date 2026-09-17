@@ -1,7 +1,8 @@
 import { SelectField, SelectOption } from './SelectField';
+import { UgaIcon } from './brand/Uga';
 import { MonthField } from './DateFields';
 import { useRef, useState, type FormEvent } from 'react';
-import { Archive, CreditCard, Plus, Search, Settings2, Wallet } from 'lucide-react';
+import { Archive, Plus, Search, Settings2 } from 'lucide-react';
 import type { Bootstrap, OwnerId, PaymentMethod } from '../shared/types';
 import { cardStatement } from '../shared/selectors';
 import {
@@ -63,7 +64,7 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
         </div>
         <div className="payment-overview-side">
           <span className="payment-overview-icon">
-            <CreditCard size={26} />
+            <UgaIcon name="payments" size={32} />
           </span>
           <span>이번 달 카드 사용액</span>
           <strong>
@@ -129,7 +130,7 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
               >
                 <div className="payment-card-heading">
                   <span className="payment-method-icon">
-                    <CreditCard size={24} />
+                    <UgaIcon name="payments" size={28} />
                   </span>
                   <div className="payment-card-identity">
                     <h3>{card.name}</h3>
@@ -213,7 +214,11 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
           })}
       </div>
       {!methods.some((p) => p.type === 'card') && (
-        <Empty>등록된 카드가 없어요. 카드 추가에서 결제일과 혜택을 설정해 보세요.</Empty>
+        <Empty>
+          {search
+            ? '검색 조건에 맞는 카드가 없어요. 다른 이름이나 기관으로 검색해 보세요.'
+            : '등록된 카드가 없어요. 카드 추가에서 결제일과 혜택을 설정해 보세요.'}
+        </Empty>
       )}
       <p className="small muted statement-note">
         예상 대금은 직접 기록한 사용 내역과 마감일·납부일을 기준으로 해요. 할부·취소·이월·휴일 및
@@ -239,7 +244,7 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
                 <div className="panel-title">
                   <div>
                     <h3>
-                      <Wallet size={18} /> {payment.name}
+                      <UgaIcon name="assets" size={22} /> {payment.name}
                     </h3>
                     <p className="muted small">
                       {name(payment.ownerId)} ·{' '}
@@ -298,7 +303,11 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
           })}
       </div>
       {!methods.some((p) => p.type !== 'card') && (
-        <Empty>통장이나 현금 항목을 등록해 주세요.</Empty>
+        <Empty>
+          {search
+            ? '검색 조건에 맞는 통장·현금이 없어요. 다른 이름이나 기관으로 검색해 보세요.'
+            : '통장이나 현금 항목을 등록해 주세요.'}
+        </Empty>
       )}
       <p className="small muted">
         통장 연결은 잔액 조회용이에요. 실제 잔액은 거래의 자산 반영과 자산 이동·조정으로 바뀌어요.

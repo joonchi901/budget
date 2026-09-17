@@ -200,6 +200,199 @@ function syntheticWorkbook(): Workbook {
   };
 }
 describe('portable data backup and import', () => {
+  it('round-trips arbitrary parent chains and sibling order while preserving independent finances', async () => {
+    const original = await backup();
+    expect(original.schemaVersion).toBe(2);
+    const candidate = structuredClone(original);
+    const main = candidate.tables.ledgers.find((l) => l.id === 'main')!;
+    const trip = candidate.tables.ledgers.find((l) => l.id === 'trip')!;
+    main.parent_id = 'year';
+    main.sort_order = 4;
+    trip.sort_order = 2;
+    candidate.tables.ledgers.push(
+      { ...main, id: 'year', name: '2026', parent_id: null, sort_order: 1 },
+      { ...trip, id: 'independent', name: '독립 가계부', parent_id: null, sort_order: 0 },
+      { ...trip, id: 'detail', name: '여행 상세', parent_id: 'trip', sort_order: 0 },
+    );
+    const before = await state();
+    const preview = await previewRestore(candidate);
+    expect(preview.issues).toEqual([]);
+    const response = await restore(candidate, preview);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await response.json()).toMatchObject({ hierarchyVersion: before.hierarchyVersion! + 1 });
+    const after = await state();
+    expect(after.hierarchyVersion).toBe(before.hierarchyVersion! + 1);
+    expect(
+      after.assets
+        .map((a) => ({ id: a.id, balance: a.balance }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    ).toEqual(
+      before.assets
+        .map((a) => ({ id: a.id, balance: a.balance }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    );
+    expect(after.assetMovements).toEqual(before.assetMovements);
+    const portable = await backup();
+    const structure = (value: BudgetBackup) =>
+      value.tables.ledgers
+        .map(({ id, parent_id, sort_order, budget }) => ({ id, parent_id, sort_order, budget }))
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    expect(structure(portable)).toEqual(structure(candidate));
+    expect(portable.tables.ledgers.every((l) => l.kind === 'purpose')).toBe(true);
+    expect((await restore(portable, await previewRestore(portable))).status).toBe(200);
+    expect(structure(await backup())).toEqual(structure(candidate));
+    expect((await state()).hierarchyVersion).toBe(before.hierarchyVersion! + 2);
+  });
+
+  it('migrates schema 1 missing sibling order from file order but rejects a missing schema 2 order', async () => {
+    const original = await backup();
+    const legacy = structuredClone(original);
+    legacy.schemaVersion = 1;
+    legacy.tables.ledgers.push({
+      ...legacy.tables.ledgers[0],
+      id: 'legacy-root',
+      kind: 'purpose',
+      parent_id: null,
+    });
+    legacy.tables.ledgers.reverse();
+    for (const ledger of legacy.tables.ledgers) delete ledger.sort_order;
+    const preview = await previewRestore(legacy);
+    expect(preview.issues).toEqual([]);
+    expect((await restore(legacy, preview)).status).toBe(200);
+    const restored = await backup();
+    expect(restored.schemaVersion).toBe(2);
+    for (const [index, ledger] of legacy.tables.ledgers.entries())
+      expect(restored.tables.ledgers.find((l) => l.id === ledger.id)?.sort_order).toBe(index);
+    const invalid = structuredClone(original);
+    delete invalid.tables.ledgers[0].sort_order;
+    expect(
+      (await previewRestore(invalid)).issues.some(
+        (issue) => issue.includes('정렬') || issue.includes('sort_order'),
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects self-parenting and multi-node cycles before any restore data is replaced', async () => {
+    const original = await backup();
+    for (const self of [false, true]) {
+      const invalid = structuredClone(original);
+      invalid.tables.ledgers.find((l) => l.id === 'main')!.parent_id = self ? 'main' : 'trip';
+      const preview = await previewRestore(invalid);
+      expect(
+        preview.issues.some((issue) => issue.includes('순환') || issue.includes('자기 자신')),
+      ).toBe(true);
+      expect((await restore(invalid, preview)).status).toBe(400);
+      expect((await backup()).tables).toEqual(original.tables);
+      expect((await state()).hierarchyVersion).toBe(1);
+    }
+  });
+
+  it('does not export or restore member roles and denies normal users both restore endpoints', async () => {
+    const original = await backup();
+    expect(original.members.every((m) => !Object.hasOwn(m, 'role'))).toBe(true);
+    const roles = (await state()).users.map(({ id, role }) => ({ id, role }));
+    const forged = structuredClone(original);
+    forged.members = forged.members.map((member) => ({
+      ...member,
+      role: member.id === 'u2' ? 'admin' : 'user',
+    }));
+    const preview = await previewRestore(forged);
+    expect(preview.issues).toEqual([]);
+    expect((await restore(forged, preview)).status).toBe(200);
+    expect((await state()).users.map(({ id, role }) => ({ id, role }))).toEqual(roles);
+    const withUsers = {
+      ...original,
+      tables: { ...original.tables, users: [{ id: 'u2', role: 'admin' }] },
+    };
+    expect(
+      (
+        await call('/api/data/restore/preview', 'POST', {
+          backup: withUsers,
+          memberMap: members,
+          mode: 'replace',
+        })
+      ).status,
+    ).toBe(400);
+    const fresh = await previewRestore(forged);
+    const userLogin = await call('/api/auth/demo', 'POST', { userId: 'u2' });
+    cookie = userLogin.headers.get('Set-Cookie')!.split(';')[0];
+    const deniedPreview = await call('/api/data/restore/preview', 'POST', {
+      backup: forged,
+      memberMap: members,
+      mode: 'replace',
+      role: 'admin',
+    });
+    expect(deniedPreview.status).toBe(403);
+    expect(await deniedPreview.json()).toMatchObject({ code: 'ADMIN_REQUIRED' });
+    const deniedApply = await restore(forged, fresh, { role: 'admin' });
+    expect(deniedApply.status).toBe(403);
+    expect((await state()).users.map(({ id, role }) => ({ id, role }))).toEqual(roles);
+  });
+
+  it('rejects the virtual all-ledgers ID as a physical ledger in restore input', async () => {
+    const original = await backup();
+    const invalid = structuredClone(original);
+    invalid.tables.ledgers.push({
+      ...invalid.tables.ledgers[0],
+      id: '__all__',
+      kind: 'purpose',
+      parent_id: null,
+    });
+    const preview = await previewRestore(invalid);
+    expect(preview.issues.some((issue) => issue.includes('전체 보기 전용 ID'))).toBe(true);
+    expect((await restore(invalid, preview)).status).toBe(400);
+    expect((await backup()).tables).toEqual(original.tables);
+  });
+
+  it('keeps transaction-only CSV import available to users without changing hierarchy', async () => {
+    const userLogin = await call('/api/auth/demo', 'POST', { userId: 'u2' });
+    cookie = userLogin.headers.get('Set-Cookie')!.split(';')[0];
+    const before = await state();
+    const preview = await importPreview();
+    expect(preview.errors).toBe(0);
+    expect((await apply(preview)).status).toBe(200);
+    const after = await state();
+    expect(after.transactions).toHaveLength(before.transactions.length + 1);
+    expect(after.hierarchyVersion).toBe(before.hierarchyVersion);
+    expect(after.ledgers).toEqual(before.ledgers);
+    expect(after.user.role).toBe('user');
+  });
+
+  it('serializes an admin restore against concurrent role revocation using current database permissions', async () => {
+    const promotion = await call('/api/users/u2/role', 'PATCH', {
+      mutationId: 'promote-restore',
+      role: 'admin',
+      expectedHierarchyVersion: 1,
+    });
+    expect(promotion.status).toBe(200);
+    const otherLogin = await runtime.dispatchFetch('http://localhost/api/auth/demo', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'u2' }),
+    });
+    const otherCookie = otherLogin.headers.get('Set-Cookie')!.split(';')[0];
+    const before = await state();
+    const candidate = await backup();
+    const preview = await previewRestore(candidate);
+    const responses = await Promise.all([
+      restore(candidate, preview),
+      runtime.dispatchFetch('http://localhost/api/users/u1/role', {
+        method: 'PATCH',
+        headers: { Cookie: otherCookie, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mutationId: 'revoke-restore',
+          role: 'user',
+          expectedHierarchyVersion: before.hierarchyVersion,
+        }),
+      }),
+    ]);
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+    expect(responses.filter((response) => [403, 409].includes(response.status))).toHaveLength(1);
+    const after = await state();
+    expect(after.hierarchyVersion).toBe(before.hierarchyVersion! + 1);
+    expect(after.revision).toBe(before.revision + 1);
+    expect(after.users.some((u) => u.role === 'admin')).toBe(true);
+  });
+
   it('exports only household records and round-trips exact balances/effects without login state', async () => {
     const original = await backup();
     expect(Object.keys(original.tables).sort()).toEqual([...backupTables].sort());
@@ -366,6 +559,8 @@ describe('portable data backup and import', () => {
     expect(records.find((r) => r.action === 'delete')?.after?.deletedAt).toEqual(
       expect.any(String),
     );
+    const adminLogin = await call('/api/auth/demo', 'POST', { userId: 'u1' });
+    cookie = adminLogin.headers.get('Set-Cookie')!.split(';')[0];
     const archived = await backup(),
       preview = await previewRestore(archived);
     expect(preview.issues).toEqual([]);
@@ -748,7 +943,7 @@ describe('portable data backup and import', () => {
     expect(
       imported.plans
         ?.filter((p) => p.ledgerId === candidate.ledgerId)
-        .every((p) => p.includeLinked === false),
+        .every((p) => p.includeLinked === true),
     ).toBe(true);
     const reimport = await buildWorkbookImport(book, await backup(), options);
     expect(reimport.transactions.count).toBe(0);
@@ -780,7 +975,7 @@ describe('portable data backup and import', () => {
     expect((await restore(final, roundTrip)).status).toBe(200);
     expect((await backup()).tables.asset_effects).toEqual(final.tables.asset_effects);
   });
-  it('rejects inconsistent plan scope, card asset links and adjustment effects in raw workbook candidates', async () => {
+  it('accepts subtree plan scope and rejects invalid card asset links and adjustment effects in raw workbook candidates', async () => {
     const candidate = await buildWorkbookImport(syntheticWorkbook(), await backup(), {
       sourceId: 'invariants',
       ledgerId: 'main',
@@ -793,9 +988,7 @@ describe('portable data backup and import', () => {
       scopePayload = JSON.parse(String(scopePlan.payload_json));
     scopePayload.includeLinked = true;
     scopePlan.payload_json = JSON.stringify(scopePayload);
-    expect(
-      (await previewRestore(invalidScope)).issues.some((i) => i.includes('원본 가계부만')),
-    ).toBe(true);
+    expect((await previewRestore(invalidScope)).issues).toEqual([]);
     const invalidBudget = structuredClone(candidate.backup),
       weekly = invalidBudget.tables.planning_records.find((p) => p.kind === 'budget')!,
       weeklyPayload = JSON.parse(String(weekly.payload_json));

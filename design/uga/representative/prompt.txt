@@ -1,0 +1,10 @@
+Mode: built-in imagegen, background-extraction
+Source: ChatGPT Image 2026년 9월 17일 오전 08_40_05.png
+Selected subject: small top-row leftmost character, both eyes open, bone beside cheek.
+Status: representative character review; not integrated into the application; raster PNG, not SVG.
+
+BACKGROUND EXTRACTION. Exactly copy ONE existing small sticker from the source, without redesigning or borrowing any other pose.
+TARGET: the small character centered at source pixel (620,246) inside rectangle (500,120)-(740,372), in a source image of 1536x1024. It is the FIRST of the four SMALL character stickers in the TOP ROW. He is to the immediate right of the giant logo character.
+The GIANT character at the left x0..470 is NOT the target. Do NOT imitate the giant character's tilted head or diagonally extended arm.
+The target SMALL sticker has: upright FRONT-FACING head, level eyes, both oval eyes OPEN, short wide open smiling mouth, dark shaggy hair whose central top tuft points upward near x646, FULL beard. Head centered over body, no head tilt. The relatively SMALL ivory bone is held VERTICALLY immediately adjacent to the viewer-left cheek, with its upper end around forehead level (not way above the hair). The raised hand is near the LEFT CHEEK, with a BENT ELBOW near the torso, not an arm stretched diagonally upward. Target bone is about 60% of the head height, not huge. The other arm rests down at right. Torso wears the original mustard yellow spotted one-shoulder tunic and ends at the original waist-level cut. The body/hand/bone/hair proportions and positions must match this exact small source sticker.
+Remove the brown background and all other sheet contents. Preserve the selected small sticker's existing contours, pose, head shape, expression, ochre tunic pattern and colors faithfully. Do not invent a new character, enlarge the eyes or mouth, tilt the head, add legs, add decorations, or copy the big logo pose. One centered cutout on true TRANSPARENT alpha background, no shadow or glow, no text. Prefer literal extraction fidelity over creative stylization.

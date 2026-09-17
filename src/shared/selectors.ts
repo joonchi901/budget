@@ -1,4 +1,5 @@
 import { accountingPeriod } from './planning';
+import { ALL_LEDGERS_ID, ledgerDescendantIds } from './hierarchy';
 import type { Bootstrap, PaymentMethod, Tag, Transaction } from './types';
 
 interface CalendarMonth {
@@ -41,22 +42,25 @@ export function visibleTransactions(
   data: Bootstrap,
   ledgerId: string,
   month: string,
+  options: { includeDescendants?: boolean; period?: 'month' | 'year' | 'period' } = {},
 ): Transaction[] {
   parseMonth(month);
   const ledger = data.ledgers.find((item) => item.id === ledgerId);
-  if (!ledger) return [];
-
-  const ledgerIds = new Set([ledgerId]);
-  if (ledger.kind === 'main') {
-    for (const child of data.ledgers) {
-      if (child.kind === 'purpose' && child.parentId === ledgerId) ledgerIds.add(child.id);
-    }
-  }
-  const period = accountingPeriod(month, ledger.periodStartDay ?? 1);
+  if (!ledger && ledgerId !== ALL_LEDGERS_ID) return [];
+  const ledgerIds =
+    options.includeDescendants === false
+      ? new Set([ledgerId])
+      : ledgerDescendantIds(data.ledgers, ledgerId);
+  const period =
+    options.period === 'year'
+      ? { startDate: `${month.slice(0, 4)}-01-01`, endDate: `${month.slice(0, 4)}-12-31` }
+      : options.period === 'period'
+        ? { startDate: ledger?.startDate ?? '0001-01-01', endDate: ledger?.endDate ?? '9999-12-31' }
+        : accountingPeriod(month, ledger?.periodStartDay ?? 1);
   return uniqueTransactions(
     data.transactions.filter(
       (transaction) =>
-        ledgerIds.has(transaction.ledgerId) &&
+        (ledgerId === ALL_LEDGERS_ID || ledgerIds.has(transaction.ledgerId)) &&
         transaction.date >= period.startDate &&
         transaction.date <= period.endDate,
     ),

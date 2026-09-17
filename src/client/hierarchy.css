@@ -1,0 +1,215 @@
+.ledger-tree {
+  min-width: 0;
+}
+.ledger-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ledger-tree [role='tree'] {
+  max-height: min(46dvh, 540px);
+  overflow-y: auto;
+}
+.ledger-tree [role='treeitem'] {
+  min-width: 0;
+}
+.ledger-tree-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 40px;
+  align-items: center;
+  margin: 3px 0;
+  border-radius: 12px;
+  transition: background-color 0.15s;
+}
+.ledger-tree-row.active,
+.ledger-tree-all.active {
+  background: var(--blue-soft);
+  color: var(--blue-strong);
+}
+.ledger-tree-row.is-drop-target {
+  box-shadow: inset 0 0 0 2px var(--blue);
+}
+.ledger-tree .tree-ledger-link {
+  min-width: 0;
+  padding: 7px 5px;
+  text-align: left;
+  justify-content: flex-start;
+  gap: 7px;
+  min-height: 44px;
+}
+.tree-ledger-link > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ledger-tree .tree-toggle {
+  width: 28px;
+  min-width: 28px;
+  min-height: 44px;
+  padding: 0;
+}
+.tree-indent {
+  width: 28px;
+}
+.tree-actions {
+  grid-column: 3;
+  display: flex;
+  gap: 0;
+  justify-content: flex-end;
+}
+.ledger-tree .tree-actions .icon-button {
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+}
+.ledger-tree-all {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 9px;
+  border-radius: 12px;
+}
+.tree-archive-toggle {
+  font-size: 12px;
+  margin-top: 12px;
+}
+.tree-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 8px 4px;
+}
+.ledger-context-toolbar {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  margin-bottom: 18px;
+}
+.ledger-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  flex: 1 1 220px;
+  min-width: 0;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.ledger-breadcrumbs > span {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+.ledger-breadcrumbs svg {
+  flex-shrink: 0;
+}
+.ledger-breadcrumbs button {
+  padding: 4px 7px;
+  min-height: 40px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.hierarchy-conflict {
+  background: var(--blue-soft);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.hierarchy-conflict ul {
+  max-height: 180px;
+  overflow: auto;
+  padding-left: 18px;
+  font-size: 13px;
+}
+.member-role-row {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 10px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.member-role-row > button {
+  grid-column: 1 / -1;
+}
+.ledger-view-controls {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  max-width: 100%;
+}
+.ledger-view-controls .ledger-view-toggle {
+  flex: 0 0 auto;
+  min-width: 200px;
+}
+.ledger-view-controls .ledger-view-toggle button {
+  min-height: 40px;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+.ledger-view-controls > label {
+  min-width: 170px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.overall-ledger-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: var(--blue-soft);
+  margin-bottom: 18px;
+}
+.overall-ledger-notice label {
+  min-width: 160px;
+}
+@media (max-width: 760px) {
+  .ledger-breadcrumbs {
+    flex-basis: 100%;
+  }
+  .ledger-view-controls {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+  .ledger-view-controls .ledger-view-toggle {
+    margin-left: auto;
+  }
+  .mobile-menu-content .ledger-tree [role='tree'] {
+    max-height: 45dvh;
+  }
+  .ledger-view-controls > label {
+    flex: 1;
+    min-width: 135px;
+  }
+  .ledger-view-controls .select-field {
+    width: 100%;
+  }
+}
+
+.tree-action-menu {
+  display: grid;
+  padding: 6px;
+  gap: 2px;
+}
+.tree-action-menu button {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-start;
+  min-height: 44px;
+  padding: 10px;
+  border-radius: 9px;
+}
+.tree-action-menu button:hover {
+  background: var(--canvas);
+}

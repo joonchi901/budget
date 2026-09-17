@@ -1,5 +1,6 @@
 import type { Bootstrap, OwnerId, Transaction } from './types';
 import { transactionForLedger } from './classification';
+import { ALL_LEDGERS_ID, ledgerDescendantIds } from './hierarchy';
 
 export type PlanKind = 'budget' | 'goal' | 'payroll' | 'event' | 'schedule';
 export type Rounding = 'none' | 'floor10000' | 'ceil10000';
@@ -118,9 +119,11 @@ export function payrollSummary(plan: PayrollPlan) {
   return { available, allocated, remaining: available - allocated, lines };
 }
 export function planTransactions(data: PlanningData, plan: Plan): Transaction[] {
-  const ids = new Set([plan.ledgerId]);
-  if (plan.includeLinked && data.ledgers.find((l) => l.id === plan.ledgerId)?.kind === 'main')
-    data.ledgers.filter((l) => l.parentId === plan.ledgerId).forEach((l) => ids.add(l.id));
+  const ids = plan.includeLinked
+    ? ledgerDescendantIds(data.ledgers, plan.ledgerId)
+    : new Set(
+        data.ledgers.filter((ledger) => ledger.id === plan.ledgerId).map((ledger) => ledger.id),
+      );
   const seen = new Set<string>();
   const groups = new Map<string, Set<string>>();
   for (const id of plan.tagIds) {
@@ -135,7 +138,7 @@ export function planTransactions(data: PlanningData, plan: Plan): Transaction[] 
     seen.add(t.id);
     const classified = transactionForLedger(data.ledgers, plan.ledgerId, t);
     return (
-      ids.has(t.ledgerId) &&
+      (plan.ledgerId === ALL_LEDGERS_ID || ids.has(t.ledgerId)) &&
       t.date >= plan.startDate &&
       t.date <= plan.endDate &&
       (!plan.ownerId || t.ownerId === plan.ownerId) &&
@@ -168,12 +171,20 @@ export function planActual(data: PlanningData, plan: Plan): number {
     .reduce((sum, t) => sum + t.amount, 0);
 }
 /** Total budget only: category and weekly budgets are separate ceilings and must never be added twice. */
-export function budgetSummary(data: PlanningData, ledgerId: string, month: string) {
+export function budgetSummary(
+  data: PlanningData,
+  ledgerId: string,
+  month: string,
+  options: { includeDescendants?: boolean; period?: 'month' | 'year' | 'period' } = {},
+) {
   const ledger = data.ledgers.find((l) => l.id === ledgerId);
-  const period = accountingPeriod(
-    month,
-    (ledger as { periodStartDay?: number } | undefined)?.periodStartDay ?? 1,
-  );
+  const monthlyPeriod = accountingPeriod(month, ledger?.periodStartDay ?? 1);
+  const period =
+    options.period === 'year'
+      ? { startDate: `${month.slice(0, 4)}-01-01`, endDate: `${month.slice(0, 4)}-12-31` }
+      : options.period === 'period'
+        ? { startDate: ledger?.startDate ?? '0001-01-01', endDate: ledger?.endDate ?? '9999-12-31' }
+        : monthlyPeriod;
   const budgets = (data.plans ?? []).filter(
     (p): p is BudgetPlan =>
       p.kind === 'budget' &&
@@ -186,18 +197,21 @@ export function budgetSummary(data: PlanningData, ledgerId: string, month: strin
   );
   const monthly = budgets.find(
     (p) =>
-      p.cadence === 'month' && p.startDate === period.startDate && p.endDate === period.endDate,
+      (!options.period || options.period === 'month') &&
+      p.cadence === 'month' &&
+      p.startDate === period.startDate &&
+      p.endDate === period.endDate,
   );
-  const purpose =
-    ledger?.kind === 'purpose'
-      ? budgets.find(
-          (p) =>
-            p.cadence === 'period' &&
-            p.startDate <= period.endDate &&
-            p.endDate >= period.startDate,
-        )
-      : undefined;
-  const selected = monthly ?? purpose;
+  const configuredPeriod = budgets.find(
+    (p) =>
+      options.period !== 'month' &&
+      p.cadence === 'period' &&
+      (options.period === 'year' || options.period === 'period'
+        ? p.startDate === period.startDate && p.endDate === period.endDate
+        : p.startDate <= period.endDate && p.endDate >= period.startDate),
+  );
+  const selected = monthly ?? configuredPeriod;
+  const useLedgerDates = !options.period && !!(ledger?.startDate || ledger?.endDate);
   const fallback: BudgetPlan = {
     id: '',
     kind: 'budget',
@@ -205,22 +219,34 @@ export function budgetSummary(data: PlanningData, ledgerId: string, month: strin
     archived: false,
     ledgerId,
     title: '',
-    amount: ledger?.budget ?? 0,
-    cadence: ledger?.kind === 'purpose' ? 'period' : 'month',
+    // A monthly or legacy ledger amount cannot be relabelled as a yearly ceiling.
+    amount: options.period === 'year' ? 0 : (ledger?.budget ?? 0),
+    cadence: useLedgerDates || (options.period && options.period !== 'month') ? 'period' : 'month',
     budgetScope: 'total',
     tagIds: [],
     ownerId: null,
     paymentMethodId: null,
-    includeLinked: ledger?.kind === 'main',
+    includeLinked: options.includeDescendants !== false,
     notes: '',
-    startDate: ledger?.kind === 'purpose' ? '0001-01-01' : period.startDate,
-    endDate: ledger?.kind === 'purpose' ? '9999-12-31' : period.endDate,
+    startDate: useLedgerDates ? (ledger?.startDate ?? '0001-01-01') : period.startDate,
+    endDate: useLedgerDates ? (ledger?.endDate ?? '9999-12-31') : period.endDate,
   };
-  const plan = selected ?? fallback;
+  const plan = {
+    ...(selected ?? fallback),
+    ...(options.includeDescendants === undefined
+      ? {}
+      : { includeLinked: options.includeDescendants }),
+  };
   return {
     amount: plan.amount,
+    hasBudget: selected !== undefined || fallback.amount > 0,
     expense: planActual(data, plan),
-    label: plan.cadence === 'month' ? `${month} 예산` : '전체 기간 예산',
+    label:
+      plan.cadence === 'month'
+        ? `${month} 예산`
+        : options.period === 'year'
+          ? `${month.slice(0, 4)} 연간 예산`
+          : '전체 기간 예산',
     periodStart: plan.startDate,
     periodEnd: plan.endDate,
   };

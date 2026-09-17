@@ -30,6 +30,7 @@ test('annual category matrix and payment drilldown agree on accounting periods',
     data: {
       mutationId: crypto.randomUUID(),
       name: '분석 검증 가계부',
+      expectedHierarchyVersion: data.hierarchyVersion,
       budget: 0,
       periodStartDay: 25,
       parentId: null,
@@ -201,10 +202,12 @@ test('annual category matrix and payment drilldown agree on accounting periods',
     .locator('.analysis-flow')
     .screenshot({ path: 'output/playwright/analytics-flow-mobile.png' });
   await page.setViewportSize({ width: 1440, height: 1000 });
+  const beforeMove = (await (await page.request.get('/api/bootstrap')).json()) as Bootstrap;
   const connected = await page.request.patch(`/api/ledgers/${ledgerId}`, {
     data: {
       mutationId: crypto.randomUUID(),
-      expectedVersion: 1,
+      expectedVersion: beforeMove.ledgers.find((ledger) => ledger.id === ledgerId)!.version,
+      expectedHierarchyVersion: beforeMove.hierarchyVersion,
       parentId: 'main',
     },
   });
@@ -219,7 +222,12 @@ test('annual category matrix and payment drilldown agree on accounting periods',
   const contributions = page.locator('.analysis-ledgers');
   const linkedRow = contributions
     .getByRole('row')
-    .filter({ has: page.getByRole('rowheader', { name: '분석 검증 가계부', exact: true }) });
+    .filter({
+      has: page.getByRole('rowheader', {
+        name: '분석 검증 가계부',
+        exact: true,
+      }),
+    });
   await expect(linkedRow).toContainText('100.0%');
   await linkedRow
     .getByRole('button', { name: '분석 검증 가계부 지출 9,100원 거래 보기', exact: true })

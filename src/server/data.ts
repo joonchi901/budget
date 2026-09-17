@@ -19,6 +19,8 @@ import { hash, type Session } from './auth';
 import { ApiError, requireValue } from './errors';
 import { bootstrap, getRevision, replay, type Binding } from './storage';
 import { date, identity, stable, text, type ObjectBody } from './validation';
+import { requireAdmin, hierarchyIncrement } from './hierarchy';
+import { ALL_LEDGERS_ID } from '../shared/hierarchy';
 
 const maximumBytes = 12_000_000;
 export async function readDataBody(request: Request): Promise<ObjectBody> {
@@ -48,7 +50,7 @@ interface Column {
 type Schema = Record<BackupTable, Column[]>;
 const rawColumns: Record<BackupTable, string> = {
   ledgers:
-    'id name icon kind parent_id budget start_date end_date archived version period_start_day fixed_expense_tag_ids tag_mappings',
+    'id name icon kind parent_id budget start_date end_date archived version period_start_day fixed_expense_tag_ids tag_mappings sort_order',
   tag_groups: 'id name selection_mode applies_to role ledger_ids sort_order archived version',
   tags: 'id name color group_id sort_order archived version parent_id',
   assets:
@@ -116,7 +118,7 @@ export async function exportBackup(db: D1Database, session: Session): Promise<Bu
   ]);
   return {
     format: 'our-budget',
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: new Date().toISOString(),
     sourceHouseholdId: h,
     sourceRevision: Number(results.at(-1)!.results[0].revision),
@@ -136,7 +138,7 @@ function parseBackup(value: unknown): BudgetBackup {
   requireValue(
     object(value) &&
       value.format === 'our-budget' &&
-      value.schemaVersion === 1 &&
+      (value.schemaVersion === 1 || value.schemaVersion === 2) &&
       object(value.tables) &&
       Array.isArray(value.members) &&
       typeof value.sourceHouseholdId === 'string',
@@ -147,6 +149,11 @@ function parseBackup(value: unknown): BudgetBackup {
     '백업에 지원하지 않는 테이블이 있어요.',
   );
   const document = structuredClone(value) as ObjectBody & { tables: Record<string, unknown> };
+  // Version 1 did not persist sibling order. Preserve its array order on migration.
+  if (document.schemaVersion === 1 && Array.isArray(document.tables.ledgers))
+    document.tables.ledgers.forEach((row, index) => {
+      if (object(row)) row.sort_order ??= index;
+    });
   if (document.tables.source_records === undefined) document.tables.source_records = [];
   if (document.tables.record_history === undefined) document.tables.record_history = [];
   if (Array.isArray(document.tables.transactions))
@@ -274,6 +281,8 @@ function referenceIssues(backup: BudgetBackup, columns: Schema): string[] {
           issue(table, row, `${column.name} JSON 형식이 올바르지 않아요.`);
       }
       if (table === 'ledgers') {
+        if (row.id === ALL_LEDGERS_ID)
+          issue(table, row, '전체 보기 전용 ID는 실제 가계부에 사용할 수 없어요.');
         ref(table, row, 'parent_id', 'ledgers');
         if (
           !['main', 'purpose'].includes(String(row.kind)) ||
@@ -289,12 +298,10 @@ function referenceIssues(backup: BudgetBackup, columns: Schema): string[] {
           (row.start_date && row.end_date && row.start_date > row.end_date)
         )
           issue(table, row, '가계부 기간이 올바르지 않아요.');
-        if (
-          row.parent_id &&
-          (row.kind !== 'purpose' ||
-            backup.tables.ledgers.find((l) => l.id === row.parent_id)?.kind !== 'main')
-        )
-          issue(table, row, '목적 가계부는 메인에만 연결할 수 있어요.');
+        if (row.parent_id === row.id)
+          issue(table, row, '가계부를 자기 자신의 하위로 연결할 수 없어요.');
+        if (!Number.isSafeInteger(row.sort_order) || Math.abs(Number(row.sort_order)) >= 1_000_000)
+          issue(table, row, '가계부의 정렬 순서를 확인해 주세요.');
         jsonRefs(table, row, 'fixed_expense_tag_ids', 'tags');
         const mappings = decoded(row, 'tag_mappings');
         if (
@@ -622,8 +629,21 @@ function referenceIssues(backup: BudgetBackup, columns: Schema): string[] {
       }
     }
   }
-  if (backup.tables.ledgers.filter((r) => r.kind === 'main').length > 1)
-    issues.push('메인 가계부가 두 개 이상이에요.');
+  const ledgerParents = new Map(backup.tables.ledgers.map((row) => [row.id, row.parent_id]));
+  const resolvedLedgers = new Set<unknown>();
+  for (const ledger of backup.tables.ledgers) {
+    const path = new Set<unknown>();
+    let current: unknown = ledger.id;
+    while (current != null && !resolvedLedgers.has(current)) {
+      if (path.has(current)) {
+        issue('ledgers', ledger, '상위 가계부가 순환 연결되어 있어요.');
+        break;
+      }
+      path.add(current);
+      current = ledgerParents.get(current as string) ?? null;
+    }
+    path.forEach((id) => resolvedLedgers.add(id));
+  }
   if (backup.tables.tag_groups.filter((r) => r.role === 'category').length > 1)
     issues.push('기본 분류 태그 유형이 두 개 이상이에요.');
   for (const tag of backup.tables.tags) {
@@ -740,6 +760,7 @@ export async function previewRestore(
   session: Session,
   body: ObjectBody,
 ): Promise<RestorePreview> {
+  await requireAdmin(db, session);
   const c = await restoreContext(db, session, body);
   return {
     digest: c.digest,
@@ -786,6 +807,9 @@ async function transformBackup(
     for (const row of transformed[table]) {
       const oldId = String(row.id);
       row.id = maps[table].get(oldId)!;
+      // main/purpose are legacy labels, not hierarchy privileges. Normalizing on
+      // restore also permits moving historical main ledgers and multiple roots.
+      if (table === 'ledgers') row.kind = 'purpose';
       if ('version' in row)
         row.version =
           Math.max(
@@ -999,14 +1023,30 @@ async function dataCommit(
   const h = session.householdId,
     u = session.user.id,
     now = new Date().toISOString();
-  const resultSelect = "json_set(?, '$.revision',(SELECT revision FROM households WHERE id=?))";
+  const resultSelect =
+    "json_set(?, '$.revision',(SELECT revision FROM households WHERE id=?),'$.hierarchyVersion',(SELECT hierarchy_version FROM households WHERE id=?))";
+  const restoring = scope === 'data.restore';
+  const permissionSql = restoring
+    ? " AND EXISTS(SELECT 1 FROM users WHERE household_id=? AND id=? AND role='admin')"
+    : '';
   const batch = [
     db
       .prepare(
-        'INSERT INTO mutation_receipts(household_id,user_id,mutation_id,request_hash,entity_id,created_at,guard_valid) VALUES(?,?,?,?,?,?,(SELECT CASE WHEN revision=? THEN 1 ELSE 0 END FROM households WHERE id=?))',
+        `INSERT INTO mutation_receipts(household_id,user_id,mutation_id,request_hash,entity_id,created_at,guard_valid) VALUES(?,?,?,?,?,?,(SELECT CASE WHEN revision=?${permissionSql} THEN 1 ELSE 0 END FROM households WHERE id=?))`,
       )
-      .bind(h, u, op.mutationId, op.requestHash, op.mutationId, now, revision, h),
+      .bind(
+        h,
+        u,
+        op.mutationId,
+        op.requestHash,
+        op.mutationId,
+        now,
+        revision,
+        ...(restoring ? [h, u] : []),
+        h,
+      ),
     ...statements,
+    ...(restoring ? [hierarchyIncrement(db, h)] : []),
     ...auditStatements(
       db,
       h,
@@ -1035,7 +1075,7 @@ async function dataCommit(
       .prepare(
         `UPDATE mutation_receipts SET result_json=${resultSelect} WHERE household_id=? AND user_id=? AND mutation_id=?`,
       )
-      .bind(JSON.stringify(extra), h, h, u, op.mutationId),
+      .bind(JSON.stringify(extra), h, h, h, u, op.mutationId),
     db
       .prepare(
         'SELECT result_json FROM mutation_receipts WHERE household_id=? AND user_id=? AND mutation_id=?',
@@ -1048,16 +1088,19 @@ async function dataCommit(
   } catch (error) {
     const previous = await replay(db, session, op.mutationId, op.requestHash);
     if (previous) return previous;
-    if (String(error).includes('mutation_version_guard'))
+    if (String(error).includes('mutation_version_guard')) {
+      if (restoring) await requireAdmin(db, session);
       throw new ApiError(
         409,
         'VERSION_CONFLICT',
         '다른 수정이 반영되었어요. 최신 상태로 미리보기를 다시 확인해 주세요.',
       );
+    }
     throw error;
   }
 }
 export async function restoreBackup(db: D1Database, session: Session, body: ObjectBody) {
+  await requireAdmin(db, session);
   const prior = await identity(db, session, body, 'data.restore');
   if (prior.previous) return prior.previous;
   requireValue(body.confirmReplace === true, '전체 교체 내용을 확인해 주세요.');
@@ -1710,8 +1753,6 @@ function invariantIssues(backup: BudgetBackup): string[] {
       (p.kind !== undefined && p.kind !== row.kind)
     )
       issue('planning_records', row, '계획의 원본 가계부·종류가 일치하지 않아요.');
-    if (ledger?.kind === 'purpose' && p.includeLinked)
-      issue('planning_records', row, '목적 가계부 계획은 원본 가계부만 집계해야 해요.');
     const duration = (Date.parse(String(p.endDate)) - Date.parse(String(p.startDate))) / 86400000;
     if (duration > 3660 || String(p.startDate) < '0001-01-01' || String(p.endDate) > '9998-12-31')
       issue('planning_records', row, '계획 기간은 1~9998년 사이, 최대 10년 이내여야 해요.');
@@ -1736,17 +1777,9 @@ function invariantIssues(backup: BudgetBackup): string[] {
       (!normalAsset(p.assetId) ||
         (p.metric !== 'savings' && p.assetId) ||
         (p.metric === 'savings' &&
-          (ledger?.kind !== 'main' ||
-            !Array.isArray(p.tagIds) ||
-            p.tagIds.length ||
-            p.paymentMethodId ||
-            p.ownerId)))
+          (!Array.isArray(p.tagIds) || p.tagIds.length || p.paymentMethodId || p.ownerId)))
     )
-      issue(
-        'planning_records',
-        row,
-        '저축 목표는 메인 가계부에서 가구 전체 또는 일반 자산을 집계해야 해요.',
-      );
+      issue('planning_records', row, '저축 목표는 가구 전체 또는 일반 자산을 집계해야 해요.');
     if (row.kind === 'payroll' && Array.isArray(p.lines) && p.lines.every(object)) {
       if (
         new Set(p.lines.map((l) => l.id)).size !== p.lines.length ||

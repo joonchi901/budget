@@ -1,0 +1,354 @@
+{
+  "version": 2,
+  "basis": "accepted representative image and accepted primary logo; source 2 character family",
+  "sourceFile": "reference-sticker-sheet.png",
+  "sourceProvenance": "User-provided second reference: ChatGPT Image 2026년 9월 17일 오전 08_40_05.png",
+  "sourceSha256": "9ac0dfb59d5a29bb8839beb1af8db8e18dc568e2015ff641c6b9db4b1a51b7b9",
+  "primaryLogoPreserved": true,
+  "rasterEmbedded": false,
+  "liveText": false,
+  "assets": {
+    "uga-logo-primary": {
+      "file": "/brand/uga-logo-primary.svg",
+      "viewBox": "-12 -12 480 667",
+      "bytes": 65912,
+      "paths": 72,
+      "origin": "accepted primary logo; unchanged",
+      "kind": "logo",
+      "sha256": "00cb580f0b187d76ad0525a450a6532836f05c60fc0f890ce975efb629e9cb84"
+    },
+    "uga-character": {
+      "file": "/brand/uga-character.svg",
+      "viewBox": "0 0 847 858",
+      "bytes": 48835,
+      "paths": 37,
+      "origin": "accepted representative PNG",
+      "kind": "character",
+      "sha256": "b24cbd48bbc3dacd347d8281e609ea7dcf2c153166030cf53947cc6a9a288e0e"
+    },
+    "uga-sticker-wave": {
+      "file": "/brand/uga-sticker-wave.svg",
+      "viewBox": "0 0 249 250",
+      "bytes": 25167,
+      "paths": 38,
+      "origin": "provided sticker sheet region (501, 120, 740, 369)",
+      "kind": "sticker",
+      "sha256": "6803fdda433761412eb4bb0e9d507ff774b9823a0ae406737d56dbd270cbe182"
+    },
+    "uga-sticker-thumbs-up": {
+      "file": "/brand/uga-sticker-thumbs-up.svg",
+      "viewBox": "0 0 252 267",
+      "bytes": 25157,
+      "paths": 36,
+      "origin": "provided sticker sheet region (765, 123, 1017, 380)",
+      "kind": "sticker",
+      "sha256": "30d9b1be9f83537db00f4c35127f0d5b60074f56da537e8edf3070727f9a3817"
+    },
+    "uga-sticker-celebrate": {
+      "file": "/brand/uga-sticker-celebrate.svg",
+      "viewBox": "0 0 264 258",
+      "bytes": 31276,
+      "paths": 45,
+      "origin": "provided sticker sheet region (992, 112, 1249, 373)",
+      "kind": "sticker",
+      "sha256": "4d02b01f83608656c4930b7379594b54c56f7b56c2e786b90b81080a3e179f5a"
+    },
+    "uga-sticker-love": {
+      "file": "/brand/uga-sticker-love.svg",
+      "viewBox": "0 0 249 256",
+      "bytes": 21767,
+      "paths": 25,
+      "origin": "provided sticker sheet region (1255, 115, 1513, 373)",
+      "kind": "sticker",
+      "sha256": "dcb6bbfc5e331ef4f46b72c43c722a430799349078e9ecaac2e3a1f77048fe12"
+    },
+    "uga-sticker-thinking": {
+      "file": "/brand/uga-sticker-thinking.svg",
+      "viewBox": "0 0 219 239",
+      "bytes": 21326,
+      "paths": 31,
+      "origin": "provided sticker sheet region (506, 394, 728, 640)",
+      "kind": "sticker",
+      "sha256": "a676e52f236a966f59488e86b8d5a05e78e3bd95d71471b08c8a65c1b2457110"
+    },
+    "uga-sticker-search": {
+      "file": "/brand/uga-sticker-search.svg",
+      "viewBox": "0 0 228 238",
+      "bytes": 26380,
+      "paths": 46,
+      "origin": "provided sticker sheet region (768, 400, 993, 639)",
+      "kind": "sticker",
+      "sha256": "6b3ab8f292c0a589bcee76252d0e7752f95d6f488cc04b13b783655ebda8b848"
+    },
+    "uga-sticker-record": {
+      "file": "/brand/uga-sticker-record.svg",
+      "viewBox": "0 0 234 245",
+      "bytes": 24089,
+      "paths": 34,
+      "origin": "provided sticker sheet region (1011, 402, 1239, 643)",
+      "kind": "sticker",
+      "sha256": "c2b597fc9c50d0dc33dd5a52394458af2367d1935afd8dcb791ff48f9f47a19a"
+    },
+    "uga-sticker-work": {
+      "file": "/brand/uga-sticker-work.svg",
+      "viewBox": "0 0 248 233",
+      "bytes": 20223,
+      "paths": 23,
+      "origin": "provided sticker sheet region (1254, 400, 1506, 637)",
+      "kind": "sticker",
+      "sha256": "17f85ab2df8981f77076bc53ef29a6254c77863fb75a4f0e51f325593b85c55c"
+    },
+    "uga-avatar-happy": {
+      "file": "/brand/uga-avatar-happy.svg",
+      "viewBox": "0 0 135 135",
+      "bytes": 23045,
+      "paths": 34,
+      "origin": "provided sticker sheet avatar region (440, 678, 568, 806)",
+      "kind": "avatar",
+      "sha256": "cc418129bdc55dd14d0a5d24d5784aaa752747f46877de5a1026e95818dd9544"
+    },
+    "uga-avatar-calm": {
+      "file": "/brand/uga-avatar-calm.svg",
+      "viewBox": "0 0 131 135",
+      "bytes": 18893,
+      "paths": 29,
+      "origin": "provided sticker sheet avatar region (567, 678, 691, 806)",
+      "kind": "avatar",
+      "sha256": "41d3c116de17b06772c6a731be65ca52e890c2145994fd2ed9c93c1e36f7e110"
+    },
+    "uga-avatar-surprise": {
+      "file": "/brand/uga-avatar-surprise.svg",
+      "viewBox": "0 0 133 135",
+      "bytes": 23643,
+      "paths": 28,
+      "origin": "provided sticker sheet avatar region (686, 678, 812, 806)",
+      "kind": "avatar",
+      "sha256": "90befa042791a380afe96cd211081d504e8e684c36ce31b51bcf33fa118716cc"
+    },
+    "uga-avatar-sleep": {
+      "file": "/brand/uga-avatar-sleep.svg",
+      "viewBox": "0 0 132 135",
+      "bytes": 17727,
+      "paths": 26,
+      "origin": "provided sticker sheet avatar region (809, 678, 934, 808)",
+      "kind": "avatar",
+      "sha256": "b9818598885aeb9c101ffc83dfe1afe38ac528e0375f09b45812c14cec9a48e8"
+    },
+    "uga-head-happy": {
+      "file": "/brand/uga-head-happy.svg",
+      "viewBox": "0 0 117 117",
+      "bytes": 21001,
+      "paths": 39,
+      "origin": "provided sheet happy avatar, circle background removed",
+      "kind": "character",
+      "sha256": "a86508218262cc0a428200f46b9a45d47a47b4cbe78744e279397bda21ed6280"
+    },
+    "uga-icon-bone": {
+      "file": "/brand/uga-icon-bone.svg",
+      "viewBox": "0 0 90 114",
+      "bytes": 6011,
+      "paths": 5,
+      "origin": "provided sticker sheet region (941, 708, 1022, 820)",
+      "kind": "motif",
+      "sha256": "500554ed3b8282b3d258757f6d85a3eb68e7d833dd35e9450a0e5590c3707f21"
+    },
+    "uga-icon-bones": {
+      "file": "/brand/uga-icon-bones.svg",
+      "viewBox": "0 0 114 110",
+      "bytes": 9151,
+      "paths": 9,
+      "origin": "provided sticker sheet region (1142, 711, 1248, 824)",
+      "kind": "motif",
+      "sha256": "e6df5ff08c39ec7febee9ca1b8fb57bbfc5a7b00c5659a4184cce54a0a366cd0"
+    },
+    "uga-icon-heart": {
+      "file": "/brand/uga-icon-heart.svg",
+      "viewBox": "0 0 100 91",
+      "bytes": 2116,
+      "paths": 2,
+      "origin": "provided sticker sheet region (1135, 860, 1236, 955)",
+      "kind": "motif",
+      "sha256": "f2af0e0ab03b5b427bb0bc5356198b1977cea4cd54e65ae7fcf17d8d18e85ac8"
+    },
+    "uga-icon-star": {
+      "file": "/brand/uga-icon-star.svg",
+      "viewBox": "0 0 109 107",
+      "bytes": 5393,
+      "paths": 4,
+      "origin": "provided sticker sheet region (1250, 852, 1357, 955)",
+      "kind": "motif",
+      "sha256": "9a9b7131f816fe55cd298fdc16f60ef94cd36254df0e456c8a2d05831994c1c8"
+    },
+    "uga-icon-sprout": {
+      "file": "/brand/uga-icon-sprout.svg",
+      "viewBox": "0 0 115 105",
+      "bytes": 3207,
+      "paths": 4,
+      "origin": "provided sticker sheet region (1371, 852, 1477, 962)",
+      "kind": "motif",
+      "sha256": "9336ca66ed14fa53f8d05309811fe5012b50d7734e0a250d557aa3557e7c2f5a"
+    },
+    "uga-icon-meat": {
+      "file": "/brand/uga-icon-meat.svg",
+      "viewBox": "0 0 147 117",
+      "bytes": 12961,
+      "paths": 15,
+      "origin": "provided sticker sheet region (1253, 701, 1397, 820)",
+      "kind": "motif",
+      "sha256": "563da329cf8cf96ee7f0a4cc0efa469463506df29e546977abf1057ab83d4e22"
+    },
+    "uga-icon-moneybag": {
+      "file": "/brand/uga-icon-moneybag.svg",
+      "viewBox": "0 0 112 135",
+      "bytes": 7737,
+      "paths": 16,
+      "origin": "provided sticker sheet region (1396, 698, 1506, 829)",
+      "kind": "motif",
+      "sha256": "210189d1900f50a831ea737971d66d8c9bd814b4e0ac68c65656effa14db1f14"
+    },
+    "uga-app-icon": {
+      "file": "/brand/uga-app-icon.svg",
+      "viewBox": "0 0 256 256",
+      "bytes": 49176,
+      "paths": 38,
+      "origin": "accepted representative, coral UI palette",
+      "kind": "identity",
+      "sha256": "315bf03ab4008d13c56e41b7bfd87f699fd150138cd8973b86610139e2bade79"
+    },
+    "uga-monochrome": {
+      "file": "/brand/uga-monochrome.svg",
+      "viewBox": "0 0 117 117",
+      "bytes": 21344,
+      "paths": 39,
+      "origin": "source happy face; one ink color with transparent cutouts",
+      "kind": "identity",
+      "sha256": "e5d375fd6ce20c42ec18f46fe2c4fbefbfe7f1561a794cf8d257b21500bcd8bf"
+    },
+    "uga-wordmark": {
+      "file": "/brand/uga-wordmark.svg",
+      "viewBox": "10 347 444 300",
+      "bytes": 37967,
+      "paths": 45,
+      "origin": "accepted stone wordmark paths, rebuilt outline",
+      "kind": "logo",
+      "sha256": "c5237f440153b9532bfb6d6848ca68859db0cb9707482eac9cff2c40e4df1968"
+    },
+    "uga-logo-horizontal": {
+      "file": "/brand/uga-logo-horizontal.svg",
+      "viewBox": "0 0 520 240",
+      "bytes": 86907,
+      "paths": 82,
+      "origin": "accepted representative and accepted wordmark",
+      "kind": "logo",
+      "sha256": "37c2171843c2a74f307fc639a5f57a56e6cb69000e9bd6f435fd2da1ce8098c7"
+    },
+    "uga-icon-home": {
+      "file": "/brand/uga-icon-home.svg",
+      "viewBox": "0 0 64 64",
+      "bytes": 681,
+      "paths": 5,
+      "origin": "purpose-drawn functional icon; rounded brown outline, ivory stone and gold",
+      "kind": "functional-icon",
+      "sha256": "fd75214dc753f770023b9adcdd81351089f8a6587c0925088101f004677065ff"
+    },
+    "uga-icon-ledger": {
+      "file": "/brand/uga-icon-ledger.svg",
+      "viewBox": "0 0 64 64",
+      "bytes": 677,
+      "paths": 5,
+      "origin": "purpose-drawn functional icon; rounded brown outline, ivory stone and gold",
+      "kind": "functional-icon",
+      "sha256": "d5777e547d29700dbb1519f07adee78b83d8aa7a15b7f8dbf804e553b5056c55"
+    },
+    "uga-icon-assets": {
+      "file": "/brand/uga-icon-assets.svg",
+      "viewBox": "0 0 64 64",
+      "bytes": 654,
+      "paths": 4,
+      "origin": "purpose-drawn functional icon; rounded brown outline, ivory stone and gold",
+      "kind": "functional-icon",
+      "sha256": "4186db65269aacff704f75e452c236378421600554d2cab09b4641ab846671dc"
+    },
+    "uga-icon-payments": {
+      "file": "/brand/uga-icon-payments.svg",
+      "viewBox": "0 0 64 64",
+      "bytes": 622,
+      "paths": 2,
+      "origin": "purpose-drawn functional icon; rounded brown outline, ivory stone and gold",
+      "kind": "functional-icon",
+      "sha256": "3bd60ac723ccd07f7955f0f5a70d5c309dcfb2d02ef7298fa1e5e7c4a88a2a2a"
+    },
+    "uga-icon-analytics": {
+      "file": "/brand/uga-icon-analytics.svg",
+      "viewBox": "0 0 64 64",
+      "bytes": 613,
+      "paths": 5,
+      "origin": "purpose-drawn functional icon; rounded brown outline, ivory stone and gold",
+      "kind": "functional-icon",
+      "sha256": "aa1f9dc82673cc56f378f0ae0c7d5615907243215aff744285759da7e6dc43f0"
+    },
+    "uga-icon-planning": {
+      "file": "/brand/uga-icon-planning.svg",
+      "viewBox": "0 0 64 64",
+      "bytes": 578,
+      "paths": 4,
+      "origin": "purpose-drawn functional icon; rounded brown outline, ivory stone and gold",
+      "kind": "functional-icon",
+      "sha256": "f46f792fd865ef0f9db5daf2439dc9924fac42452e0c209af7ea13a302520830"
+    },
+    "uga-icon-tags": {
+      "file": "/brand/uga-icon-tags.svg",
+      "viewBox": "0 0 64 64",
+      "bytes": 547,
+      "paths": 2,
+      "origin": "purpose-drawn functional icon; rounded brown outline, ivory stone and gold",
+      "kind": "functional-icon",
+      "sha256": "20be15f41843c9cfdcc30cd3402aa1cee6eead90fc0710b1b7619740fe937ca0"
+    },
+    "uga-icon-data": {
+      "file": "/brand/uga-icon-data.svg",
+      "viewBox": "0 0 64 64",
+      "bytes": 619,
+      "paths": 4,
+      "origin": "purpose-drawn functional icon; rounded brown outline, ivory stone and gold",
+      "kind": "functional-icon",
+      "sha256": "d27d4fcf5f0c40505b3991923bcb1abb589d594ce5cfd37a6beede9544bb2457"
+    },
+    "uga-badge-pick": {
+      "file": "/brand/uga-badge-pick.svg",
+      "viewBox": "0 0 200 168",
+      "bytes": 22983,
+      "paths": 46,
+      "origin": "source happy face and mint capsule; outlined label",
+      "kind": "badge",
+      "sha256": "1dae66079c480dac9662f5d75458a702a820ca529c2ce06a198bdf5b79c5db59"
+    },
+    "uga-card-header": {
+      "file": "/brand/uga-card-header.svg",
+      "viewBox": "0 0 360 180",
+      "bytes": 62853,
+      "paths": 52,
+      "origin": "accepted representative plus source star and sprout",
+      "kind": "illustration",
+      "sha256": "8a05dc0598b0fa9ac3764d76b02d9bb7200223af57e7ff97f54403cfb0666092"
+    },
+    "uga-empty-state": {
+      "file": "/brand/uga-empty-state.svg",
+      "viewBox": "0 0 400 264",
+      "bytes": 54855,
+      "paths": 48,
+      "origin": "accepted representative with purpose-drawn piggybank and source motifs",
+      "kind": "illustration",
+      "sha256": "84b30d3014b8bd56b2135e205fc6aa2636c70479ea8c144854e548a552c08d53"
+    },
+    "uga-sticker-rest": {
+      "file": "/brand/uga-sticker-rest.svg",
+      "viewBox": "0 0 192 192",
+      "bytes": 17871,
+      "paths": 26,
+      "origin": "provided sleepy avatar",
+      "kind": "sticker",
+      "sha256": "b24f0c08aa3bbfaeda92ba8d7b1d88c2faba2f21da708c5e4fe6e49931199a60"
+    }
+  }
+}

@@ -107,7 +107,7 @@ export async function sessionByHash(
 ): Promise<Session | null> {
   const row = await db
     .prepare(
-      `SELECT u.id, u.name, u.color, u.household_id, s.expires_at, s.auth_kind, i.issuer, i.email
+      `SELECT u.id, u.name, u.color, u.role, u.household_id, s.expires_at, s.auth_kind, i.issuer, i.email
     FROM sessions s JOIN users u ON u.id = s.user_id
     LEFT JOIN auth_identities i ON i.user_id=u.id AND i.issuer=s.identity_issuer AND i.subject=s.identity_subject AND i.active=1
     WHERE s.token_hash = ? AND s.expires_at > ? AND u.id IN ('u1','u2')
@@ -118,6 +118,7 @@ export async function sessionByHash(
       id: 'u1' | 'u2';
       name: string;
       color: string;
+      role: 'admin' | 'user';
       household_id: string;
       expires_at: number;
       auth_kind: 'demo' | 'oidc';
@@ -138,7 +139,7 @@ export async function sessionByHash(
   }
   return row
     ? {
-        user: { id: row.id, name: row.name, color: row.color },
+        user: { id: row.id, name: row.name, color: row.color, role: row.role },
         householdId: row.household_id,
         tokenHash,
         expiresAt: row.expires_at,
@@ -208,7 +209,7 @@ export async function login(request: Request, env: Env): Promise<Response> {
     throw new ApiError(400, 'INVALID_USER', '로컬 데모 계정을 선택해 주세요.');
   if (body.userId !== 'u1' && body.userId !== 'u2')
     throw new ApiError(400, 'INVALID_USER', '로컬 데모 계정을 선택해 주세요.');
-  const user = await env.DB.prepare('SELECT id, name, color FROM users WHERE id = ?')
+  const user = await env.DB.prepare('SELECT id, name, color, role FROM users WHERE id = ?')
     .bind(body.userId)
     .first<User>();
   if (!user) throw new ApiError(400, 'INVALID_USER', '데모 초기 데이터를 먼저 준비해 주세요.');

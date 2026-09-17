@@ -1,3 +1,4 @@
+import { ALL_LEDGERS_ID, ledgerDescendantIds, ledgerPath } from '../shared/hierarchy';
 import { Tooltip } from './Tooltip';
 import { SelectField, SelectOption } from './SelectField';
 import { DateField } from './DateFields';
@@ -22,6 +23,7 @@ import { totals } from '../shared/selectors';
 import { Dialog, Empty, Stat, ownerName, won } from './components';
 import { TagBadge } from './TagBadge';
 import './management.css';
+import './analytics-ux.css';
 
 export function downloadFile(name: string, content: string, type = 'text/csv;charset=utf-8') {
   const url = URL.createObjectURL(new Blob([content], { type }));
@@ -47,6 +49,7 @@ export default function AnalyticsView({
   const flowCaptionId = useId();
   const [section, setSection] = useState<'flow' | 'category' | 'sources' | 'transactions'>('flow');
   const [mode, setMode] = useState('month');
+  const [includeDescendants, setIncludeDescendants] = useState(true);
   const [start, setStart] = useState(`${month.slice(0, 4)}-01-01`);
   const [end, setEnd] = useState(`${month.slice(0, 4)}-12-31`);
   const [owner, setOwner] = useState('');
@@ -59,9 +62,14 @@ export default function AnalyticsView({
   const [sourceLedgerId, setSourceLedgerId] = useState('');
   const [detail, setDetail] = useState<{ title: string; rows: Transaction[] } | null>(null);
   const ledger = data.ledgers.find((l) => l.id === ledgerId);
+  const descendants = ledgerDescendantIds(data.ledgers, ledgerId);
   const sourceLedgers = data.ledgers.filter(
-    (source) => source.id === ledgerId || (ledger?.kind === 'main' && source.parentId === ledgerId),
+    (source) => ledgerId === ALL_LEDGERS_ID || descendants.has(source.id),
   );
+  const scopeDates = data.transactions
+    .filter((tx) => ledgerId === ALL_LEDGERS_ID || descendants.has(tx.ledgerId))
+    .map((tx) => tx.date)
+    .sort();
   const sourceId = sourceLedgers.some((source) => source.id === sourceLedgerId)
     ? sourceLedgerId
     : '';
@@ -74,10 +82,16 @@ export default function AnalyticsView({
             startDate: accountingPeriod(`${year}-01`, ledger?.periodStartDay ?? 1).startDate,
             endDate: accountingPeriod(`${year}-12`, ledger?.periodStartDay ?? 1).endDate,
           }
-        : { startDate: start, endDate: end };
+        : mode === 'period'
+          ? {
+              startDate: ledger?.startDate ?? scopeDates[0] ?? `${year}-01-01`,
+              endDate: ledger?.endDate ?? scopeDates.at(-1) ?? `${year}-12-31`,
+            }
+          : { startDate: start, endDate: end };
   const filter = {
     ledgerId,
     sourceLedgerId: sourceId,
+    includeDescendants: includeDescendants && sourceId !== ledgerId,
     ...period,
     ownerId: owner,
     paymentMethodId: payment,
@@ -162,6 +176,10 @@ export default function AnalyticsView({
     })),
   ];
   function resetFilters() {
+    setMode('month');
+    setIncludeDescendants(true);
+    setStart(`${month.slice(0, 4)}-01-01`);
+    setEnd(`${month.slice(0, 4)}-12-31`);
     setSourceLedgerId('');
     setOwner('');
     setPayment('');
@@ -169,6 +187,22 @@ export default function AnalyticsView({
     setType('');
     setSelected([]);
   }
+  const periodLabel =
+    mode === 'month'
+      ? `${month} 선택 월`
+      : mode === 'year'
+        ? `${year}년 선택 연도`
+        : mode === 'period'
+          ? '가계부 설정 기간'
+          : '직접 지정한 기간';
+  const scopeLabel = sourceId
+    ? `${sourceLedgers.find((item) => item.id === sourceId)?.name ?? sourceId}${sourceId === ledgerId ? ' · 직접 기록' : ' · 하위 가계부 포함'}`
+    : ledgerId === ALL_LEDGERS_ID
+      ? '모든 가계부의 원본 기록'
+      : includeDescendants
+        ? '이 가계부와 하위 가계부의 기록'
+        : '이 가계부의 직접 기록';
+  const filtersChanged = mode !== 'month' || !includeDescendants || activeFilters.length > 0;
   function amountButton(value: number, title: string, transactions: Transaction[]) {
     return (
       <button
@@ -220,8 +254,19 @@ export default function AnalyticsView({
     );
   }
   function table(list: Transaction[]) {
+    if (!list.length)
+      return (
+        <Empty illustration="search">
+          이 조건에 맞는 기록이 없어요. 조회 기간이나 적용한 필터를 확인해 주세요.
+        </Empty>
+      );
     return (
-      <div className="management-table">
+      <div
+        className="management-table analysis-transaction-table"
+        tabIndex={0}
+        role="region"
+        aria-label="조회한 거래 내역 표 · 가로로 이동하여 원본 열기"
+      >
         <table>
           <thead>
             <tr>
@@ -236,11 +281,11 @@ export default function AnalyticsView({
           <tbody>
             {list.map((tx) => (
               <tr key={tx.id}>
-                <td>
+                <td className="analysis-record-source">
                   {tx.date}
                   <small>{data.ledgers.find((l) => l.id === tx.ledgerId)?.name}</small>
                 </td>
-                <td>
+                <td className="analysis-record-description">
                   {tx.description}
                   <span className="tag-badge-list">
                     {tx.tagIds.map((id) => (
@@ -248,14 +293,18 @@ export default function AnalyticsView({
                     ))}
                   </span>
                 </td>
-                <td>
+                <td className="analysis-record-payment">
                   {ownerName(tx.ownerId)}
                   <small>
                     {data.paymentMethods.find((p) => p.id === tx.paymentMethodId)?.name}
                   </small>
                 </td>
-                <td>{tx.type === 'income' ? won(tx.amount) : '—'}</td>
-                <td>{tx.type === 'expense' ? won(tx.amount) : '—'}</td>
+                <td className="analysis-record-amount">
+                  {tx.type === 'income' ? won(tx.amount) : '—'}
+                </td>
+                <td className="analysis-record-amount">
+                  {tx.type === 'expense' ? won(tx.amount) : '—'}
+                </td>
                 <td>
                   {onEdit && (
                     <button
@@ -273,7 +322,6 @@ export default function AnalyticsView({
             ))}
           </tbody>
         </table>
-        {!list.length && <Empty>조건에 맞는 기록이 없어요.</Empty>}
       </div>
     );
   }
@@ -283,7 +331,7 @@ export default function AnalyticsView({
         <div className="analysis-overview-heading">
           <div>
             <p className="analysis-eyebrow">
-              {ledger?.name} ·{' '}
+              {ledgerId === ALL_LEDGERS_ID ? '전체 가계부' : ledger?.name} ·{' '}
               {mode === 'month' ? month : mode === 'year' ? `${year}년` : '선택 기간'}
             </p>
             <h2>우리의 돈은 어디로 갔을까요?</h2>
@@ -295,6 +343,7 @@ export default function AnalyticsView({
             type="button"
             className="analysis-export"
             aria-label="CSV 내보내기"
+            disabled={!valid || rows.length === 0}
             onClick={() =>
               downloadFile(
                 `가계부_${period.startDate}_${period.endDate}.csv`,
@@ -352,6 +401,22 @@ export default function AnalyticsView({
         </div>
       </section>
       <section className="panel management-panel analysis-controls" aria-label="분석 조회 조건">
+        <div className="analysis-controls-heading">
+          <div>
+            <h2>조회 조건</h2>
+            <p>기간과 가계부를 정하고, 필요한 조건만 좁혀 보세요.</p>
+          </div>
+          <Tooltip content="현재 가계부의 선택 월로 돌아가고, 모든 추가 조건을 해제해요.">
+            <button
+              type="button"
+              className="text-button analysis-reset"
+              disabled={!filtersChanged}
+              onClick={resetFilters}
+            >
+              모두 초기화
+            </button>
+          </Tooltip>
+        </div>
         <div className="management-filters analysis-basic-filters">
           <label>
             가계부
@@ -360,12 +425,14 @@ export default function AnalyticsView({
               value={ledgerId}
               onValueChange={(value) => {
                 setSourceLedgerId('');
+                setIncludeDescendants(true);
                 setLedgerId(value);
               }}
             >
+              <SelectOption value={ALL_LEDGERS_ID}>전체 가계부</SelectOption>
               {data.ledgers.map((l) => (
                 <SelectOption key={l.id} value={l.id}>
-                  {l.name}
+                  {ledgerPath(data.ledgers, l.id)}
                 </SelectOption>
               ))}
             </SelectField>
@@ -375,9 +442,25 @@ export default function AnalyticsView({
             <SelectField value={mode} onValueChange={(value) => setMode(value)}>
               <SelectOption value="month">선택 월</SelectOption>
               <SelectOption value="year">선택 연도</SelectOption>
+              <SelectOption value="period">가계부 설정 기간</SelectOption>
               <SelectOption value="range">직접 기간</SelectOption>
             </SelectField>
           </label>
+          {ledgerId !== ALL_LEDGERS_ID && (
+            <label>
+              조회 대상
+              <SelectField
+                value={includeDescendants ? 'descendants' : 'self'}
+                onValueChange={(value) => {
+                  setIncludeDescendants(value === 'descendants');
+                  setSourceLedgerId('');
+                }}
+              >
+                <SelectOption value="descendants">하위 가계부 포함</SelectOption>
+                <SelectOption value="self">이 가계부만</SelectOption>
+              </SelectField>
+            </label>
+          )}
           {mode === 'range' && (
             <>
               <label>
@@ -390,6 +473,23 @@ export default function AnalyticsView({
               </label>
             </>
           )}
+        </div>
+        <div className="analysis-query-summary" aria-label="적용한 조회 범위">
+          <div>
+            <strong>{periodLabel}</strong>
+            <span>
+              {period.startDate} ~ {period.endDate}
+            </span>
+          </div>
+          <p>{scopeLabel}</p>
+          <span
+            className="analysis-result-count"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {valid ? `조회 결과 ${rows.length}건` : '조회 기간 확인 필요'}
+          </span>
         </div>
         {!valid && (
           <p className="analysis-filter-error" role="alert">
@@ -404,16 +504,17 @@ export default function AnalyticsView({
             </span>
             <ChevronDown size={18} aria-hidden="true" />
           </summary>
-          <div className="management-filters">
-            {ledger?.kind === 'main' && (
+          <p className="analysis-detail-hint">필터를 접어도 선택한 조건은 계속 적용돼요.</p>
+          <div className="management-filters analysis-detail-fields">
+            {(ledgerId === ALL_LEDGERS_ID || includeDescendants) && (
               <label>
                 거래 출처
                 <SelectField value={sourceId} onValueChange={(value) => setSourceLedgerId(value)}>
-                  <SelectOption value="">메인과 연결 가계부 전체</SelectOption>
+                  <SelectOption value="">조회 대상 전체</SelectOption>
                   {sourceLedgers.map((source) => (
                     <SelectOption key={source.id} value={source.id}>
-                      {source.name}
-                      {source.id === ledgerId ? ' · 직접 기록' : ''}
+                      {ledgerPath(data.ledgers, source.id)}
+                      {source.id === ledgerId ? ' · 직접 기록' : ' · 하위 포함'}
                       {source.archived ? ' (보관)' : ''}
                     </SelectOption>
                   ))}
@@ -516,16 +617,28 @@ export default function AnalyticsView({
                 onClick={item.remove}
                 aria-label={`${item.label} 필터 해제`}
               >
-                {item.tagId ? tagLabel(item.tagId, item.label) : item.label}
+                <span>{item.tagId ? tagLabel(item.tagId, item.label) : item.label}</span>
                 <X size={13} aria-hidden="true" />
               </button>
             ))}
-            <button type="button" className="analysis-reset" onClick={resetFilters}>
-              모두 초기화
-            </button>
           </div>
         )}
       </section>
+      {valid && rows.length === 0 && (
+        <section className="analysis-empty-result" aria-label="빈 조회 결과">
+          <div>
+            <strong>선택한 기간과 조건에 맞는 기록이 없어요.</strong>
+            <p>
+              조회 기간을 바꾸거나 추가 필터를 해제해 보세요. 연간 표는 선택 연도 전체를 보여줘요.
+            </p>
+          </div>
+          {filtersChanged && (
+            <button type="button" className="secondary" onClick={resetFilters}>
+              조회 조건 초기화
+            </button>
+          )}
+        </section>
+      )}
       <div className="analysis-section-nav" role="group" aria-label="분석 보기">
         {(
           [
@@ -549,6 +662,10 @@ export default function AnalyticsView({
         <>
           <section className="panel management-panel">
             <h2>{year}년 월별 흐름</h2>
+            <p className="analysis-range-note">
+              연간 비교 · 위에서 선택한 기간과 별도로 {year}년의 12개월을 보여줘요. 수입·지출에는
+              같은 가계부와 추가 필터를 적용해요.
+            </p>
             <p className="small muted">
               {matrix.periods[0].startDate} ~ {matrix.periods[11].endDate} · 현재까지 시작한{' '}
               {matrix.elapsedPeriods}개 집계 기간의 월평균 지출:{' '}
@@ -634,7 +751,12 @@ export default function AnalyticsView({
                 월별 금액 자세히 보기
                 <ChevronDown size={18} aria-hidden="true" />
               </summary>
-              <div className="management-table">
+              <div
+                className="management-table"
+                tabIndex={0}
+                role="region"
+                aria-label="월별 금액 상세표"
+              >
                 <table>
                   <thead>
                     <tr>
@@ -671,6 +793,9 @@ export default function AnalyticsView({
           </section>
           <section className="panel management-panel">
             <h2>하루하루 소비 기록</h2>
+            <p className="analysis-range-note">
+              선택 기간 · {period.startDate} ~ {period.endDate}
+            </p>
             <p className="small muted">
               가계부 설정의 고정지출 기준 태그를 제외해요. 미래 날짜는 무지출로 세지 않아요. 조회
               조건 적용 후 {daily.filter((d) => d.date <= today && d.variableExpense === 0).length}
@@ -722,7 +847,12 @@ export default function AnalyticsView({
             <p className="small muted">
               금액을 누르면 해당 거래를 볼 수 있어요. 여러 옵션이 붙은 거래는 각 항목에 표시해요.
             </p>
-            <div className="management-table">
+            <div
+              className="management-table analysis-category-table"
+              tabIndex={0}
+              role="region"
+              aria-label="선택 기간 분류별 금액 표"
+            >
               <table>
                 <thead>
                   <tr>
@@ -872,7 +1002,12 @@ export default function AnalyticsView({
               {period.startDate} ~ {period.endDate} · 선택한 기록의 원본 가계부별 지출 비중이에요.
               연결된 보관 가계부도 포함해요.
             </p>
-            <div className="management-table analysis-ledgers">
+            <div
+              className="management-table analysis-ledgers"
+              tabIndex={0}
+              role="region"
+              aria-label="가계부별 사용액 표"
+            >
               <table>
                 <thead>
                   <tr>
@@ -938,7 +1073,12 @@ export default function AnalyticsView({
               {period.startDate} ~ {period.endDate} · 선택한 조회 조건을 적용해요. 금액과 건수를
               누르면 거래를 확인할 수 있어요.
             </p>
-            <div className="management-table analysis-payments">
+            <div
+              className="management-table analysis-payments"
+              tabIndex={0}
+              role="region"
+              aria-label="결제수단별 사용액 표"
+            >
               <table>
                 <thead>
                   <tr>
@@ -1010,7 +1150,12 @@ export default function AnalyticsView({
       )}
       {detail && (
         <Dialog title={detail.title} onClose={() => setDetail(null)}>
-          <div className="form-body">{table(detail.rows)}</div>
+          <div className="form-body analysis-detail-body">
+            <p className="analysis-detail-caption">
+              {detail.rows.length}건 · 좁은 화면에서는 표를 가로로 움직여 원본을 열 수 있어요.
+            </p>
+            {table(detail.rows)}
+          </div>
         </Dialog>
       )}
     </div>

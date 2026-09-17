@@ -43,7 +43,7 @@
   transition: background-color 150ms ease;
 }
 .tag-badge .tag-badge-remove:hover:not(:disabled) {
-  background: #191f2810;
+  background: var(--shadow-color);
 }
 .row-tags .tag-badge.custom-tag,
 .asset-tags .tag-badge.custom-tag {
@@ -75,7 +75,7 @@
   align-items: center;
   gap: 8px;
   padding: 4px 0;
-  color: var(--muted, #6b7684);
+  color: var(--muted);
   background: transparent;
 }
 .management-tags button.tag-filter {
@@ -86,11 +86,11 @@
   background: transparent;
 }
 .management-tags button.tag-filter:hover:not(:disabled) {
-  background: var(--canvas, #f2f4f6);
+  background: var(--canvas);
 }
 .management-tags button.tag-filter[aria-pressed='true'] {
-  border-color: #b4d5ff;
-  background: var(--blue-soft, #e8f3ff);
+  border-color: var(--accent-line);
+  background: var(--blue-soft);
 }
 .tag-filter-check {
   flex-shrink: 0;

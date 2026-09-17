@@ -1,0 +1,207 @@
+/* Shared interaction refinements, using the existing Uga surfaces and controls. */
+html {
+  /* Field focus and popup anchors should not drift while the page is scrolling. */
+  scroll-behavior: auto;
+}
+
+.dialog {
+  overscroll-behavior-y: contain;
+  scroll-padding-block: 120px 160px;
+}
+
+.dialog .form-footer {
+  background: var(--surface);
+  flex-wrap: wrap;
+}
+
+.dialog .footer-actions {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.dialog-heading > div,
+.section-heading > div,
+.panel-title > h2,
+.table-scroll {
+  min-width: 0;
+}
+
+.dialog-heading h2,
+.dialog-heading p {
+  overflow-wrap: anywhere;
+}
+
+.date-field-trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-scroll:focus-visible {
+  outline: 2px solid var(--brand-focus-ring);
+  outline-offset: -2px;
+}
+
+.transactions-heading .search {
+  padding-block: 2px;
+}
+
+.transactions-heading .search input {
+  min-width: 0;
+  min-height: 40px;
+}
+
+.transactions-heading .search:has(input:focus-visible) {
+  outline: var(--brand-focus-width) solid var(--brand-focus-ring);
+  outline-offset: var(--brand-focus-offset);
+}
+
+.transactions-heading .search input:focus-visible {
+  outline: none;
+}
+
+.search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  margin-right: -10px;
+  border-radius: var(--brand-radius-xs);
+  color: var(--muted);
+}
+
+.search-clear:hover {
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
+.transaction-list-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 0 24px 14px;
+}
+
+.transaction-list-tools .transaction-tabs {
+  padding: 0;
+}
+
+.transaction-list-tools .transaction-sort {
+  flex: 0 1 148px;
+  margin-left: auto;
+  min-width: 132px;
+  min-height: 40px;
+  font-size: var(--brand-font-size-caption);
+}
+
+.transaction-sort .ui-control-trigger {
+  min-height: 40px;
+  padding-block: 8px;
+}
+
+.transaction-filter-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 10px 24px;
+  background: var(--surface-subtle);
+  border-top: 1px solid var(--line);
+  font-size: var(--brand-font-size-caption);
+}
+
+.transaction-filter-summary p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  margin: 0;
+  min-width: 0;
+  color: var(--muted);
+}
+
+.transaction-filter-summary p > span {
+  max-width: 100%;
+  margin-left: 4px;
+  padding: 2px 8px;
+  background: var(--surface-muted);
+  border-radius: var(--brand-radius-xs);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.transaction-filter-summary > button {
+  min-height: 40px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.transactions .transaction-name,
+.transactions .transaction-sub,
+.transactions .payment-cell {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  html {
+    scroll-padding-bottom: calc(100px + env(safe-area-inset-bottom));
+  }
+
+  .transaction-list-tools {
+    padding-inline: 20px;
+    column-gap: 8px;
+  }
+
+  .transaction-list-tools .transaction-sort {
+    flex-basis: 132px;
+  }
+
+  .transaction-filter-summary {
+    padding-inline: 20px;
+  }
+
+  .ledger-scope-select > .ui-field {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dialog .form-footer .footer-actions > button {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .transactions tbody tr {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transactions .description-cell,
+  .transactions .money-cell,
+  .transactions .tags-cell,
+  .transactions .payment-cell,
+  .transactions .owner-cell,
+  .transactions .action-cell {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .transactions .money-cell {
+    text-align: left;
+    margin-block: 4px;
+  }
+
+  .dialog .form-footer > .footer-actions {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .dialog .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

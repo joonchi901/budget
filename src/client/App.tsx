@@ -1,28 +1,43 @@
+import {
+  ALL_LEDGERS_ID,
+  ledgerAncestors,
+  ledgerDescendantIds,
+  ledgerPath,
+} from '../shared/hierarchy';
+import LedgerTree from './LedgerTree';
+import HierarchyDialog, { type MoveIntent } from './HierarchyDialog';
+import MemberRoles from './MemberRoles';
+import LedgerCalendar from './LedgerCalendar';
+import './hierarchy.css';
 import { Tooltip } from './Tooltip';
+import {
+  UgaAvatar,
+  UgaIcon,
+  UgaIllustration,
+  UgaLedgerIcon,
+  UgaLogo,
+  UgaMascot,
+  UGA_CHART_COLORS,
+} from './brand/Uga';
 import { SelectField, SelectOption } from './SelectField';
 import { MonthField } from './DateFields';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpRight,
-  BarChart3,
-  BookOpen,
   Check,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
-  CreditCard,
-  CalendarDays,
-  Database,
-  Home,
   Link2,
+  List,
   LogOut,
   Menu,
   Plus,
   Search,
   Sparkles,
-  Tags,
-  Wallet,
   WifiOff,
+  X,
 } from 'lucide-react';
 import type { Bootstrap, Ledger, Transaction, TransactionType } from '../shared/types';
 import { categoryNames, tagGroupBreakdown, totals, visibleTransactions } from '../shared/selectors';
@@ -47,15 +62,15 @@ const currentMonth = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
-const colors = ['#3182f6', '#64a8ff', '#20c997', '#9270e8', '#ffb331', '#f66570'];
+const colors = UGA_CHART_COLORS;
 const navigation = [
-  { id: 'ledger', label: '가계부', icon: Home },
-  { id: 'assets', label: '자산', icon: Wallet },
-  { id: 'payments', label: '카드 · 통장', icon: CreditCard },
-  { id: 'analytics', label: '통계', icon: BarChart3 },
-  { id: 'planning', label: '계획 · 일정', icon: CalendarDays },
-  { id: 'tags', label: '태그 설정', icon: Tags },
-  { id: 'data', label: '데이터 관리', icon: Database },
+  { id: 'ledger', label: '가계부', icon: 'home' },
+  { id: 'assets', label: '자산', icon: 'assets' },
+  { id: 'payments', label: '카드 · 통장', icon: 'payments' },
+  { id: 'analytics', label: '통계', icon: 'analytics' },
+  { id: 'planning', label: '계획 · 일정', icon: 'planning' },
+  { id: 'tags', label: '태그 설정', icon: 'tags' },
+  { id: 'data', label: '데이터 관리', icon: 'data' },
 ] as const;
 
 export default function App() {
@@ -64,8 +79,18 @@ export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [month, setMonth] = useState(currentMonth);
   const state = useBudget(ledgerId);
-  const [edit, setEdit] = useState<{ original?: Transaction } | null>(null);
+  const [edit, setEdit] = useState<{ original?: Transaction; initialDate?: string } | null>(null);
+  useEffect(() => {
+    if (edit?.original?.ledgerId === ledgerId) state.presence(edit.original.id, null);
+  }, [ledgerId, edit?.original?.id, state.presence]);
+  const [ledgerView, setLedgerView] = useState<'list' | 'calendar'>('list');
+  const [calendarAddDate, setCalendarAddDate] = useState<string | null>(null);
+  const [calendarTarget, setCalendarTarget] = useState('');
   const [newLedger, setNewLedger] = useState(false);
+  const [moveIntent, setMoveIntent] = useState<MoveIntent | null>(null);
+  const [memberRoles, setMemberRoles] = useState(false);
+  const [includeDescendants, setIncludeDescendants] = useState(true);
+  const [period, setPeriod] = useState<'month' | 'year' | 'period'>('month');
   const [settingsLedger, setSettingsLedger] = useState<Ledger | null>(null);
   const [config, setConfig] = useState<{ demoEnabled: boolean; oidcEnabled: boolean }>({
     demoEnabled: false,
@@ -80,19 +105,79 @@ export default function App() {
   const [help, setHelp] = useState(false);
   const [loginBusy, setLoginBusy] = useState(false);
   const [actionError, setActionError] = useState('');
-  const [linkBusy, setLinkBusy] = useState(false);
   const data = state.data;
-  const ledger = data?.ledgers.find((l) => l.id === ledgerId) ?? data?.ledgers[0];
+  useEffect(() => {
+    if (!data?.user.id) return;
+    try {
+      setLedgerView(
+        localStorage.getItem(`budget:ledger-view:${data.user.id}`) === 'calendar'
+          ? 'calendar'
+          : 'list',
+      );
+    } catch {
+      setLedgerView('list');
+    }
+  }, [data?.user.id]);
+  const changeLedgerView = (view: 'list' | 'calendar') => {
+    setLedgerView(view);
+    if (!data) return;
+    try {
+      localStorage.setItem(`budget:ledger-view:${data.user.id}`, view);
+    } catch {
+      // Viewing the ledger must remain available when device storage is blocked.
+    }
+  };
+  const overall: Ledger = {
+    id: ALL_LEDGERS_ID,
+    name: '전체 가계부',
+    icon: '🏡',
+    kind: 'main',
+    parentId: null,
+    budget: 0,
+    startDate: null,
+    endDate: null,
+    archived: false,
+    version: 0,
+  };
+  const ledger =
+    ledgerId === ALL_LEDGERS_ID
+      ? overall
+      : (data?.ledgers.find((l) => l.id === ledgerId) ?? data?.ledgers[0] ?? overall);
+  const admin = data?.user.role === 'admin';
+  const isOverall = ledger.id === ALL_LEDGERS_ID;
+  useEffect(() => {
+    if (data && ledgerId !== ALL_LEDGERS_ID && !data.ledgers.some((item) => item.id === ledgerId))
+      setLedgerId(ALL_LEDGERS_ID);
+  }, [data, ledgerId]);
   const entries = useMemo(
-    () => (data ? visibleTransactions(data, ledgerId, month) : []),
-    [data, ledgerId, month],
+    () => (data ? visibleTransactions(data, ledgerId, month, { includeDescendants, period }) : []),
+    [data, ledgerId, month, includeDescendants, period],
   );
+  const calendarEntries = useMemo(() => {
+    if (!data) return [];
+    // Calendar months always run from the first to the last date, independent of accounting periods.
+    return visibleTransactions(
+      { ...data, ledgers: data.ledgers.map((item) => ({ ...item, periodStartDay: 1 })) },
+      ledgerId,
+      month,
+      { includeDescendants, period: 'month' },
+    );
+  }, [data, ledgerId, month, includeDescendants]);
+  function addOnDate(date: string) {
+    if (ledger.archived) return;
+    if (isOverall) {
+      setCalendarTarget('');
+      setCalendarAddDate(date);
+    } else setEdit({ initialDate: date });
+  }
   function notice(message: string) {
     setToast(message);
   }
   function navigate(id: string) {
     state.presence(null, null);
     setLedgerId(id);
+    setIncludeDescendants(true);
+    setPeriod('month');
     setPage('ledger');
     setActionError('');
     setMobileMenu(false);
@@ -114,25 +199,6 @@ export default function App() {
       setLoginBusy(false);
     }
   }
-  async function toggleLink() {
-    if (!ledger) return;
-    setLinkBusy(true);
-    setActionError('');
-    try {
-      await request(`/api/ledgers/${ledger.id}`, 'PATCH', {
-        mutationId: crypto.randomUUID(),
-        expectedVersion: ledger.version,
-        parentId: ledger.parentId ? null : 'main',
-      });
-      await state.refresh();
-      notice(ledger.parentId ? '메인 가계부 연결을 해제했어요.' : '메인 가계부에 연결했어요.');
-    } catch (e) {
-      setActionError((e as Error).message);
-      await state.refresh();
-    } finally {
-      setLinkBusy(false);
-    }
-  }
   const closeEdit = () => {
     setEdit(null);
     state.presence(null, null);
@@ -140,9 +206,7 @@ export default function App() {
   if (state.loading)
     return (
       <div className="loading">
-        <div className="brand-mark">
-          <BookOpen size={24} />
-        </div>
+        <UgaMascot size={104} />
         <p>우리의 기록을 불러오고 있어요…</p>
       </div>
     );
@@ -150,31 +214,30 @@ export default function App() {
     return (
       <div className="login-page">
         <div className="login-art">
-          <span className="eyebrow">OUR DAYS, TOGETHER</span>
+          <UgaLogo
+            variant="primary"
+            size={230}
+            className="login-brand-hero"
+            alt="우가 · 우리의 가계부"
+          />
           <h1>
-            오늘의 기록이
-            <br />
-            우리의 내일로.
+            우리가 쓰는 오늘,
+            <br />더 나은 내일
           </h1>
           <p>
             함께 쓰고, 함께 살펴보는
             <br />
             우리 둘의 가계부.
           </p>
-          <div className="art-ledger">
-            <div className="art-emoji">🌿</div>
-            <span>작은 기록, 차곡차곡</span>
-            <div className="art-line" />
-            <div className="art-line short" />
+          <div className="login-brand-message">
+            <UgaIcon name="sprout" size={28} />
+            <span>작은 기록이 큰 변화를 만들어요.</span>
           </div>
           <span className="art-bottom">둘이서 만들어가는 좋은 습관</span>
         </div>
         <main className="login-content">
           <div className="brand">
-            <div className="brand-mark">
-              <BookOpen size={22} />
-            </div>
-            <strong>우리의 가계부</strong>
+            <UgaLogo size={180} alt="우가 · 우리의 가계부" />
           </div>
           <span className="demo-chip">
             {config.demoEnabled ? '로컬 미리보기' : '우리 둘의 기록'}
@@ -199,7 +262,9 @@ export default function App() {
           {config.demoEnabled && (
             <div className="login-users">
               <button disabled={loginBusy} onClick={() => void login('u1')}>
-                <span className="avatar purple">나</span>
+                <span className="avatar purple">
+                  <UgaAvatar mood="happy" size={44} />
+                </span>
                 <span>
                   <strong>나로 시작하기</strong>
                   <small>예시 사용자 1</small>
@@ -207,7 +272,9 @@ export default function App() {
                 <ArrowUpRight size={19} />
               </button>
               <button disabled={loginBusy} onClick={() => void login('u2')}>
-                <span className="avatar pink">와</span>
+                <span className="avatar pink">
+                  <UgaAvatar mood="calm" size={44} />
+                </span>
                 <span>
                   <strong>와이프로 시작하기</strong>
                   <small>예시 사용자 2</small>
@@ -246,17 +313,14 @@ export default function App() {
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            navigate('main');
+            navigate(ALL_LEDGERS_ID);
           }}
         >
-          <div className="brand-mark">
-            <BookOpen size={22} />
-          </div>
-          <strong>우리의 가계부</strong>
+          <UgaLogo size={170} alt="우가 · 우리의 가계부" />
         </a>
         <div className="household">
           <div className="household-icon">
-            <Wallet size={21} />
+            <UgaIcon name="home" size={26} />
           </div>
           <div>
             <strong>우리 집</strong>
@@ -272,7 +336,7 @@ export default function App() {
               aria-current={page === item.id ? 'page' : undefined}
               onClick={() => changePage(item.id)}
             >
-              <item.icon size={19} />
+              <UgaIcon name={item.icon} size={24} />
               {item.label}
             </button>
           ))}
@@ -280,38 +344,36 @@ export default function App() {
         <div className="ledger-nav">
           <div className="nav-section-title">
             <span>내 가계부</span>
-            <button
-              className="icon-button"
-              aria-label="목적 가계부 추가"
-              onClick={() => setNewLedger(true)}
-            >
-              <Plus size={17} />
-            </button>
-          </div>
-          {data.ledgers.map((item) => (
-            <Tooltip content={item.name} key={item.id}>
+            {admin && (
               <button
-                className={ledgerId === item.id && page === 'ledger' ? 'active' : ''}
-                onClick={() => navigate(item.id)}
+                className="icon-button"
+                aria-label="가계부 추가"
+                onClick={() => setNewLedger(true)}
               >
-                <span>{item.icon}</span>
-                <span className="truncate">
-                  {item.name}
-                  {item.archived ? ' (보관)' : ''}
-                </span>
-                {item.parentId && <Link2 size={13} />}
+                <Plus size={17} />
               </button>
-            </Tooltip>
-          ))}
+            )}
+          </div>
+          <LedgerTree
+            data={data}
+            selectedId={ledgerId}
+            onNavigate={navigate}
+            onMove={setMoveIntent}
+          />
         </div>
         <div className="sidebar-bottom">
+          {admin && (
+            <button className="help-button" onClick={() => setMemberRoles(true)}>
+              구성원 권한
+            </button>
+          )}
           <button className="help-button" onClick={() => setHelp(true)}>
             <CircleHelp size={17} />
             기록 가이드
           </button>
           <div className="profile">
             <span className="avatar small" style={{ background: data.user.color }}>
-              {data.user.name.slice(0, 1)}
+              <UgaAvatar mood={data.user.id === 'u1' ? 'happy' : 'calm'} size={36} />
             </span>
             <div>
               <strong>{data.user.name}</strong>
@@ -338,8 +400,13 @@ export default function App() {
           <div className="collaboration">
             <div className="avatar-group">
               <Tooltip content={`${data.user.name} (나)`}>
-                <span className="avatar tiny" style={{ background: data.user.color }}>
-                  {data.user.name.slice(0, 1)}
+                <span
+                  className="avatar tiny"
+                  role="img"
+                  aria-label={`${data.user.name} (나)`}
+                  style={{ background: data.user.color }}
+                >
+                  <UgaAvatar mood={data.user.id === 'u1' ? 'happy' : 'calm'} size={28} />
                 </span>
               </Tooltip>
               {state.peers.map((peer, index) => (
@@ -347,8 +414,13 @@ export default function App() {
                   content={`${peer.name} · ${data.ledgers.find((l) => l.id === peer.ledgerId)?.name ?? '가계부'}`}
                   key={`${peer.userId}-${index}`}
                 >
-                  <span className="avatar tiny" style={{ background: peer.color }}>
-                    {peer.name.slice(0, 1)}
+                  <span
+                    className="avatar tiny"
+                    role="img"
+                    aria-label={peer.name}
+                    style={{ background: peer.color }}
+                  >
+                    <UgaAvatar mood={peer.userId === 'u1' ? 'happy' : 'calm'} size={28} />
                   </span>
                 </Tooltip>
               ))}
@@ -368,14 +440,20 @@ export default function App() {
           <div className="page-heading">
             <div>
               <h1>
-                {page === 'ledger' && <span className="heading-emoji">{ledger.icon}</span>}
+                <span className="heading-emoji">
+                  {page === 'ledger' ? (
+                    <UgaLedgerIcon value={ledger.icon} size={30} />
+                  ) : (
+                    <UgaIcon name={page} size={30} />
+                  )}
+                </span>
                 {pageTitle}
               </h1>
               <p>
                 {page === 'ledger'
-                  ? ledger.kind === 'main'
-                    ? '함께 기록하고, 한눈에 확인해요.'
-                    : '이 가계부의 기록과 예산을 독립적으로 관리해요.'
+                  ? isOverall
+                    ? '모든 가계부의 원본 기록을 중복 없이 모아 봐요.'
+                    : '이 가계부와 하위 가계부의 기록을 함께 살펴보세요.'
                   : page === 'assets'
                     ? '어디에 얼마가 있는지, 우리의 자산을 함께 살펴보세요.'
                     : page === 'payments'
@@ -419,14 +497,15 @@ export default function App() {
                   </button>
                 </div>
               )}
-              {page === 'ledger' && (
+              {page === 'ledger' && !isOverall && (
                 <button className="secondary" onClick={() => setSettingsLedger(ledger)}>
                   가계부 설정
                 </button>
               )}
-              {page === 'ledger' && (
+              {page === 'ledger' && !isOverall && (
                 <button
                   className="primary"
+                  disabled={ledger.archived}
                   onClick={() => {
                     setEdit({});
                     state.presence(null, '새 내역');
@@ -438,6 +517,100 @@ export default function App() {
               )}
             </div>
           </div>
+          {page === 'ledger' && (
+            <>
+              <div className="ledger-context-toolbar">
+                <nav className="ledger-breadcrumbs" aria-label="가계부 경로">
+                  <button onClick={() => navigate(ALL_LEDGERS_ID)}>전체 가계부</button>
+                  {!isOverall &&
+                    [...ledgerAncestors(data.ledgers, ledger.id), ledger].map((item) => (
+                      <span key={item.id}>
+                        <ChevronRight size={12} />
+                        <button
+                          onClick={() => navigate(item.id)}
+                          aria-current={item.id === ledger.id ? 'page' : undefined}
+                        >
+                          {item.name}
+                        </button>
+                      </span>
+                    ))}
+                </nav>
+                <div className="ledger-view-controls">
+                  <label>
+                    조회 기간
+                    <SelectField
+                      value={ledgerView === 'calendar' ? 'month' : period}
+                      disabled={ledgerView === 'calendar'}
+                      onValueChange={(value) => setPeriod(value as typeof period)}
+                    >
+                      <SelectOption value="month">선택 월</SelectOption>
+                      <SelectOption value="year">선택 연도</SelectOption>
+                      <SelectOption value="period">
+                        {isOverall ? '전체 기록 기간' : '가계부 설정 기간'}
+                      </SelectOption>
+                    </SelectField>
+                  </label>
+                  {!isOverall && (
+                    <label>
+                      조회 대상
+                      <SelectField
+                        value={includeDescendants ? 'descendants' : 'self'}
+                        onValueChange={(value) => setIncludeDescendants(value === 'descendants')}
+                      >
+                        <SelectOption value="descendants">하위 가계부 포함</SelectOption>
+                        <SelectOption value="self">이 가계부만</SelectOption>
+                      </SelectField>
+                    </label>
+                  )}
+                  <div
+                    className="segmented ledger-view-toggle"
+                    role="group"
+                    aria-label="가계부 보기"
+                  >
+                    <button
+                      type="button"
+                      className={ledgerView === 'list' ? 'selected' : ''}
+                      aria-pressed={ledgerView === 'list'}
+                      onClick={() => changeLedgerView('list')}
+                    >
+                      <List size={16} /> 목록
+                    </button>
+                    <button
+                      type="button"
+                      className={ledgerView === 'calendar' ? 'selected' : ''}
+                      aria-pressed={ledgerView === 'calendar'}
+                      onClick={() => changeLedgerView('calendar')}
+                    >
+                      <CalendarDays size={16} /> 캘린더
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {isOverall && (
+                <div className="overall-ledger-notice">
+                  <span>기록을 추가할 원본 가계부를 먼저 선택하세요.</span>
+                  <label>
+                    <span className="sr-only">기록할 가계부</span>
+                    <SelectField
+                      value=""
+                      onValueChange={(id) => {
+                        if (id) navigate(id);
+                      }}
+                    >
+                      <SelectOption value="">가계부 선택</SelectOption>
+                      {data.ledgers
+                        .filter((item) => !item.archived)
+                        .map((item) => (
+                          <SelectOption key={item.id} value={item.id}>
+                            {ledgerPath(data.ledgers, item.id)}
+                          </SelectOption>
+                        ))}
+                    </SelectField>
+                  </label>
+                </div>
+              )}
+            </>
+          )}
           {(state.error || actionError) && (
             <div className="alert error" role="alert">
               {actionError || state.error}
@@ -458,8 +631,22 @@ export default function App() {
               연결을 복구하고 있어요. 재연결되면 최신 기록을 불러와요.
             </div>
           )}
-          {page === 'ledger' && (
+          {page === 'ledger' && ledgerView === 'calendar' && (
+            <LedgerCalendar
+              data={data}
+              ledger={ledger}
+              month={month}
+              entries={calendarEntries}
+              onAdd={addOnDate}
+              onOpen={(tx) => {
+                navigate(tx.ledgerId);
+                setEdit({ original: tx });
+              }}
+            />
+          )}
+          {page === 'ledger' && ledgerView === 'list' && (
             <LedgerView
+              key={ledger.id}
               data={data}
               ledger={ledger}
               entries={entries}
@@ -467,11 +654,10 @@ export default function App() {
               peers={state.peers}
               onEdit={(tx) => {
                 setEdit({ original: tx });
-                state.presence(tx.id, null);
               }}
               onNavigate={navigate}
-              onLink={() => void toggleLink()}
-              linkBusy={linkBusy}
+              period={period}
+              includeDescendants={includeDescendants}
             />
           )}
           {page === 'assets' && (
@@ -511,12 +697,13 @@ export default function App() {
               onEdit={(tx) => {
                 navigate(tx.ledgerId);
                 setEdit({ original: tx });
-                state.presence(tx.id, null);
               }}
             />
           )}
           <footer className="page-footer">
-            <span>우리의 가계부</span>
+            <span>
+              <UgaIcon name="sprout" size={18} /> 우가 · 우리의 가계부
+            </span>
             <span>{data.mode === 'demo' ? '로컬 미리보기 · 가상 데이터' : '우리 둘만의 기록'}</span>
           </footer>
         </main>
@@ -533,7 +720,7 @@ export default function App() {
             aria-current={page === item.id ? 'page' : undefined}
             onClick={() => changePage(item.id)}
           >
-            <item.icon size={22} />
+            <UgaIcon name={item.icon} size={24} />
             <span>{item.label}</span>
           </button>
         ))}
@@ -548,36 +735,47 @@ export default function App() {
             <div className="mobile-menu-grid">
               {navigation.map((item) => (
                 <button key={item.id} onClick={() => changePage(item.id)}>
-                  <item.icon size={24} />
+                  <UgaIcon name={item.icon} size={28} />
                   <span>{item.label}</span>
                 </button>
               ))}
             </div>
             <div className="section-heading">
               <h3>내 가계부</h3>
+              {admin && (
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    setMobileMenu(false);
+                    setNewLedger(true);
+                  }}
+                >
+                  <Plus size={16} />
+                  가계부 추가
+                </button>
+              )}
+            </div>
+            <LedgerTree
+              data={data}
+              selectedId={ledgerId}
+              onNavigate={navigate}
+              onMove={(intent) => {
+                setMobileMenu(false);
+                setMoveIntent(intent);
+              }}
+              name="모바일 가계부 트리"
+            />
+            {admin && (
               <button
-                className="text-button"
+                className="help-button"
                 onClick={() => {
                   setMobileMenu(false);
-                  setNewLedger(true);
+                  setMemberRoles(true);
                 }}
               >
-                <Plus size={16} />
-                목적 가계부 추가
+                구성원 권한
               </button>
-            </div>
-            <div className="mobile-ledger-list">
-              {data.ledgers.map((item) => (
-                <button key={item.id} onClick={() => navigate(item.id)}>
-                  <span>{item.icon}</span>
-                  <strong>
-                    {item.name}
-                    {item.archived ? ' (보관)' : ''}
-                  </strong>
-                  <ChevronRight size={18} />
-                </button>
-              ))}
-            </div>
+            )}
             <button
               className="help-button"
               onClick={() => {
@@ -612,11 +810,12 @@ export default function App() {
       )}
       {edit && (
         <TransactionForm
-          key={`${data.householdId ?? data.mode}:${data.user.id}:${ledgerId}:${edit.original?.id ?? 'new'}`}
+          key={`${data.householdId ?? data.mode}:${data.user.id}:${ledgerId}:${edit.original?.id ?? `new:${edit.initialDate ?? ''}`}`}
           data={data}
           ledgerId={ledgerId}
           month={month}
           original={edit.original}
+          initialDate={edit.initialDate}
           onClose={closeEdit}
           onSaved={(message) => {
             closeEdit();
@@ -627,10 +826,52 @@ export default function App() {
           onChanged={state.refresh}
         />
       )}
+      {calendarAddDate && (
+        <Dialog
+          title="기록할 가계부 선택"
+          subtitle={`${calendarAddDate}의 기록을 남길 곳을 선택해 주세요.`}
+          onClose={() => setCalendarAddDate(null)}
+        >
+          <div className="form-body">
+            <label>
+              원본 가계부
+              <SelectField value={calendarTarget} onValueChange={setCalendarTarget}>
+                <SelectOption value="">가계부 선택</SelectOption>
+                {data.ledgers
+                  .filter((item) => !item.archived)
+                  .map((item) => (
+                    <SelectOption key={item.id} value={item.id}>
+                      {ledgerPath(data.ledgers, item.id)}
+                    </SelectOption>
+                  ))}
+              </SelectField>
+            </label>
+            {!data.ledgers.some((item) => !item.archived) && (
+              <p className="small muted">관리자가 기록할 가계부를 먼저 만들어 주세요.</p>
+            )}
+          </div>
+          <div className="form-footer">
+            <span />
+            <button
+              className="primary"
+              disabled={!data.ledgers.some((item) => item.id === calendarTarget && !item.archived)}
+              onClick={() => {
+                const date = calendarAddDate;
+                navigate(calendarTarget);
+                setCalendarAddDate(null);
+                setEdit({ initialDate: date });
+              }}
+            >
+              이 가계부에 기록
+            </button>
+          </div>
+        </Dialog>
+      )}
       {settingsLedger && (
         <LedgerForm
           data={data}
           original={settingsLedger}
+          onChanged={state.refresh}
           onClose={() => {
             setSettingsLedger(null);
             void state.refresh();
@@ -645,6 +886,8 @@ export default function App() {
       {newLedger && (
         <LedgerForm
           data={data}
+          initialParentId={isOverall || ledger.archived ? null : ledger.id}
+          onChanged={state.refresh}
           onClose={() => setNewLedger(false)}
           onSaved={(id) => {
             setNewLedger(false);
@@ -653,13 +896,33 @@ export default function App() {
           }}
         />
       )}
+      {moveIntent && (
+        <HierarchyDialog
+          key={`${moveIntent.ledger.id}:${moveIntent.hierarchyVersion}`}
+          data={data}
+          intent={moveIntent}
+          onChanged={state.refresh}
+          onClose={() => setMoveIntent(null)}
+          onSaved={() => {
+            setMoveIntent(null);
+            notice('가계부 위치를 변경했어요.');
+          }}
+        />
+      )}
+      {memberRoles && (
+        <MemberRoles data={data} onChanged={state.refresh} onClose={() => setMemberRoles(false)} />
+      )}
       {help && (
         <Dialog title="함께 쓰는 기록 가이드" onClose={() => setHelp(false)}>
           <div className="form-body guide">
+            <div className="uga-guide">
+              <UgaMascot pose="record" size={80} />
+              <p>작은 기록부터 우가와 함께 시작해요.</p>
+            </div>
             <h3>기록은 한 번, 조회는 함께</h3>
             <p>
-              목적 가계부를 메인에 연결하면 기록이 함께 보여요. 수정은 기록을 작성한 원본 가계부에서
-              해요.
+              상위 가계부에서는 모든 단계의 하위 기록을 함께 볼 수 있어요. 수정은 기록을 작성한 원본
+              가계부에서 해요.
             </p>
             <h3>태그와 자산 반영</h3>
             <p>
@@ -714,8 +977,8 @@ function LedgerView({
   peers,
   onEdit,
   onNavigate,
-  onLink,
-  linkBusy,
+  period,
+  includeDescendants,
 }: {
   data: Bootstrap;
   ledger: Ledger;
@@ -724,15 +987,39 @@ function LedgerView({
   peers: ReturnType<typeof useBudget>['peers'];
   onEdit(tx: Transaction): void;
   onNavigate(id: string): void;
-  onLink(): void;
-  linkBusy: boolean;
+  period: 'month' | 'year' | 'period';
+  includeDescendants: boolean;
 }) {
   const [search, setSearch] = useState('');
   const [type, setType] = useState('all');
   const [summaryGroupId, setSummaryGroupId] = useState('');
   const [sourceScope, setSourceScope] = useState('all');
+  const [sort, setSort] = useState('date-desc');
+  const sourceLedgers = data.ledgers.filter(
+    (item) =>
+      item.id !== ledger.id &&
+      (ledger.id === ALL_LEDGERS_ID || ledgerDescendantIds(data.ledgers, ledger.id).has(item.id)),
+  );
+  const canFilterSource =
+    (ledger.id === ALL_LEDGERS_ID || includeDescendants) && sourceLedgers.length > 0;
+  // A hidden source filter must not keep excluding records after a scope change or hierarchy move.
+  const activeSource =
+    canFilterSource &&
+    (sourceScope === ledger.id || sourceLedgers.some((item) => item.id === sourceScope))
+      ? sourceScope
+      : 'all';
+  useEffect(() => {
+    if (sourceScope !== activeSource) setSourceScope(activeSource);
+  }, [sourceScope, activeSource]);
+  const query = search.trim().toLocaleLowerCase();
+  const hasFilters = !!query || type !== 'all' || activeSource !== 'all';
+  const resetFilters = () => {
+    setSearch('');
+    setType('all');
+    setSourceScope('all');
+  };
   const sum = totals(entries);
-  const budgetState = budgetSummary(data, ledger.id, month);
+  const budgetState = budgetSummary(data, ledger.id, month, { includeDescendants, period });
   const budgetExpense = budgetState.expense;
   const budget = budgetState.amount;
   const remaining = budget - budgetExpense;
@@ -767,53 +1054,82 @@ function LedgerView({
   const filtered = entries
     .filter(
       (tx) =>
-        (ledger.kind !== 'main' || sourceScope === 'all' || tx.ledgerId === sourceScope) &&
+        (activeSource === 'all' || tx.ledgerId === activeSource) &&
         (type === 'all' || tx.type === type) &&
         `${tx.description} ${categoryNames(data, tx).join(' ')} ${tx.tagIds.map((id) => data.tags.find((t) => t.id === id)?.name).join(' ')}`
           .toLocaleLowerCase()
-          .includes(search.toLocaleLowerCase()),
+          .includes(query),
     )
-    .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
+    .sort((a, b) => {
+      const order =
+        sort === 'amount-desc'
+          ? b.amount - a.amount
+          : sort === 'amount-asc'
+            ? a.amount - b.amount
+            : sort === 'date-asc'
+              ? a.date.localeCompare(b.date)
+              : b.date.localeCompare(a.date);
+      return order || b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt);
+    });
+  const filteredSum = totals(filtered);
   return (
     <>
-      {ledger.kind === 'purpose' && (
-        <div className="purpose-info">
-          <div>
-            <span className={`badge ${ledger.parentId ? 'green' : ''}`}>
-              <Link2 size={12} />
-              {ledger.parentId ? '메인에 연결됨' : '독립 가계부'}
-            </span>
-            <span>
-              {ledger.startDate ?? '시작일 없음'} — {ledger.endDate ?? '종료일 없음'}
-            </span>
-          </div>
-          <button className="text-button" disabled={linkBusy} onClick={onLink}>
-            {linkBusy ? '변경 중…' : ledger.parentId ? '메인 연결 해제' : '메인에 연결'}
-          </button>
-        </div>
-      )}
       <p className="ledger-period small muted">
-        집계 기간 {accountingPeriod(month, ledger.periodStartDay ?? 1).startDate} ~{' '}
-        {accountingPeriod(month, ledger.periodStartDay ?? 1).endDate}
+        집계 기간 {budgetState.periodStart ?? '전체'} ~ {budgetState.periodEnd ?? '전체'} ·{' '}
+        {ledger.id === ALL_LEDGERS_ID
+          ? '모든 원본 가계부'
+          : includeDescendants
+            ? '모든 하위 가계부 포함'
+            : '현재 가계부만'}
       </p>
-      <section className="stats-grid" aria-label="월 요약">
+      <section className="stats-grid" aria-label="조회 기간 요약">
         <Stat
-          label="이번 달 지출"
+          label={period === 'month' ? '이번 달 지출' : '조회 기간 지출'}
           amount={sum.expense}
-          hint={ledger.kind === 'main' ? '연결된 가계부 포함' : '이 가계부의 월 지출'}
+          hint={
+            ledger.id === ALL_LEDGERS_ID
+              ? '모든 원본 기록을 한 번씩 집계'
+              : includeDescendants
+                ? '모든 하위 가계부 포함'
+                : '현재 가계부만'
+          }
           accent
         />
-        <Stat label="이번 달 수입" amount={sum.income} hint={`${monthLabel(month)} 기록 기준`} />
+        <Stat
+          label={period === 'month' ? '이번 달 수입' : '조회 기간 수입'}
+          amount={sum.income}
+          hint={
+            period === 'month'
+              ? `${monthLabel(month)} 기록 기준`
+              : period === 'year'
+                ? `${month.slice(0, 4)}년 기록 기준`
+                : '선택한 가계부 기간 기준'
+          }
+        />
         <Stat
           label="수입 − 지출"
           amount={sum.income - sum.expense}
           hint="자산 이동·잔액 조정은 포함하지 않아요"
         />
-        <Stat
-          label="남은 예산"
-          amount={remaining}
-          hint={`예산 ${won(budget)}원 · ${budgetState.periodStart === '0001-01-01' && budgetState.periodEnd === '9999-12-31' ? '전체 기간' : `${budgetState.periodStart ?? '전체'} ~ ${budgetState.periodEnd ?? '전체'}`}`}
-        />
+        {ledger.id === ALL_LEDGERS_ID ? (
+          <div className="stat">
+            <span className="stat-label">원본 가계부</span>
+            <strong>{new Set(entries.map((entry) => entry.ledgerId)).size}개</strong>
+            <p>예산은 각 가계부에서 독립적으로 관리해요.</p>
+          </div>
+        ) : !budgetState.hasBudget ? (
+          <div className="stat">
+            <span className="stat-label">조회 기간 예산</span>
+            <strong>미설정</strong>
+            <p>계획에서 이 기간의 예산을 설정해 주세요.</p>
+          </div>
+        ) : (
+          <Stat
+            label="남은 예산"
+            amount={remaining}
+            hint={`예산 ${won(budget)}원 · ${budgetState.periodStart === '0001-01-01' && budgetState.periodEnd === '9999-12-31' ? '전체 기간' : `${budgetState.periodStart ?? '전체'} ~ ${budgetState.periodEnd ?? '전체'}`}`}
+          />
+        )}
       </section>
       <div className="ledger-body-grid">
         <section className="panel transactions-panel">
@@ -823,8 +1139,8 @@ function LedgerView({
                 거래 내역 <span className="count">{filtered.length}</span>
               </h2>
               <p>
-                {ledger.kind === 'main'
-                  ? '연결된 목적 가계부의 내역도 함께 보여요.'
+                {includeDescendants
+                  ? '하위 기록은 원본 가계부에서 수정해요.'
                   : '이 가계부에서 작성한 내역이에요.'}
               </p>
             </div>
@@ -836,41 +1152,79 @@ function LedgerView({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+              {search && (
+                <button
+                  type="button"
+                  className="search-clear"
+                  aria-label="검색어 지우기"
+                  onClick={() => setSearch('')}
+                >
+                  <X size={16} />
+                </button>
+              )}
             </label>
           </div>
-          {ledger.kind === 'main' && (
+          {canFilterSource && (
             <label className="ledger-scope-select small muted">
               거래 목록의 가계부 범위
               <SelectField
                 aria-label="거래 목록의 가계부 범위"
-                value={sourceScope}
+                value={activeSource}
                 onValueChange={(value) => setSourceScope(value)}
               >
-                <SelectOption value="all">메인과 연결된 가계부 전체</SelectOption>
-                <SelectOption value={ledger.id}>메인에 직접 기록한 내역</SelectOption>
-                {data.ledgers
-                  .filter((l) => l.parentId === ledger.id)
-                  .map((l) => (
-                    <SelectOption key={l.id} value={l.id}>
-                      {l.name}
-                    </SelectOption>
-                  ))}
+                <SelectOption value="all">조회 대상 전체</SelectOption>
+                {ledger.id !== ALL_LEDGERS_ID && (
+                  <SelectOption value={ledger.id}>이 가계부에 직접 기록한 내역</SelectOption>
+                )}
+                {sourceLedgers.map((l) => (
+                  <SelectOption key={l.id} value={l.id}>
+                    {ledgerPath(data.ledgers, l.id)}
+                  </SelectOption>
+                ))}
               </SelectField>
             </label>
           )}
-          <div className="transaction-tabs" role="group" aria-label="내역 종류 필터">
-            {(['all', ...Object.keys(labels)] as const).map((t) => (
-              <button
-                key={t}
-                aria-pressed={type === t}
-                className={type === t ? 'active' : ''}
-                onClick={() => setType(t)}
-              >
-                {t === 'all' ? '전체' : labels[t as TransactionType]}
-              </button>
-            ))}
+          <div className="transaction-list-tools">
+            <div className="transaction-tabs" role="group" aria-label="내역 종류 필터">
+              {(['all', ...Object.keys(labels)] as const).map((t) => (
+                <button
+                  key={t}
+                  aria-pressed={type === t}
+                  className={type === t ? 'active' : ''}
+                  onClick={() => setType(t)}
+                >
+                  {t === 'all' ? '전체' : labels[t as TransactionType]}
+                </button>
+              ))}
+            </div>
+            <SelectField
+              aria-label="내역 정렬"
+              value={sort}
+              onValueChange={setSort}
+              className="transaction-sort"
+            >
+              <SelectOption value="date-desc">최신순</SelectOption>
+              <SelectOption value="date-asc">오래된순</SelectOption>
+              <SelectOption value="amount-desc">금액 높은순</SelectOption>
+              <SelectOption value="amount-asc">금액 낮은순</SelectOption>
+            </SelectField>
           </div>
-          <div className="table-scroll">
+          {hasFilters && (
+            <div className="transaction-filter-summary">
+              <p role="status" aria-label="목록 조회 결과">
+                전체 {entries.length}건 중 <strong>{filtered.length}건</strong>
+                {query && <span>검색 “{search.trim()}”</span>}
+                {type !== 'all' && <span>{labels[type as TransactionType]}</span>}
+                {activeSource !== 'all' && (
+                  <span>{data.ledgers.find((item) => item.id === activeSource)?.name}</span>
+                )}
+              </p>
+              <button type="button" className="text-button" onClick={resetFilters}>
+                조회 조건 초기화
+              </button>
+            </div>
+          )}
+          <div className="table-scroll" role="region" aria-label="거래 내역 목록" tabIndex={0}>
             <table className="transactions">
               <thead>
                 <tr>
@@ -904,7 +1258,7 @@ function LedgerView({
                         <div className="transaction-sub">
                           {indirect && (
                             <span className="source-label">
-                              {source?.icon} {source?.name}
+                              <UgaLedgerIcon value={source?.icon} size={16} /> {source?.name}
                             </span>
                           )}
                           {editing && (
@@ -975,7 +1329,7 @@ function LedgerView({
             </table>
           </div>
           {!filtered.length && (
-            <Empty>
+            <Empty illustration={entries.length ? 'search' : 'empty'}>
               {entries.length
                 ? '조건에 맞는 내역이 없어요. 검색어나 필터를 바꿔보세요.'
                 : '아직 내역이 없어요. 첫 기록을 남겨보세요.'}
@@ -984,70 +1338,88 @@ function LedgerView({
           <div className="table-summary">
             <span>현재 목록 기준</span>
             <span>
-              수입 <b>{won(totals(filtered).income)}원</b>
+              수입 <b>{won(filteredSum.income)}원</b>
               <i />
-              지출 <b>{won(totals(filtered).expense)}원</b>
+              지출 <b>{won(filteredSum.expense)}원</b>
             </span>
           </div>
         </section>
         <div className="overview-grid">
-          <section className="panel budget-panel">
-            <div className="panel-title">
-              <h2>{ledger.kind === 'main' ? '예산 현황' : '목적 가계부 예산'}</h2>
-              <span className="pill">
-                {ledger.kind === 'main' ? `${Number(month.slice(5))}월` : '전체 기간'}
-              </span>
+          <aside className="brand-welcome" aria-label="우가의 한마디">
+            <UgaIllustration name="card-header" size={132} />
+            <div>
+              <strong>오늘도 우가우가!</strong>
+              <p>작은 기록이 큰 변화를 만들어요.</p>
             </div>
-            <div className="budget-summary">
-              <div>
-                <span className="muted small">예산 대비 지출</span>
-                <strong>
-                  {budget ? percent : '—'}
-                  <small>{budget ? '%' : ''}</small>
-                </strong>
+          </aside>
+          {ledger.id !== ALL_LEDGERS_ID && (
+            <section className="panel budget-panel">
+              <div className="panel-title">
+                <h2>예산 현황</h2>
+                <span className="pill">
+                  {period === 'month'
+                    ? `${Number(month.slice(5))}월`
+                    : period === 'year'
+                      ? `${month.slice(0, 4)}년`
+                      : '설정 기간'}
+                </span>
               </div>
-              <span className={`budget-message ${remaining < 0 ? 'over' : ''}`}>
-                {budget === 0
-                  ? '예산이 설정되지 않았어요'
-                  : remaining < 0
-                    ? `${won(-remaining)}원 초과했어요`
-                    : `${won(remaining)}원 더 사용할 수 있어요`}
-              </span>
-            </div>
-            <div className="progress-track">
-              <div style={{ width: `${Math.min(percent, 100)}%` }} />
-            </div>
-            <div className="progress-labels">
-              <span>사용 {won(budgetExpense)}원</span>
-              <span>예산 {won(budget)}원</span>
-            </div>
-            {ledger.kind === 'main' ? (
-              <div className="linked-ledgers">
-                {data.ledgers
-                  .filter((l) => l.parentId === ledger.id)
-                  .map((l) => (
-                    <button key={l.id} onClick={() => onNavigate(l.id)}>
-                      <span>{l.icon}</span>
-                      <span>{l.name}</span>
-                      <span className="muted">연결됨</span>
-                      <ChevronRight size={15} />
-                    </button>
-                  ))}
-                {!data.ledgers.some((l) => l.parentId === ledger.id) && (
-                  <p className="small muted">목적 가계부를 연결하면 이곳에 함께 보여요.</p>
-                )}
+              <div className="budget-summary">
+                <div>
+                  <span className="muted small">예산 대비 지출</span>
+                  <strong>
+                    {budget ? percent : '—'}
+                    <small>{budget ? '%' : ''}</small>
+                  </strong>
+                </div>
+                <span className={`budget-message ${remaining < 0 ? 'over' : ''}`}>
+                  {!budgetState.hasBudget
+                    ? '예산이 설정되지 않았어요'
+                    : remaining < 0
+                      ? `${won(-remaining)}원 초과했어요`
+                      : `${won(remaining)}원 더 사용할 수 있어요`}
+                </span>
               </div>
-            ) : (
-              <div className="budget-note">
-                <Sparkles size={16} />
-                <span>이 예산은 가계부의 소비 기준이에요. 자산과 독립적으로 관리돼요.</span>
+              <div className="progress-track">
+                <div style={{ width: `${Math.min(percent, 100)}%` }} />
               </div>
-            )}
-          </section>
+              <div className="progress-labels">
+                <span>사용 {won(budgetExpense)}원</span>
+                <span>예산 {won(budget)}원</span>
+              </div>
+              {includeDescendants ? (
+                <div className="linked-ledgers">
+                  {data.ledgers
+                    .filter(
+                      (l) =>
+                        l.id !== ledger.id &&
+                        (ledger.id === ALL_LEDGERS_ID ||
+                          ledgerDescendantIds(data.ledgers, ledger.id).has(l.id)),
+                    )
+                    .map((l) => (
+                      <button key={l.id} onClick={() => onNavigate(l.id)}>
+                        <UgaLedgerIcon value={l.icon} size={24} />
+                        <span>{l.name}</span>
+                        <span className="muted">연결됨</span>
+                        <ChevronRight size={15} />
+                      </button>
+                    ))}
+                  {!data.ledgers.some((l) => l.parentId === ledger.id) && (
+                    <p className="small muted">하위 가계부를 추가하면 이곳에 함께 보여요.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="budget-note">
+                  <Sparkles size={16} />
+                  <span>이 예산은 가계부의 소비 기준이에요. 자산과 독립적으로 관리돼요.</span>
+                </div>
+              )}
+            </section>
+          )}
           <section className="panel categories-panel">
             <div className="panel-title">
               <h2>많이 쓴 곳</h2>
-              <span className="muted small">이번 달 지출</span>
+              <span className="muted small">조회 기간 지출</span>
             </div>
             <label className="ledger-category-select small muted">
               요약할 태그 유형

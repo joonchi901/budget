@@ -3,10 +3,12 @@ import type { Plan } from './planning';
 import type { AssetDetails } from './assets';
 export type TransactionType = 'expense' | 'income';
 export type OwnerId = 'u1' | 'u2' | 'shared';
+export type UserRole = 'admin' | 'user';
 export interface User {
   id: 'u1' | 'u2';
   name: string;
   color: string;
+  role?: UserRole;
 }
 export interface Ledger {
   id: string;
@@ -19,6 +21,7 @@ export interface Ledger {
   endDate: string | null;
   archived: boolean;
   version: number;
+  sortOrder?: number;
   periodStartDay?: number;
   fixedExpenseTagIds?: string[];
   tagMappings?: Record<string, string>;
@@ -126,6 +129,7 @@ export interface Bootstrap {
   assetOperations: AssetOperation[];
   assetMovements: AssetMovement[];
   revision: number;
+  hierarchyVersion?: number;
   mode: 'demo' | 'production';
   plans?: Plan[];
 }
@@ -142,6 +146,8 @@ export interface TransactionMutation {
 }
 export interface MutationResult {
   revision: number;
+  hierarchyVersion?: number;
+  user?: User;
   transaction?: Transaction;
   ledger?: Ledger;
   asset?: Asset;

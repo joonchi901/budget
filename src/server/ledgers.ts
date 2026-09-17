@@ -1,7 +1,14 @@
 import type { MutationResult } from '../shared/types';
 import type { Session } from './auth';
 import { ApiError, requireValue } from './errors';
-import { commit, ledgerById } from './storage';
+import { combineGuards, commit, existsGuard, ledgerById } from './storage';
+import {
+  adminHierarchyGuard,
+  checkHierarchyVersion,
+  hierarchyIncrement,
+  hierarchyVersion,
+  requireAdmin,
+} from './hierarchy';
 import { identity, text, date, money, version, type ObjectBody } from './validation';
 import type { Ledger } from '../shared/types';
 
@@ -46,6 +53,63 @@ async function settings(db: D1Database, h: string, body: ObjectBody, current?: L
   };
 }
 
+interface Node {
+  id: string;
+  parent_id: string | null;
+  sort_order: number;
+}
+
+async function tree(db: D1Database, householdId: string): Promise<Node[]> {
+  return (
+    await db
+      .prepare(
+        'SELECT id,parent_id,sort_order FROM ledgers WHERE household_id=? ORDER BY sort_order,id',
+      )
+      .bind(householdId)
+      .all<Node>()
+  ).results;
+}
+
+function parentValue(value: unknown): string | null {
+  return value == null ? null : text(value, '상위 가계부');
+}
+
+function validateParent(nodes: Node[], id: string, parentId: string | null) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  requireValue(parentId === null || byId.has(parentId), '같은 가구의 가계부를 선택해 주세요.');
+  const visited = new Set<string>([id]);
+  let ancestor = parentId;
+  while (ancestor) {
+    requireValue(!visited.has(ancestor), '자기 자신이나 하위 가계부 안으로 이동할 수 없습니다.');
+    visited.add(ancestor);
+    ancestor = byId.get(ancestor)?.parent_id ?? null;
+  }
+}
+
+function placement(nodes: Node[], id: string, parentId: string | null, before: unknown) {
+  const siblings = nodes
+    .filter((node) => node.parent_id === parentId && node.id !== id)
+    .map((node) => node.id);
+  const beforeId = before == null ? null : text(before, '순서 기준 가계부');
+  requireValue(
+    beforeId === null || siblings.includes(beforeId),
+    '같은 상위 가계부에 속한 다른 가계부를 순서 기준으로 선택해 주세요.',
+  );
+  const at = beforeId === null ? siblings.length : siblings.indexOf(beforeId);
+  siblings.splice(at, 0, id);
+  return { ids: siblings, sortOrder: at };
+}
+
+function normalizeOrder(db: D1Database, householdId: string, ids: string[]) {
+  const order = JSON.stringify(ids);
+  return db
+    .prepare(
+      `UPDATE ledgers SET sort_order=CAST((SELECT key FROM json_each(?) WHERE value=ledgers.id) AS INTEGER),version=version+1
+    WHERE household_id=? AND id IN (SELECT value FROM json_each(?)) AND sort_order!=CAST((SELECT key FROM json_each(?) WHERE value=ledgers.id) AS INTEGER)`,
+    )
+    .bind(order, householdId, order, order);
+}
+
 export async function createLedger(
   db: D1Database,
   session: Session,
@@ -53,31 +117,33 @@ export async function createLedger(
 ): Promise<MutationResult> {
   const op = await identity(db, session, body, 'ledger.create');
   if (op.previous) return op.previous;
+  await requireAdmin(db, session);
+  const expectedHierarchyVersion = hierarchyVersion(body.expectedHierarchyVersion);
+  await checkHierarchyVersion(db, session, expectedHierarchyVersion);
   const name = text(body.name, '가계부 이름', 60);
   const icon = body.icon ? text(body.icon, '아이콘', 16) : '📒';
   const budget = money(body.budget, true);
   const start = body.startDate ? date(body.startDate, '시작일') : null;
   const end = body.endDate ? date(body.endDate, '종료일') : null;
   requireValue(!start || !end || start <= end, '종료일은 시작일보다 빠를 수 없습니다.');
-  const parentId = body.parentId == null ? null : text(body.parentId, '메인 가계부');
-  if (parentId) {
-    const parent = await ledgerById(db, session.householdId, parentId);
-    requireValue(parent?.kind === 'main', '같은 가구의 메인 가계부에만 연결할 수 있습니다.');
-  }
+  const parentId = parentValue(body.parentId);
   const id = crypto.randomUUID();
+  const nodes = await tree(db, session.householdId);
+  validateParent(nodes, id, parentId);
+  const order = placement(nodes, id, parentId, body.beforeId);
   const config = await settings(db, session.householdId, body);
   return commit(db, session, {
     ...op,
     entityId: id,
     entityType: 'ledger',
     ledgerId: id,
-    guardSql: 'SELECT 1',
-    guardBindings: [],
+    expectedHierarchyVersion,
+    ...combineGuards([adminHierarchyGuard(session, expectedHierarchyVersion)]),
     statements: [
       db
         .prepare(
-          `INSERT INTO ledgers (id, household_id, name, icon, kind, parent_id, budget, start_date, end_date,period_start_day,fixed_expense_tag_ids,tag_mappings)
-      VALUES (?, ?, ?, ?, 'purpose', ?, ?, ?, ?,?,?,?)`,
+          `INSERT INTO ledgers (id, household_id, name, icon, kind, parent_id, budget, start_date, end_date,period_start_day,fixed_expense_tag_ids,tag_mappings,sort_order)
+        VALUES (?, ?, ?, ?, 'purpose', ?, ?, ?, ?,?,?,?,?)`,
         )
         .bind(
           id,
@@ -91,7 +157,10 @@ export async function createLedger(
           config.day,
           config.fixed,
           config.mappings,
+          order.sortOrder,
         ),
+      normalizeOrder(db, session.householdId, order.ids),
+      hierarchyIncrement(db, session.householdId),
     ],
   });
 }
@@ -104,12 +173,26 @@ export async function patchLedger(
 ): Promise<MutationResult> {
   const op = await identity(db, session, body, `ledger.patch:${id}`);
   if (op.previous) return op.previous;
+  const structural = ['parentId', 'beforeId', 'sortOrder', 'archived'].some((key) =>
+    Object.hasOwn(body, key),
+  );
+  let expectedHierarchyVersion: number | undefined;
+  if (structural) {
+    await requireAdmin(db, session);
+    expectedHierarchyVersion = hierarchyVersion(body.expectedHierarchyVersion);
+    await checkHierarchyVersion(db, session, expectedHierarchyVersion);
+  }
+  requireValue(
+    !Object.hasOwn(body, 'sortOrder'),
+    '순서는 이동할 위치의 가계부를 기준으로 변경해 주세요.',
+  );
   const expected = version(body.expectedVersion);
   const current = await ledgerById(db, session.householdId, id);
   if (!current) throw new ApiError(404, 'NOT_FOUND', '가계부를 찾을 수 없습니다.');
   requireValue(
     [
       'parentId',
+      'beforeId',
       'archived',
       'budget',
       'name',
@@ -122,27 +205,27 @@ export async function patchLedger(
     ].some((key) => Object.hasOwn(body, key)),
     '변경할 내용을 입력해 주세요.',
   );
-  const parentId = Object.hasOwn(body, 'parentId')
-    ? body.parentId == null
-      ? null
-      : text(body.parentId, '메인 가계부')
-    : current.parentId;
-  requireValue(
-    current.kind === 'purpose' || parentId === null,
-    '메인 가계부를 다른 가계부에 연결할 수 없습니다.',
-  );
-  if (parentId) {
-    const parent = await ledgerById(db, session.householdId, parentId);
-    requireValue(
-      parent?.kind === 'main' && parent.id !== id,
-      '메인 가계부에 한 단계로 연결해 주세요.',
-    );
+  const parentId = Object.hasOwn(body, 'parentId') ? parentValue(body.parentId) : current.parentId;
+  const parentChanged = parentId !== current.parentId;
+  let sortOrder = current.sortOrder ?? 0;
+  const orderStatements: D1PreparedStatement[] = [];
+  if (parentChanged || Object.hasOwn(body, 'beforeId')) {
+    const nodes = await tree(db, session.householdId);
+    validateParent(nodes, id, parentId);
+    const order = placement(nodes, id, parentId, body.beforeId);
+    sortOrder = order.sortOrder;
+    if (parentChanged) {
+      const oldSiblings = nodes
+        .filter((node) => node.parent_id === current.parentId && node.id !== id)
+        .map((node) => node.id);
+      orderStatements.push(normalizeOrder(db, session.householdId, oldSiblings));
+    }
+    orderStatements.push(normalizeOrder(db, session.householdId, order.ids));
   }
   const budget = Object.hasOwn(body, 'budget') ? money(body.budget, true) : current.budget;
   if (Object.hasOwn(body, 'archived'))
     requireValue(typeof body.archived === 'boolean', '보관 여부가 올바르지 않습니다.');
   const archived = Object.hasOwn(body, 'archived') ? Boolean(body.archived) : current.archived;
-  requireValue(current.kind !== 'main' || !archived, '메인 가계부는 보관할 수 없습니다.');
   const name = body.name === undefined ? current.name : text(body.name, '가계부 이름', 60);
   const icon = body.icon === undefined ? current.icon : text(body.icon, '아이콘', 16);
   const start =
@@ -158,22 +241,34 @@ export async function patchLedger(
         ? date(body.endDate, '종료일')
         : null;
   requireValue(!start || !end || start <= end, '종료일은 시작일보다 빠를 수 없습니다.');
-  const config = await settings(db, session.householdId, body, current);
+  // Mappings describe this node's immediate parent, so they must never follow a move.
+  const config = await settings(
+    db,
+    session.householdId,
+    parentChanged ? { ...body, tagMappings: {} } : body,
+    current,
+  );
   return commit(db, session, {
     ...op,
     entityId: id,
     entityType: 'ledger',
     ledgerId: id,
-    guardSql:
-      'SELECT CASE WHEN EXISTS (SELECT 1 FROM ledgers WHERE household_id = ? AND id = ? AND version = ?) THEN 1 ELSE 0 END',
-    guardBindings: [session.householdId, id, expected],
+    expectedHierarchyVersion,
+    ...combineGuards([
+      existsGuard('ledgers', session.householdId, id, expected),
+      ...(expectedHierarchyVersion === undefined
+        ? []
+        : [adminHierarchyGuard(session, expectedHierarchyVersion)]),
+    ]),
     statements: [
       db
         .prepare(
-          'UPDATE ledgers SET parent_id=?,budget=?,archived=?,name=?,icon=?,start_date=?,end_date=?,period_start_day=?,fixed_expense_tag_ids=?,tag_mappings=?,version=version+1 WHERE household_id=? AND id=?',
+          'UPDATE ledgers SET parent_id=?,kind=?,sort_order=?,budget=?,archived=?,name=?,icon=?,start_date=?,end_date=?,period_start_day=?,fixed_expense_tag_ids=?,tag_mappings=?,version=version+1 WHERE household_id=? AND id=?',
         )
         .bind(
           parentId,
+          parentId !== null ? 'purpose' : current.kind,
+          sortOrder,
           budget,
           Number(archived),
           name,
@@ -186,6 +281,10 @@ export async function patchLedger(
           session.householdId,
           id,
         ),
+      ...orderStatements,
+      ...(expectedHierarchyVersion === undefined
+        ? []
+        : [hierarchyIncrement(db, session.householdId)]),
     ],
   });
 }

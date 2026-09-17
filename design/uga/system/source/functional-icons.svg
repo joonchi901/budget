@@ -1,0 +1,69 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg">
+  <title>우가 기능 아이콘 원형 — 캐릭터와 분리된 8종</title>
+  <symbol id="icon-home" viewBox="0 0 64 64">
+    <g stroke="#39251b" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+      <path fill="#ceb18f" d="M7 54c2-13 8-28 17-39 4-6 12-7 17-1 8 8 14 26 17 40Z" />
+      <path fill="#edd6b9" stroke="none" d="M16 48c3-12 8-24 14-30l-6 2c-7 9-11 20-13 28Z" />
+      <path fill="#694833" d="M22 54V41c0-16 20-16 20 0v13Z" />
+      <path fill="#f5c268" d="M29 54V43c0-5 6-5 6 0v11Z" stroke="none" />
+      <path d="M5 55h54" fill="none" />
+    </g>
+  </symbol>
+  <symbol id="icon-ledger" viewBox="0 0 64 64">
+    <g stroke="#39251b" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+      <path fill="#e5cbb0" d="M13 9c10-3 27-3 39 0l3 44c-13 4-31 4-45 0Z" />
+      <path fill="#fff4df" d="M19 9c9-1 20-1 30 1l2 38c-9 2-22 2-32 1Z" />
+      <path d="m25 19 16-1m-16 10 18-1m-18 10 11-1" stroke="#b3906b" stroke-width="3" />
+      <path d="m10 18 8-1m-8 11 8-1m-8 12 8-1" />
+      <path fill="#f2bd56" d="m43 41 10-8 5 6-10 8-7 1Z" />
+    </g>
+  </symbol>
+  <symbol id="icon-assets" viewBox="0 0 64 64">
+    <g stroke="#39251b" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+      <path fill="#eac891" d="M20 22C10 33 6 45 14 53c8 8 32 8 40-1 7-9 0-22-12-31Z" />
+      <path fill="#f1d9ae" d="M24 22c-4-4-8-9-5-13 3-3 7-1 11 2 5-6 10-6 12-2 6-3 9-1 9 3-1 5-5 8-10 12Z" />
+      <path d="m22 24 19 1" fill="none" />
+      <path fill="none" d="m22 35 4 13 6-12 6 12 4-13m-22 7h24" stroke-width="3.5" />
+    </g>
+  </symbol>
+  <symbol id="icon-payments" viewBox="0 0 64 64">
+    <g stroke="#39251b" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="8" y="15" width="49" height="37" rx="8" fill="#d4b493" />
+      <path fill="#f8e8d1" d="M8 25h49v11H8Z" />
+      <path fill="#fff4df" d="m20 39 14-7c0-4 4-7 7-5 3 1 3 4 1 6 4 1 4 5 1 7-3 2-6 1-8-1l-14 8c0 4-4 6-7 4-3-1-3-4-1-6-4-1-4-5-1-7 3-2 6-1 8 1Z" stroke-width="3" />
+    </g>
+  </symbol>
+  <symbol id="icon-analytics" viewBox="0 0 64 64">
+    <g stroke="#39251b" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 10v44h46" fill="none" />
+      <path fill="#b6d2b5" d="M18 35h8v19h-8Z" />
+      <path fill="#f2bd56" d="M32 24h8v30h-8Z" />
+      <path fill="#ee9a7c" d="M46 12h8v42h-8Z" />
+      <path d="m16 25 13-12 8 4 8-10" fill="none" stroke="#b08a60" stroke-width="3" />
+    </g>
+  </symbol>
+  <symbol id="icon-planning" viewBox="0 0 64 64">
+    <g stroke="#39251b" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+      <path fill="#f7e4c8" d="m12 10 38-2 4 48-44-1Z" />
+      <path fill="#efb443" d="m12 10 38-2 1 13-40 2Z" />
+      <path d="M21 6v10M40 5v10" fill="none" />
+      <path fill="#94bc80" d="m23 33 7 6 12-14 6 6-17 16-13-9Z" stroke-width="3" />
+    </g>
+  </symbol>
+  <symbol id="icon-tags" viewBox="0 0 64 64">
+    <g stroke="#39251b" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+      <path fill="#efb443" d="m11 9 21 1 24 26-19 20-27-24Z" />
+      <circle cx="22" cy="22" r="4" fill="#fff4df" stroke-width="3" />
+      <path d="m34 31 9 9m-15-3 9 9" fill="none" stroke="#9c632e" stroke-width="3" />
+    </g>
+  </symbol>
+  <symbol id="icon-data" viewBox="0 0 64 64">
+    <g stroke="#39251b" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+      <path fill="#cfb494" d="M12 11c12-3 27-3 40 0l-1 45H13Z" />
+      <path fill="#fff4df" d="M21 10c6-1 17-1 22 0l1 16-11-4-11 4Z" />
+      <path d="M21 37h21m-21 9h14" fill="none" stroke="#997551" stroke-width="3" />
+      <path fill="#94bc80" d="m45 40 11 3-3 13-12-3Z" stroke-width="3" />
+    </g>
+  </symbol>
+</svg>

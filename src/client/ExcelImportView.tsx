@@ -1,7 +1,7 @@
 import { SelectField, SelectOption, SelectGroup } from './SelectField';
 import { FileField } from './FileField';
 import { useRef, useState } from 'react';
-import { FileSpreadsheet } from 'lucide-react';
+import { UgaIcon } from './brand/Uga';
 import type { Bootstrap } from '../shared/types';
 import type { BudgetBackup, RestorePreview } from '../shared/data';
 import { originalTransactions, readXlsx, cellValue, type Workbook } from '../shared/xlsx';
@@ -20,10 +20,11 @@ interface Props {
   onNotice(message: string): void;
 }
 export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
+  const isAdmin = data.user.role === 'admin';
   const [book, setBook] = useState<Workbook | null>(null),
     [fileName, setFileName] = useState('');
   const [sourceId, setSourceId] = useState(''),
-    [ledgerId, setLedgerId] = useState(data.ledgers.find((l) => l.kind === 'main')?.id ?? '');
+    [ledgerId, setLedgerId] = useState(data.ledgers.find((l) => !l.archived)?.id ?? '');
   const [newLedgerName, setNewLedgerName] = useState('엑셀 가계부');
   const [payments, setPayments] = useState<NonNullable<WorkbookImportOptions['payments']>>({});
   const [corrections, setCorrections] = useState<NonNullable<WorkbookImportOptions['corrections']>>(
@@ -85,7 +86,7 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
     }
   }
   async function inspect() {
-    if (!book) return;
+    if (!book || !isAdmin) return;
     setBusy(true);
     clearPreview();
     try {
@@ -114,7 +115,7 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
     }
   }
   async function apply() {
-    if (busy) return;
+    if (busy || !isAdmin) return;
     if (!pending.current && preview && confirmed && !preview.server.issues.length)
       pending.current = {
         mutationId: crypto.randomUUID(),
@@ -144,6 +145,7 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
         setUncertain(false);
         clearPreview();
         setError((e as Error).message);
+        if (e.status === 403 || e.status === 409) await onChanged();
       } else setUncertain(true);
     } finally {
       setBusy(false);
@@ -152,7 +154,7 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
   return (
     <section className="panel data-panel" aria-label="엑셀 가져오기">
       <h2>
-        <FileSpreadsheet size={20} /> 기존 엑셀 가져오기
+        <UgaIcon name="data" size={24} /> 기존 엑셀 가져오기
       </h2>
       <p className="muted small">
         월별 거래·계획·카드·통장·자산·분류를 함께 읽어요. 원본 수식은 실행하지 않고 저장된 값과
@@ -171,7 +173,13 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
           </button>
         </div>
       )}
-      <fieldset disabled={busy || uncertain}>
+      {!isAdmin && (
+        <p className="small muted">
+          가계부와 관리 항목을 함께 구성하는 엑셀 가져오기는 관리자만 할 수 있어요. 기존 가계부에
+          거래를 추가하려면 CSV 가져오기를 이용해 주세요.
+        </p>
+      )}
+      <fieldset disabled={busy || uncertain || !isAdmin}>
         <label>
           원본 가계부 XLSX
           <FileField accept=".xlsx" onChange={(e) => void load(e.target.files?.[0])} />

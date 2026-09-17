@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="우가 기능 아이콘 — tags">
+  <title>우가 기능 아이콘 — tags</title>
+  <g stroke="#39251b" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+    <path fill="#efb443" d="m11 9 21 1 24 26-19 20-27-24Z" />
+    <circle cx="22" cy="22" r="4" fill="#fff4df" stroke-width="3" />
+    <path d="m34 31 9 9m-15-3 9 9" fill="none" stroke="#9c632e" stroke-width="3" />
+  </g>
+</svg>

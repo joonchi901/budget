@@ -14,6 +14,7 @@ import {
   transactionsCsv,
 } from '../../src/shared/analytics';
 import { visibleTransactions } from '../../src/shared/selectors';
+import { ALL_LEDGERS_ID } from '../../src/shared/hierarchy';
 const ledger = (id: string, more: Partial<Ledger> = {}): Ledger => ({
   id,
   name: id,
@@ -83,6 +84,45 @@ function data(): Bootstrap {
   };
 }
 describe('complete analysis views', () => {
+  it('aggregates arbitrary subtrees and partitions root or child contributions without double-counting', () => {
+    const d = data();
+    d.ledgers.push(
+      ledger('grandchild', { kind: 'purpose', parentId: 'child', tagMappings: { meal: 'trip' } }),
+      ledger('other-root', { kind: 'purpose' }),
+    );
+    d.transactions = [
+      tx('root', { amount: 100 }),
+      tx('child', { ledgerId: 'child', amount: 200 }),
+      tx('grandchild', { ledgerId: 'grandchild', amount: 300, tagIds: ['meal'] }),
+      tx('grandchild', { ledgerId: 'grandchild', amount: 300, tagIds: ['meal'] }),
+      tx('other', { ledgerId: 'other-root', amount: 400 }),
+    ];
+    const filter = { ledgerId: 'main', startDate: '2026-09-01', endDate: '2026-09-30' };
+    const selected = analysisTransactions(d, { ...filter, sourceLedgerId: 'child' });
+    expect(selected.map((row) => row.id)).toEqual(['child', 'grandchild']);
+    expect(selected.find((row) => row.id === 'grandchild')?.tagIds).toEqual(['food']);
+    expect(analysisTransactions(d, { ...filter, ledgerId: 'child' }).map((row) => row.id)).toEqual([
+      'child',
+      'grandchild',
+    ]);
+    const groups = ledgerAnalysis(d, analysisTransactions(d, filter), 'main');
+    expect(groups.map((group) => [group.id, group.expense])).toEqual([
+      ['main', 100],
+      ['child', 500],
+    ]);
+    const all = analysisTransactions(d, { ...filter, ledgerId: ALL_LEDGERS_ID });
+    expect(
+      ledgerAnalysis(d, all, ALL_LEDGERS_ID).map((group) => [group.id, group.expense]),
+    ).toEqual([
+      ['main', 600],
+      ['other-root', 400],
+    ]);
+    expect(all.find((row) => row.id === 'grandchild')?.tagIds).toEqual(['meal']);
+    d.ledgers.find((item) => item.id === 'child')!.parentId = 'other-root';
+    expect(analysisTransactions(d, filter).map((row) => row.id)).toEqual(['root']);
+    expect(analysisTransactions(d, { ...filter, ledgerId: 'other-root' })).toHaveLength(3);
+    expect(d.transactions[2].tagIds).toEqual(['meal']);
+  });
   it('maps child classification in the parent without modifying or duplicating original transactions', () => {
     const d = data();
     const original = tx('x', { ledgerId: 'child', tagIds: ['trip', 'food'] });
@@ -313,7 +353,9 @@ describe('complete analysis views', () => {
       { id: 'child', name: 'child (보관)', income: 0, expense: 300, count: 1, expenseShare: 0.75 },
     ]);
     expect(
-      analysisTransactions(d, { ...filter, sourceLedgerId: 'main' }).map((row) => row.id),
+      analysisTransactions(d, { ...filter, sourceLedgerId: 'main', includeDescendants: false }).map(
+        (row) => row.id,
+      ),
     ).toEqual(['main']);
     expect(analysisTransactions(d, { ...filter, sourceLedgerId: 'detached' })).toEqual([]);
     d.ledgers[1].parentId = null;

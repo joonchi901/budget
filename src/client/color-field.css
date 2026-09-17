@@ -6,21 +6,21 @@
   max-width: 100%;
   min-height: 44px;
   padding: 0 12px;
-  border: 1px solid var(--line, #e5e8eb);
-  border-radius: 12px;
-  background: var(--surface, white);
+  border: 1px solid var(--line);
+  border-radius: var(--brand-radius-control);
+  background: var(--surface);
 }
 .color-field:focus-within {
-  border-color: var(--blue-strong, #1b64da);
-  outline: 2px solid var(--blue-soft, #e8f3ff);
-  outline-offset: 2px;
+  border-color: var(--blue-strong);
+  outline: var(--brand-focus-width) solid var(--brand-focus-ring);
+  outline-offset: var(--brand-focus-offset);
 }
 .color-field-swatch {
   width: 24px;
   height: 24px;
   flex-shrink: 0;
   border-radius: 7px;
-  box-shadow: inset 0 0 0 1px #191f2814;
+  box-shadow: inset 0 0 0 1px var(--shadow-color);
 }
 .color-field > input[type='text'] {
   min-width: 0;
@@ -33,7 +33,7 @@
   background: transparent;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
-  color: var(--text, #191f28);
+  color: var(--text);
 }
 .color-field > input[type='text']:focus-visible {
   outline: 0;

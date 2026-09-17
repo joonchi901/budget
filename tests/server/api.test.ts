@@ -500,6 +500,7 @@ describe('real Worker + D1 ledger API', () => {
     const unlinked = await call('/api/ledgers/trip', 'PATCH', {
       mutationId: 'unlink',
       expectedVersion: 1,
+      expectedHierarchyVersion: before.hierarchyVersion,
       parentId: null,
     });
     expect(unlinked.status).toBe(200);
@@ -509,6 +510,7 @@ describe('real Worker + D1 ledger API', () => {
     const relinked = await call('/api/ledgers/trip', 'PATCH', {
       mutationId: 'relink',
       expectedVersion: 2,
+      expectedHierarchyVersion: independent.hierarchyVersion,
       parentId: 'main',
       budget: 9900000,
     });
@@ -637,18 +639,60 @@ describe('real Worker + D1 ledger API', () => {
   });
 
   test('WebSocket upgrades require a valid session, allowed origin and owned ledger', async () => {
-    const unauthorized = await runtime.dispatchFetch('http://localhost/api/ws?ledgerId=main', {
-      headers: { Upgrade: 'websocket', Origin: 'http://localhost' },
-    });
-    expect(unauthorized.status).toBe(401);
-    const crossOrigin = await runtime.dispatchFetch('http://localhost/api/ws?ledgerId=main', {
-      headers: { Upgrade: 'websocket', Cookie: cookie1, Origin: 'https://evil.example' },
-    });
-    expect(crossOrigin.status).toBe(403);
+    for (const ledgerId of ['main', '__all__']) {
+      const unauthorized = await runtime.dispatchFetch(
+        `http://localhost/api/ws?ledgerId=${ledgerId}`,
+        {
+          headers: { Upgrade: 'websocket', Origin: 'http://localhost' },
+        },
+      );
+      expect(unauthorized.status).toBe(401);
+      const crossOrigin = await runtime.dispatchFetch(
+        `http://localhost/api/ws?ledgerId=${ledgerId}`,
+        {
+          headers: { Upgrade: 'websocket', Cookie: cookie1, Origin: 'https://evil.example' },
+        },
+      );
+      expect(crossOrigin.status).toBe(403);
+    }
     const wrongLedger = await runtime.dispatchFetch('http://localhost/api/ws?ledgerId=missing', {
       headers: { Upgrade: 'websocket', Cookie: cookie1, Origin: 'http://localhost' },
     });
     expect(wrongLedger.status).toBe(404);
+  });
+
+  test('the virtual overall view joins presence and receives household revisions without claiming original edit cursors', async () => {
+    expect((await snapshot()).ledgers.some((ledger) => ledger.id === '__all__')).toBe(false);
+    const a = await connect(cookie1, '__all__');
+    const b = await connect(cookie2, '__all__');
+    await vi.waitFor(() => {
+      const peers = a.events.filter((event) => event.type === 'presence').at(-1)?.peers;
+      expect(peers).toEqual([
+        expect.objectContaining({ userId: 'u2', ledgerId: '__all__', transactionId: null }),
+      ]);
+    });
+    b.socket.send(
+      JSON.stringify({
+        type: 'presence',
+        ledgerId: '__all__',
+        transactionId: 'demo-flight',
+        field: 'amount',
+      }),
+    );
+    await vi.waitFor(() => expect(b.events.some((event) => event.type === 'error')).toBe(true));
+    const peers = a.events.filter((event) => event.type === 'presence').at(-1)?.peers;
+    expect(peers).toEqual([
+      expect.objectContaining({ userId: 'u2', ledgerId: '__all__', transactionId: null }),
+    ]);
+    const saved = await create(expense({ ledgerId: 'trip' }));
+    await vi.waitFor(() => {
+      for (const connection of [a, b])
+        expect(
+          connection.events.some(
+            (event) => event.type === 'revision' && event.revision === saved.revision,
+          ),
+        ).toBe(true);
+    });
   });
 
   test('a silently expired session receives a sign-in notice instead of later financial revisions', async () => {
@@ -1324,6 +1368,7 @@ describe('real Worker + D1 ledger API', () => {
       {
         expectedVersion: 1,
         name: '여행 기록',
+        expectedHierarchyVersion: before.hierarchyVersion,
         startDate: '2026-09-01',
         endDate: '2026-09-10',
         archived: true,
@@ -1345,9 +1390,10 @@ describe('real Worker + D1 ledger API', () => {
           mutationId: crypto.randomUUID(),
           expectedVersion: 2,
           archived: true,
+          expectedHierarchyVersion: after.hierarchyVersion,
         })
       ).status,
-    ).toBe(400);
+    ).toBe(200);
     expect(
       (
         await call('/api/ledgers/main', 'PATCH', {

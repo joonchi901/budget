@@ -1,0 +1,134 @@
+/* Uga foundations. Shared by the design-system board and, after review, the app.
+ * Keep palette/semantic values here. Do not use brand colors to rewrite saved
+ * tag, payment-method, ledger, or user color data.
+ */
+:root {
+  /* Reference 1: brand palette. Light swatches are illustration/fill colors. */
+  --brand-brown: #5b4636;
+  --brand-coral: #f08a5d;
+  --brand-sand: #f6e1c7;
+  --brand-mint: #a7d7c5;
+  --brand-sky: #7cc7f2;
+  --brand-cream: #faf8f4;
+  --brand-charcoal: #4b4b4b;
+
+  /* Reference 2: the accepted bearded Uga character. Illustration only. */
+  --brand-character-hair: #482a1a;
+  --brand-character-outline: #2d180e;
+  --brand-character-skin: #ffc493;
+  --brand-character-cheek: #f69c7e;
+  --brand-character-tunic: #e8ad3f;
+  --brand-character-bone: #fff3df;
+
+  /* Actions: brown anchors the UI; coral is an accent, never pale body text. */
+  --brand-primary: var(--brand-brown);
+  --brand-primary-hover: #493528;
+  --brand-primary-active: #3a281d;
+  --brand-on-primary: #ffffff;
+  --brand-accent: #ad4f2c;
+  --brand-accent-soft: #fff0e6;
+  --brand-accent-hover: #fbe4d3;
+  --brand-accent-line: #dfad8e;
+
+  /* Text and surfaces. Body copy keeps the information density of the app. */
+  --brand-text: #382b23;
+  --brand-text-secondary: #69574a;
+  --brand-muted: #75665a;
+  --brand-subtle: #77685c;
+  --brand-canvas: var(--brand-cream);
+  --brand-surface: #fffefa;
+  --brand-surface-subtle: #fbf6ee;
+  --brand-surface-muted: #f3ece2;
+  --brand-surface-hover: #f7f0e7;
+  --brand-surface-glass: #fffefaf5;
+  --brand-line: #e9dfd2;
+  --brand-line-strong: #9b8674;
+  --brand-disabled-bg: #f1e9df;
+  --brand-disabled-text: #817469;
+
+  /* Financial and feedback semantics stay distinct from selection. */
+  --brand-success: #38735b;
+  --brand-success-soft: #eaf5ef;
+  --brand-success-line: #a7d7c5;
+  --brand-danger: #ae393b;
+  --brand-danger-soft: #fff0ed;
+  --brand-danger-line: #ecc1b8;
+  --brand-warning: #8b611c;
+  --brand-warning-soft: #fff4d8;
+  --brand-warning-line: #e8c578;
+  --brand-info: #286588;
+  --brand-info-soft: #eaf6fd;
+  --brand-info-line: #a2cce4;
+
+  /* Focus uses an opaque, contrasting outline, not only a faint shadow. */
+  --brand-focus-ring: var(--brand-accent);
+  --brand-focus-soft: #f08a5d26;
+  --brand-focus-width: 3px;
+  --brand-focus-offset: 3px;
+  --brand-backdrop: #382b2366;
+  --brand-shadow-color: #5b46360c;
+  --brand-shadow-deep: #5b463624;
+  --brand-shadow-card: 0 1px 2px #5b463604, 0 4px 18px #5b463608;
+  --brand-shadow-raised: 0 2px 5px #5b46360a, 0 10px 28px #5b463612;
+  --brand-shadow-popover: 0 4px 14px #5b463612, 0 16px 48px #5b463624;
+  --brand-shadow-button: 0 2px 3px #5b463614;
+
+  /* Existing OS fonts support Korean without a new font dependency. */
+  --brand-font-body:
+    -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Segoe UI',
+    sans-serif;
+  --brand-font-size-xs: 0.75rem;
+  --brand-font-size-caption: 0.8125rem;
+  --brand-font-size-sm: 0.875rem;
+  --brand-font-size-body: 0.9375rem;
+  --brand-font-size-md: 1rem;
+  --brand-font-size-section: 1.1875rem;
+  --brand-font-size-title: 1.875rem;
+  --brand-font-size-amount: 2.25rem;
+  --brand-font-weight-regular: 400;
+  --brand-font-weight-medium: 500;
+  --brand-font-weight-semibold: 650;
+  --brand-font-weight-bold: 750;
+  --brand-line-height-tight: 1.25;
+  --brand-line-height-heading: 1.35;
+  --brand-line-height-body: 1.5;
+  --brand-line-height-caption: 1.6;
+  --brand-letter-spacing-body: -0.025em;
+  --brand-letter-spacing-heading: -0.045em;
+
+  /* 4px rhythm with 2px optical adjustments. Concentric nested corners. */
+  --brand-space-1: 4px;
+  --brand-space-2: 8px;
+  --brand-space-3: 12px;
+  --brand-space-4: 16px;
+  --brand-space-5: 20px;
+  --brand-space-6: 24px;
+  --brand-space-8: 32px;
+  --brand-space-10: 40px;
+  --brand-space-12: 48px;
+  --brand-radius-xs: 6px;
+  --brand-radius-sm: 10px;
+  --brand-radius-control: 14px;
+  --brand-radius-card: 22px;
+  --brand-radius-dialog: 28px;
+  --brand-radius-pill: 999px;
+  --brand-control-size: 44px;
+  --brand-field-size: 48px;
+  --brand-icon-sm: 16px;
+  --brand-icon-md: 20px;
+  --brand-icon-lg: 24px;
+
+  /* No entrance animation for dense ledger views. Interruptible feedback. */
+  --brand-motion-fast: 120ms;
+  --brand-motion-normal: 160ms;
+  --brand-motion-slow: 220ms;
+  --brand-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --brand-motion-fast: 0ms;
+    --brand-motion-normal: 0ms;
+    --brand-motion-slow: 0ms;
+  }
+}

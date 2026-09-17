@@ -85,6 +85,30 @@ function data(patch: Partial<PlanningData> = {}): PlanningData {
 }
 
 describe('planning periods and actuals', () => {
+  it('supports plans on any subtree and composes deep mappings while keeping budgets independent', () => {
+    const source = data({
+      transactions: [
+        tx('trip', { ledgerId: 'trip', amount: 200 }),
+        tx('deep', { ledgerId: 'deep', amount: 300, tagIds: ['meal'] }),
+      ],
+      tags: [tag('food', 'category')],
+      plans: [
+        budget({ amount: 1000 }),
+        budget({ id: 'child-budget', ledgerId: 'trip', amount: 5000 }),
+      ],
+    });
+    source.ledgers.push(ledger('deep', 'purpose', 'trip'));
+    source.ledgers[1].tagMappings = { travel: 'food' };
+    source.ledgers[3].tagMappings = { meal: 'travel' };
+    expect(planActual(source, budget({ ledgerId: 'trip' }))).toBe(500);
+    expect(planActual(source, budget({ ledgerId: 'trip', includeLinked: false }))).toBe(200);
+    expect(planActual(source, budget({ budgetScope: 'category', tagIds: ['food'] }))).toBe(300);
+    expect(budgetSummary(source, 'main', '2026-09')).toMatchObject({ amount: 1000, expense: 500 });
+    source.ledgers[1].parentId = 'other';
+    expect(planActual(source, budget())).toBe(0);
+    expect(planActual(source, budget({ ledgerId: 'other' }))).toBe(500);
+    expect(plannedBudget(source, 'main', '2026-09')).toBe(1000);
+  });
   it('uses the parent tag mapping in category budgets without altering child records', () => {
     const source = data({
       tags: [
@@ -227,10 +251,104 @@ describe('planning periods and actuals', () => {
       periodEnd: '2026-09-30',
     });
     source.plans = [];
+    source.ledgers[1].startDate = '2026-08-25';
+    source.ledgers[1].endDate = '2026-09-30';
     expect(budgetSummary(source, 'trip', '2026-09')).toMatchObject({
       amount: 900,
       expense: 200,
       label: '전체 기간 예산',
+      periodStart: '2026-08-25',
+      periodEnd: '2026-09-30',
+    });
+  });
+  it('uses configured dates for period budgets and keeps unbounded ledgers monthly by default', () => {
+    const source = data({
+      transactions: [
+        tx('old', { date: '2025-12-31' }),
+        tx('this-month'),
+        tx('next-month', { date: '2026-10-01' }),
+      ],
+    });
+    source.ledgers[0].startDate = '2026-01-01';
+    source.ledgers[0].endDate = '2026-12-31';
+    expect(budgetSummary(source, 'main', '2026-09', { period: 'period' })).toMatchObject({
+      expense: 200,
+      periodStart: '2026-01-01',
+      periodEnd: '2026-12-31',
+    });
+    expect(budgetSummary(source, 'main', '2026-09', { period: 'year' })).toMatchObject({
+      amount: 0,
+      hasBudget: false,
+      expense: 200,
+      label: '2026 연간 예산',
+    });
+    expect(budgetSummary(source, 'main', '2026-09', { period: 'month' })).toMatchObject({
+      expense: 100,
+      periodStart: '2026-09-01',
+      periodEnd: '2026-09-30',
+    });
+    source.ledgers[0].startDate = null;
+    source.ledgers[0].endDate = null;
+    expect(budgetSummary(source, 'main', '2026-09')).toMatchObject({
+      expense: 100,
+      label: '2026-09 예산',
+    });
+  });
+  it('requires an exact annual plan instead of treating a monthly, child, or legacy budget as annual', () => {
+    const source = data({
+      transactions: [tx('january', { date: '2026-01-01' }), tx('september')],
+      plans: [
+        budget({ amount: 1000 }),
+        budget({
+          id: 'child-annual',
+          ledgerId: 'trip',
+          cadence: 'period',
+          startDate: '2026-01-01',
+          endDate: '2026-12-31',
+          amount: 8000,
+        }),
+        budget({
+          id: 'partial-period',
+          cadence: 'period',
+          startDate: '2026-01-01',
+          endDate: '2026-11-30',
+          amount: 2000,
+        }),
+      ],
+    });
+    expect(budgetSummary(source, 'main', '2026-09', { period: 'year' })).toMatchObject({
+      amount: 0,
+      hasBudget: false,
+      expense: 200,
+      periodStart: '2026-01-01',
+      periodEnd: '2026-12-31',
+    });
+    expect(budgetSummary(source, 'main', '2026-09')).toMatchObject({
+      amount: 1000,
+      hasBudget: true,
+    });
+    const annual = budget({
+      id: 'annual',
+      cadence: 'period',
+      startDate: '2026-01-01',
+      endDate: '2026-12-31',
+      amount: 12000,
+    });
+    source.plans!.push(annual);
+    expect(budgetSummary(source, 'main', '2026-09', { period: 'year' })).toMatchObject({
+      amount: 12000,
+      hasBudget: true,
+      expense: 200,
+    });
+    annual.amount = 0;
+    expect(budgetSummary(source, 'main', '2026-09', { period: 'year' })).toMatchObject({
+      amount: 0,
+      hasBudget: true,
+    });
+    annual.archived = true;
+    expect(budgetSummary(source, 'main', '2026-09', { period: 'year' })).toMatchObject({
+      amount: 0,
+      hasBudget: false,
     });
   });
   it('calculates payroll floor/ceiling allocations and shows overspending without creating records', () => {
@@ -300,6 +418,10 @@ describe('planning periods and actuals', () => {
     });
     expect(planActual(source, goal)).toBe(600);
     expect(planActual(source, { ...goal, assetId: 'deposit' })).toBe(400);
+    // A savings goal always uses household asset effects, even on a nested or moved ledger.
+    expect(planActual(source, { ...goal, ledgerId: 'trip', includeLinked: false })).toBe(600);
+    source.ledgers[1].parentId = 'other';
+    expect(planActual(source, { ...goal, ledgerId: 'trip', includeLinked: true })).toBe(600);
   });
   it('keeps manual event actuals separate from expense transactions', () => {
     const source = data({ transactions: [tx('expense')] });

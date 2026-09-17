@@ -1,7 +1,7 @@
 import { SelectField, SelectOption } from './SelectField';
 import { DateField } from './DateFields';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Info, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Info, Plus, Trash2 } from 'lucide-react';
 import type {
   Bootstrap,
   Transaction,
@@ -13,11 +13,13 @@ import type {
 import { RequestError, request } from './api';
 import { Dialog, labels, ownerName, useUnsavedGuard, won } from './components';
 import { TagFields } from './TagFields';
+import './transaction-form.css';
 
 interface Props {
   data: Bootstrap;
   ledgerId: string;
   month: string;
+  initialDate?: string;
   original?: Transaction;
   onClose(): void;
   onChanged(): Promise<void>;
@@ -30,6 +32,7 @@ interface PendingTransaction {
   body: TransactionMutation | { mutationId: string; expectedVersion?: number };
   deleting: boolean;
   automatic: boolean;
+  continueEntry?: boolean;
 }
 interface DeviceDraft {
   draft: TransactionInput;
@@ -90,7 +93,9 @@ function readDeviceDraft(key: string, ledgerId: string, originalId?: string): De
         !op.body ||
         typeof op.body.mutationId !== 'string' ||
         !/^[a-zA-Z0-9_-]+$/.test(op.body.mutationId) ||
-        typeof op.automatic !== 'boolean'
+        typeof op.automatic !== 'boolean' ||
+        (op.continueEntry !== undefined && typeof op.continueEntry !== 'boolean') ||
+        (op.continueEntry && (originalId || op.deleting || op.automatic))
       )
         return null;
       if (op.deleting) {
@@ -115,6 +120,7 @@ export default function TransactionForm({
   data,
   ledgerId,
   month,
+  initialDate,
   original,
   onClose,
   onSaved,
@@ -127,7 +133,7 @@ export default function TransactionForm({
     ? inputOf(original)
     : {
         ledgerId,
-        date: date.startsWith(month) ? date : `${month}-01`,
+        date: initialDate ?? (date.startsWith(month) ? date : `${month}-01`),
         description: '',
         amount: 0,
         type: 'expense',
@@ -139,7 +145,8 @@ export default function TransactionForm({
   const household =
     (data as Bootstrap & { householdId?: string }).householdId ??
     `${data.mode}:${data.ledgers.find((l) => l.kind === 'main')?.id ?? ledgerId}`;
-  const deviceKey = `budget:transaction-draft:v1:${encodeURIComponent(household)}:${data.user.id}:${encodeURIComponent(ledgerId)}:${original?.id ?? 'new'}`;
+  // A calendar day has its own draft so choosing a date never overwrites another unfinished entry.
+  const deviceKey = `budget:transaction-draft:v1:${encodeURIComponent(household)}:${data.user.id}:${encodeURIComponent(ledgerId)}:${original?.id ?? (initialDate ? `new:${initialDate}` : 'new')}`;
   const [restored] = useState(() => readDeviceDraft(deviceKey, ledgerId, original?.id));
   const [draft, setDraft] = useState<TransactionInput>(restored?.draft ?? starting);
   const [version, setVersion] = useState(restored?.version ?? original?.version);
@@ -158,12 +165,17 @@ export default function TransactionForm({
   const [autoSave, setAutoSave] = useState(Boolean(original));
   const [autoPaused, setAutoPaused] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
+  const [allocationOpen, setAllocationOpen] = useState(
+    Boolean((restored?.draft ?? starting).allocations.length),
+  );
   const initialDraft = useRef(JSON.stringify(starting));
   const pending = useRef<PendingTransaction | null>(restored?.pending ?? null);
   const inFlight = useRef(false);
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestSubmit = useRef<(automatic: boolean) => void>(() => {});
   const formRef = useRef<HTMLFormElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
+  const focusNextEntry = useRef(false);
   const [tagPending, setTagPending] = useState(false);
   const assets = data.assets.filter(
     (asset) =>
@@ -171,6 +183,11 @@ export default function TransactionForm({
       (!asset.archived || original?.allocations.some((a) => a.assetId === asset.id)),
   );
   const allocated = draft.allocations.reduce((sum, row) => sum + row.amount, 0);
+  const allocationInvalid =
+    draft.allocations.some(
+      (row) => !row.assetId || !Number.isSafeInteger(row.amount) || row.amount <= 0,
+    ) ||
+    (draft.allocations.length > 0 && allocated !== draft.amount);
   const locked = busy || uncertain || tagPending;
   const dirty = JSON.stringify(draft) !== initialDraft.current;
   useUnsavedGuard(busy || uncertain || dirty);
@@ -198,6 +215,16 @@ export default function TransactionForm({
     persist();
   }, [draft, version, uncertain, deviceKey]);
   useEffect(() => () => cancelAutoSave(), []);
+  useEffect(() => {
+    if (!busy && focusNextEntry.current) {
+      focusNextEntry.current = false;
+      amountRef.current?.focus();
+      amountRef.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [busy]);
+  useEffect(() => {
+    if (draft.allocations.length && (allocationInvalid || error)) setAllocationOpen(true);
+  }, [draft.allocations.length, allocationInvalid, error]);
   useEffect(() => {
     if (
       original &&
@@ -244,7 +271,7 @@ export default function TransactionForm({
       (formRef.current?.checkValidity() ?? false)
     );
   }
-  async function submit(deleting = false, automatic = false) {
+  async function submit(deleting = false, automatic = false, continueEntry = false) {
     cancelAutoSave();
     if (
       inFlight.current ||
@@ -255,7 +282,10 @@ export default function TransactionForm({
     )
       return;
     if (!deleting && !pending.current && !validInput()) {
-      if (!automatic) setError('날짜·내용·금액과 자산 배분 합계를 확인해 주세요.');
+      if (!automatic) {
+        if (allocationInvalid) setAllocationOpen(true);
+        setError('날짜·내용·금액과 자산 배분 합계를 확인해 주세요.');
+      }
       return;
     }
     if (!deleting && !pending.current && original && !dirty) {
@@ -281,6 +311,7 @@ export default function TransactionForm({
             },
             deleting: false,
             automatic,
+            continueEntry: continueEntry && !original && !automatic,
           };
     const op = pending.current;
     persist(draft, version, op);
@@ -302,7 +333,21 @@ export default function TransactionForm({
       setUncertain(false);
       setRestoredNotice(false);
       setAutoPaused(false);
-      if (result.transaction) {
+      if (result.transaction && op.continueEntry) {
+        const next: TransactionInput = {
+          ...inputOf(result.transaction),
+          id: undefined,
+          description: '',
+          amount: 0,
+          allocations: [],
+        };
+        initialDraft.current = JSON.stringify(next);
+        setDraft(next);
+        setVersion(undefined);
+        setAllocationOpen(false);
+        focusNextEntry.current = true;
+        persist(next, undefined, null);
+      } else if (result.transaction) {
         const saved = inputOf(result.transaction);
         initialDraft.current = JSON.stringify(saved);
         setDraft(saved);
@@ -315,9 +360,17 @@ export default function TransactionForm({
           setLocalAvailable(false);
         }
       }
-      setSaveStatus(op.automatic ? '자동 저장됨' : '저장됨');
-      // A new entry closes after its first confirmed write so another blur cannot create it again.
-      if (op.automatic && original && !op.deleting) await onChanged();
+      setSaveStatus(
+        op.continueEntry
+          ? '저장했어요. 다음 내역의 금액과 내용을 입력해 주세요.'
+          : op.automatic
+            ? '자동 저장됨'
+            : '저장됨',
+      );
+      // Only an explicit manual continuation starts a fresh draft after the confirmed write.
+      if (op.continueEntry) {
+        await onChanged();
+      } else if (op.automatic && original && !op.deleting) await onChanged();
       else
         onSaved(
           op.deleting
@@ -382,6 +435,7 @@ export default function TransactionForm({
     const reset = newest ? inputOf(newest) : starting;
     initialDraft.current = JSON.stringify(reset);
     setDraft(reset);
+    setAllocationOpen(Boolean(reset.allocations.length));
     setVersion(newest?.version ?? original?.version);
     setRestoredNotice(false);
     setConflict(null);
@@ -397,8 +451,16 @@ export default function TransactionForm({
       locked={locked}
     >
       <form
+        className="transaction-form"
         ref={formRef}
         onSubmit={onSubmit}
+        onInvalidCapture={(event) => {
+          if (
+            event.target instanceof Element &&
+            event.target.closest('.transaction-allocation-content')
+          )
+            setAllocationOpen(true);
+        }}
         onBlurCapture={(event) => {
           const field = event.target.closest('.ui-field, .date-field, .tag-field');
           if (field?.contains(event.relatedTarget as Node)) return;
@@ -468,6 +530,7 @@ export default function TransactionForm({
                   const latest = inputOf(conflict);
                   initialDraft.current = JSON.stringify(latest);
                   setDraft(latest);
+                  setAllocationOpen(Boolean(latest.allocations.length));
                   setVersion(conflict.version);
                   persist(latest, conflict.version, null);
                   setAutoPaused(false);
@@ -491,62 +554,87 @@ export default function TransactionForm({
             </div>
           )}
           <fieldset disabled={busy || uncertain || deleted}>
-            <div className="segmented" aria-label="거래 종류">
-              {(Object.keys(labels) as TransactionType[]).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  aria-pressed={draft.type === type}
-                  className={draft.type === type ? 'selected' : ''}
-                  onClick={() => switchType(type)}
-                >
-                  {labels[type]}
-                </button>
-              ))}
-            </div>
-            <label className="amount-field">
-              금액
-              <div>
-                <input
-                  name="amount"
-                  aria-label="금액"
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  max="1000000000000"
-                  step="1"
-                  required
-                  value={draft.amount || ''}
-                  onChange={(e) => patch({ amount: Number(e.target.value) })}
-                  placeholder="0"
-                  autoFocus={!original}
-                />
-                <span>원</span>
+            <section className="transaction-form-section" aria-label="기본 정보">
+              <div className="segmented" aria-label="거래 종류">
+                {(Object.keys(labels) as TransactionType[]).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    aria-pressed={draft.type === type}
+                    className={draft.type === type ? 'selected' : ''}
+                    onClick={() => switchType(type)}
+                  >
+                    {labels[type]}
+                  </button>
+                ))}
               </div>
-            </label>
-            <label>
-              내용
-              <input
-                name="description"
-                required
-                maxLength={240}
-                value={draft.description}
-                onChange={(e) => patch({ description: e.target.value })}
-                placeholder="어디에 사용했나요?"
-              />
-            </label>
-            <div className="form-grid">
+              <label className="amount-field">
+                금액
+                <div>
+                  <input
+                    ref={amountRef}
+                    name="amount"
+                    aria-label="금액"
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    max="1000000000000"
+                    step="1"
+                    required
+                    value={draft.amount || ''}
+                    onChange={(e) => patch({ amount: Number(e.target.value) })}
+                    placeholder="0"
+                    autoFocus={!original}
+                  />
+                  <span>원</span>
+                </div>
+              </label>
               <label>
-                날짜
-                <DateField
-                  name="date"
+                내용
+                <input
+                  name="description"
                   required
-                  value={draft.date}
-                  onValueChange={(value) => patch({ date: value })}
+                  maxLength={240}
+                  value={draft.description}
+                  onChange={(e) => patch({ description: e.target.value })}
+                  placeholder="어디에 사용했나요?"
                 />
               </label>
-            </div>
-            <div className="form-grid">
+              <div className="form-grid">
+                <label>
+                  날짜
+                  <DateField
+                    name="date"
+                    required
+                    value={draft.date}
+                    onValueChange={(value) => patch({ date: value })}
+                  />
+                </label>
+                <label>
+                  결제수단
+                  <SelectField
+                    name="paymentMethodId"
+                    value={draft.paymentMethodId}
+                    onValueChange={(value) => patch({ paymentMethodId: value })}
+                  >
+                    {data.paymentMethods
+                      .filter(
+                        (method) => !method.archived || method.id === original?.paymentMethodId,
+                      )
+                      .map((method) => (
+                        <SelectOption value={method.id} key={method.id}>
+                          {method.name}
+                        </SelectOption>
+                      ))}
+                  </SelectField>
+                </label>
+              </div>
+            </section>
+            <section
+              className="transaction-form-section transaction-classification"
+              aria-label="분류와 귀속"
+            >
+              <h3>분류와 귀속</h3>
               <label>
                 누구의 내역인가요?
                 <SelectField
@@ -563,141 +651,146 @@ export default function TransactionForm({
                   ))}
                 </SelectField>
               </label>
-              <label>
-                결제수단
-                <SelectField
-                  name="paymentMethodId"
-                  value={draft.paymentMethodId}
-                  onValueChange={(value) => patch({ paymentMethodId: value })}
+              <TagFields
+                data={data}
+                value={draft.tagIds}
+                onChange={(tagIds) => patch({ tagIds })}
+                appliesTo="transaction"
+                ledgerId={ledgerId}
+                disabled={busy || uncertain}
+                onChanged={onChanged}
+                onPendingChange={setTagPending}
+              />
+            </section>
+            <section className="transaction-allocation" aria-label="자산 잔액 반영">
+              <div className="transaction-allocation-heading">
+                <button
+                  type="button"
+                  className="transaction-allocation-toggle"
+                  aria-expanded={allocationOpen}
+                  aria-controls="transaction-allocation-content"
+                  onClick={() => setAllocationOpen(!allocationOpen)}
                 >
-                  {data.paymentMethods
-                    .filter((method) => !method.archived || method.id === original?.paymentMethodId)
-                    .map((method) => (
-                      <SelectOption value={method.id} key={method.id}>
-                        {method.name}
-                      </SelectOption>
-                    ))}
-                </SelectField>
-              </label>
-            </div>
-            <TagFields
-              data={data}
-              value={draft.tagIds}
-              onChange={(tagIds) => patch({ tagIds })}
-              appliesTo="transaction"
-              ledgerId={ledgerId}
-              disabled={busy || uncertain}
-              onChanged={onChanged}
-              onPendingChange={setTagPending}
-            />
-            <div className="rule-section">
-              <div className="panel-title">
-                <div className="field-label">
-                  {draft.type === 'income' ? '입금할 자산' : '사용한 자산'}
-                </div>
+                  <span>
+                    <strong>자산 잔액 반영</strong>
+                    <small>
+                      {draft.allocations.length
+                        ? `${draft.allocations.length}개 자산 · ${won(allocated)}원`
+                        : '선택 사항 · 필요할 때 자산에 연결해요'}
+                    </small>
+                  </span>
+                  <ChevronDown size={18} aria-hidden="true" />
+                </button>
                 <button
                   type="button"
                   className="text-button"
                   disabled={draft.allocations.length >= assets.length}
-                  onClick={() =>
+                  onClick={() => {
+                    setAllocationOpen(true);
                     patch({
                       allocations: [
                         ...draft.allocations,
                         { assetId: '', amount: Math.max(0, draft.amount - allocated) },
                       ],
-                    })
-                  }
+                    });
+                  }}
                 >
                   <Plus size={14} /> 자산 배분 추가
                 </button>
               </div>
-              <p className="small muted">
-                자산을 선택하면 잔액에도 함께 반영해요. 여러 자산으로 금액을 나눌 수 있어요.
-              </p>
-              {draft.allocations.map((allocation, index) => (
-                <div className="allocation-row" key={index}>
-                  <label>
-                    {draft.type === 'income' ? '입금 자산' : '출금 자산'} {index + 1}
-                    <SelectField
-                      name="allocationAsset"
-                      required
-                      value={allocation.assetId}
-                      onValueChange={(value) =>
-                        patch({
-                          allocations: draft.allocations.map((row, i) =>
-                            i === index ? { ...row, assetId: value } : row,
-                          ),
-                        })
+              <div
+                id="transaction-allocation-content"
+                className="transaction-allocation-content"
+                hidden={!allocationOpen}
+              >
+                <p className="small muted">
+                  자산을 선택하면 잔액에도 함께 반영해요. 여러 자산으로 금액을 나눌 수 있어요.
+                </p>
+                {draft.allocations.map((allocation, index) => (
+                  <div className="allocation-row" key={index}>
+                    <label>
+                      {draft.type === 'income' ? '입금 자산' : '출금 자산'} {index + 1}
+                      <SelectField
+                        name="allocationAsset"
+                        required
+                        value={allocation.assetId}
+                        onValueChange={(value) =>
+                          patch({
+                            allocations: draft.allocations.map((row, i) =>
+                              i === index ? { ...row, assetId: value } : row,
+                            ),
+                          })
+                        }
+                      >
+                        <SelectOption value="">선택해 주세요</SelectOption>
+                        {assets
+                          .filter(
+                            (asset) =>
+                              asset.id === allocation.assetId ||
+                              !draft.allocations.some((row) => row.assetId === asset.id),
+                          )
+                          .map((asset) => (
+                            <SelectOption value={asset.id} key={asset.id}>
+                              {asset.name}
+                              {asset.trackSavings ? ' · 저축 집계' : ''}
+                            </SelectOption>
+                          ))}
+                      </SelectField>
+                    </label>
+                    <label>
+                      배분 금액 {index + 1}
+                      <input
+                        name="allocationAmount"
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        max="1000000000000"
+                        step="1"
+                        required
+                        value={allocation.amount || ''}
+                        onChange={(e) =>
+                          patch({
+                            allocations: draft.allocations.map((row, i) =>
+                              i === index ? { ...row, amount: Number(e.target.value) } : row,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={`자산 배분 ${index + 1} 삭제`}
+                      onClick={() =>
+                        patch({ allocations: draft.allocations.filter((_, i) => i !== index) })
                       }
                     >
-                      <SelectOption value="">선택해 주세요</SelectOption>
-                      {assets
-                        .filter(
-                          (asset) =>
-                            asset.id === allocation.assetId ||
-                            !draft.allocations.some((row) => row.assetId === asset.id),
-                        )
-                        .map((asset) => (
-                          <SelectOption value={asset.id} key={asset.id}>
-                            {asset.name}
-                            {asset.trackSavings ? ' · 저축 집계' : ''}
-                          </SelectOption>
-                        ))}
-                    </SelectField>
-                  </label>
-                  <label>
-                    배분 금액 {index + 1}
-                    <input
-                      name="allocationAmount"
-                      type="number"
-                      inputMode="numeric"
-                      min="1"
-                      max="1000000000000"
-                      step="1"
-                      required
-                      value={allocation.amount || ''}
-                      onChange={(e) =>
-                        patch({
-                          allocations: draft.allocations.map((row, i) =>
-                            i === index ? { ...row, amount: Number(e.target.value) } : row,
-                          ),
-                        })
-                      }
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label={`자산 배분 ${index + 1} 삭제`}
-                    onClick={() =>
-                      patch({ allocations: draft.allocations.filter((_, i) => i !== index) })
-                    }
-                  >
-                    <Trash2 size={17} />
-                  </button>
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
+                ))}
+                <div className="effect-preview">
+                  <Info size={16} />
+                  <span>
+                    {draft.allocations.length ? (
+                      <>
+                        배분 합계 <strong>{won(allocated)}원</strong> / 내역 {won(draft.amount)}원
+                        <br />
+                        {allocated !== draft.amount
+                          ? `남은 배분 ${won(draft.amount - allocated)}원`
+                          : '내역은 한 번만 집계하고, 자산별 잔액을 반영해요.'}
+                      </>
+                    ) : (
+                      '자산 배분을 추가하지 않으면 수입·지출만 기록해요.'
+                    )}
+                  </span>
                 </div>
-              ))}
-              <div className="effect-preview">
-                <Info size={16} />
-                <span>
-                  {draft.allocations.length ? (
-                    <>
-                      배분 합계 <strong>{won(allocated)}원</strong> / 내역 {won(draft.amount)}원
-                      <br />
-                      {allocated !== draft.amount
-                        ? `남은 배분 ${won(draft.amount - allocated)}원`
-                        : '내역은 한 번만 집계하고, 자산별 잔액을 반영해요.'}
-                    </>
-                  ) : (
-                    '자산 배분을 추가하지 않으면 수입·지출만 기록해요.'
-                  )}
-                </span>
+                <p className="small muted">
+                  태그 이름이나 선택만으로 잔액이 바뀌지는 않아요. 자산 간 이동과 잔액 조정은 자산
+                  화면에서 기록해요.
+                </p>
               </div>
-              <p className="small muted">
-                태그 이름이나 선택만으로 잔액이 바뀌지는 않아요. 자산 간 이동과 잔액 조정은 자산
-                화면에서 기록해요.
-              </p>
-            </div>
+            </section>
           </fieldset>
           <div className="transaction-save-options">
             <div>
@@ -717,10 +810,10 @@ export default function TransactionForm({
                 <p className="small">
                   {autoSave
                     ? '필수 항목을 채우고 입력 칸을 나가면 잠시 후 저장하고 창을 닫아요.'
-                    : '작성 중인 내용은 이 기기에 초안으로 보관해요. 저장을 눌러 가계부에 반영해 주세요.'}
+                    : '날짜·결제수단·태그를 유지하려면 저장하고 계속 입력을 눌러 주세요.'}
                 </p>
               )}
-              <span className="small" data-testid="transaction-save-status">
+              <span className="small" data-testid="transaction-save-status" role="status">
                 {uncertain
                   ? '저장 결과 확인 필요'
                   : autoPaused
@@ -758,6 +851,14 @@ export default function TransactionForm({
             </details>
           )}
         </div>
+        {confirmDelete && !uncertain && (
+          <div className="delete-confirm">
+            <span>이 내역과 연결된 자산 반영을 삭제할까요?</span>
+            <button type="button" disabled={locked} onClick={() => void submit(true)}>
+              삭제 확인
+            </button>
+          </div>
+        )}
         <div className="form-footer">
           {original && !uncertain && (
             <button
@@ -777,6 +878,16 @@ export default function TransactionForm({
             <button type="button" className="secondary" onClick={close} disabled={locked}>
               닫기
             </button>
+            {!original && !autoSave && !uncertain && (
+              <button
+                type="button"
+                className="secondary transaction-continue"
+                disabled={locked || Boolean(conflict) || deleted}
+                onClick={() => void submit(false, false, true)}
+              >
+                저장하고 계속 입력
+              </button>
+            )}
             {uncertain ? (
               <button
                 type="button"
@@ -797,14 +908,6 @@ export default function TransactionForm({
             )}
           </div>
         </div>
-        {confirmDelete && !uncertain && (
-          <div className="delete-confirm">
-            <span>이 내역과 연결된 자산 반영을 삭제할까요?</span>
-            <button type="button" disabled={locked} onClick={() => void submit(true)}>
-              삭제 확인
-            </button>
-          </div>
-        )}
       </form>
     </Dialog>
   );

@@ -25,7 +25,7 @@ test('two users share source-ledger transactions, asset effects and link changes
     const checkingBefore = baseline.assets.find((asset) => asset.id === 'checking')!.balance;
     const reserveBefore = baseline.assets.find((asset) => asset.id === 'reserve')!.balance;
     const balanceText = (amount: number) => `${amount.toLocaleString('ko-KR')}원`;
-    await first.getByRole('button', { name: '목적 가계부 추가' }).click();
+    await first.getByRole('button', { name: '가계부 추가' }).click();
     await first.getByLabel('가계부 이름').fill('우리의 테스트 여행');
     await first.getByLabel('전체 예산 (원)').fill('300000');
     await first.getByRole('button', { name: '가계부 만들기', exact: true }).click();
@@ -56,10 +56,30 @@ test('two users share source-ledger transactions, asset effects and link changes
       balanceText(checkingBefore - 27000),
     );
     await expect(second.getByTestId('asset-reserve')).toHaveText(balanceText(reserveBefore));
-    await first.getByRole('button', { name: '메인 연결 해제', exact: true }).click();
+    await first.getByRole('button', { name: '우리의 테스트 여행 관리 메뉴', exact: true }).click();
+    await first.getByRole('button', { name: '우리의 테스트 여행 위치 변경', exact: true }).click();
+    await selectChoice(
+      first.getByRole('dialog').getByRole('combobox', { name: '상위 가계부', exact: true }),
+      '',
+    );
+    await first
+      .getByRole('dialog')
+      .getByRole('button', { name: '이 위치로 이동', exact: true })
+      .click();
+    await expect(first.getByRole('dialog')).toHaveCount(0);
     await second.getByRole('button', { name: '가계부', exact: true }).click();
     await expect(second.getByRole('row').filter({ hasText: '여행 중 저녁 식사' })).toHaveCount(0);
-    await first.getByRole('button', { name: '메인에 연결', exact: true }).click();
+    await first.getByRole('button', { name: '우리의 테스트 여행 관리 메뉴', exact: true }).click();
+    await first.getByRole('button', { name: '우리의 테스트 여행 위치 변경', exact: true }).click();
+    await selectChoice(
+      first.getByRole('dialog').getByRole('combobox', { name: '상위 가계부', exact: true }),
+      'main',
+    );
+    await first
+      .getByRole('dialog')
+      .getByRole('button', { name: '이 위치로 이동', exact: true })
+      .click();
+    await expect(first.getByRole('dialog')).toHaveCount(0);
     await expect(second.getByRole('row').filter({ hasText: '여행 중 저녁 식사' })).toHaveCount(1);
     await second.getByRole('button', { name: '자산', exact: true }).click();
     await expect(second.getByTestId('asset-checking')).toHaveText(

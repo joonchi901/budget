@@ -84,6 +84,30 @@ afterAll(async () => {
   await runtime?.dispose();
 });
 describe('planning records Worker API', () => {
+  it('allows any ledger to include descendants and host household-wide savings goals', async () => {
+    const child = (await snapshot()).ledgers.find((ledger) => ledger.kind === 'purpose')!;
+    const plan = await create({ ledgerId: child.id, title: '하위 포함 예산', includeLinked: true });
+    expect(plan.includeLinked).toBe(true);
+    const goal = await create({
+      ledgerId: child.id,
+      kind: 'goal',
+      title: '가구 순저축',
+      metric: 'savings',
+      direction: 'atLeast',
+      assetId: null,
+      includeLinked: false,
+    });
+    expect(goal).toMatchObject({ ledgerId: child.id, metric: 'savings', includeLinked: false });
+    expect(
+      (
+        await call('/api/plans', 'POST', {
+          ...base,
+          ledgerId: '__all__',
+          mutationId: crypto.randomUUID(),
+        })
+      ).status,
+    ).toBe(400);
+  });
   it('persists all five plan kinds without creating expenses or asset effects', async () => {
     const before = await snapshot();
     const budget = await create();

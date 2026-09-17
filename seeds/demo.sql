@@ -1,7 +1,7 @@
--- Fictional data for local development. Remote deployment is not configured.
+-- Fictional data for local development only. Never seed production.
 INSERT OR IGNORE INTO households (id, name) VALUES ('home', '우리의 가계부');
-INSERT OR IGNORE INTO users (id, household_id, name, color) VALUES
-  ('u1', 'home', '나', '#7972e8'), ('u2', 'home', '와이프', '#d9779b');
+INSERT OR IGNORE INTO users (id, household_id, name, color, role) VALUES
+  ('u1', 'home', '나', '#7972e8', 'admin'), ('u2', 'home', '와이프', '#d9779b', 'user');
 INSERT OR IGNORE INTO ledgers (id, household_id, name, icon, kind, parent_id, budget, start_date, end_date) VALUES
   ('main', 'home', '우리의 일상', '🏡', 'main', NULL, 2400000, NULL, NULL),
   ('trip', 'home', '제주에서 보내는 가을', '🍊', 'purpose', 'main', 1200000, '2026-09-20', '2026-09-24');

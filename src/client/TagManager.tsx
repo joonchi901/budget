@@ -1,4 +1,5 @@
 import { Tooltip } from './Tooltip';
+import { UgaIcon, UgaLedgerIcon, UgaMascot } from './brand/Uga';
 import { SelectField, SelectOption } from './SelectField';
 import { useRef, useState, type FormEvent } from 'react';
 import {
@@ -11,7 +12,6 @@ import {
   Pencil,
   Plus,
   RotateCcw,
-  Tags,
 } from 'lucide-react';
 import type { Bootstrap, MutationResult, Tag, TagGroup } from '../shared/types';
 import { RequestError, request } from './api';
@@ -182,7 +182,7 @@ export default function TagManager({
               onClick={() => setActiveId(group.id)}
             >
               <span className="tag-group-icon">
-                <Tags size={18} />
+                <UgaIcon name="tags" size={24} />
               </span>
               <span>
                 <strong>
@@ -334,7 +334,7 @@ export default function TagManager({
             </>
           ) : (
             <div className="tag-manager-empty">
-              <Tags size={28} />
+              <UgaMascot pose="thinking" size={96} />
               <p>
                 분류, 내역, 자산 용도 등<br />
                 필요한 유형을 직접 만들 수 있어요.
@@ -611,7 +611,7 @@ function TagEditor({
                                   )
                                 }
                               />
-                              {ledger.icon} {ledger.name}
+                              <UgaLedgerIcon value={ledger.icon} size={20} /> {ledger.name}
                             </label>
                           ))}
                       </div>

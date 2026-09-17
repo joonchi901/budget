@@ -19,7 +19,7 @@ export type BackupTable = (typeof backupTables)[number];
 export type DataRow = Record<string, string | number | null>;
 export interface BudgetBackup {
   format: 'our-budget';
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   exportedAt: string;
   sourceHouseholdId: string;
   sourceRevision: number;

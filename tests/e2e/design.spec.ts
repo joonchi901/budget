@@ -13,10 +13,25 @@ const screens = [
 ] as const;
 type Screen = (typeof screens)[number];
 
+const pageErrors = new WeakMap<Page, string[]>();
+test.beforeEach(({ page }) => {
+  const errors: string[] = [];
+  pageErrors.set(page, errors);
+  page.on('pageerror', (error) => errors.push(error.message));
+});
+test.afterEach(({ page }) => {
+  expect(pageErrors.get(page), 'screens must not raise browser exceptions').toEqual([]);
+});
+
 async function login(page: Page) {
   await page.goto('/');
+  await expect(page.getByRole('button', { name: '나로 시작하기' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '나로 시작하기' })).toBeInViewport({ ratio: 1 });
+  await fitsViewport(page, '로그인');
+  const width = page.viewportSize()?.width ?? 1440;
+  await capture(page, width > 760 ? 'desktop-login' : `mobile-${width}-login`);
   await page.getByRole('button', { name: '나로 시작하기' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: /우리의 일상/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: '우리의 일상', exact: true })).toBeVisible();
   await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2026-09');
   await expect(page.getByTestId('connection')).toHaveText('실시간 연결됨');
 }
@@ -31,6 +46,24 @@ async function fitsViewport(page: Page, context: string) {
 async function capture(page: Page, suffix: string) {
   await mkdir('output/playwright', { recursive: true });
   await page.evaluate(() => document.fonts.ready);
+  const assets = await page.locator('img[src^="/brand/"]').evaluateAll(async (images) => {
+    return Promise.all(
+      images.map(async (element) => {
+        const image = element as HTMLImageElement;
+        try {
+          await image.decode();
+        } catch {
+          /* Report the failed URL below. */
+        }
+        return { src: image.getAttribute('src'), loaded: image.complete && image.naturalWidth > 0 };
+      }),
+    );
+  });
+  expect(assets.length, `${suffix}: brand assets should be present`).toBeGreaterThan(0);
+  expect(
+    assets.filter((asset) => !asset.loaded),
+    `${suffix}: SVG assets must load`,
+  ).toEqual([]);
   await page.screenshot({ path: `output/playwright/design-${suffix}.png`, animations: 'disabled' });
 }
 
@@ -162,7 +195,7 @@ for (const width of [320, 390]) {
     const menu = page.getByRole('dialog', { name: '전체 메뉴', exact: true });
     await expect(menu).toBeVisible();
     await expect(menu.getByRole('button', { name: '로그아웃', exact: true })).toBeVisible();
-    await expect(menu.getByRole('button', { name: '목적 가계부 추가', exact: true })).toBeVisible();
+    await expect(menu.getByRole('button', { name: '가계부 추가', exact: true })).toBeVisible();
     await fitsViewport(page, `${width}px 전체 메뉴`);
     await page.keyboard.press('Escape');
     await expect(menu).not.toBeVisible();
@@ -176,15 +209,15 @@ for (const width of [320, 390]) {
     }
 
     await more.click();
-    await menu.getByRole('button', { name: /제주에서 보내는 가을/ }).click();
+    await menu.getByRole('button', { name: '제주에서 보내는 가을', exact: true }).click();
     await expect(
-      page.getByRole('heading', { level: 1, name: /제주에서 보내는 가을/ }),
+      page.getByRole('heading', { level: 1, name: '제주에서 보내는 가을', exact: true }),
     ).toBeVisible();
     await expect(menu).not.toBeVisible();
     await fitsViewport(page, `${width}px 목적 가계부`);
     await more.click();
-    await menu.getByRole('button', { name: '목적 가계부 추가', exact: true }).click();
-    const ledgerForm = page.getByRole('dialog', { name: '목적 가계부 만들기', exact: true });
+    await menu.getByRole('button', { name: '가계부 추가', exact: true }).click();
+    const ledgerForm = page.getByRole('dialog', { name: '가계부 만들기', exact: true });
     await expect(ledgerForm).toBeVisible();
     await expect(ledgerForm.getByLabel('가계부 이름', { exact: true })).toBeEditable();
     await fitsViewport(page, `${width}px 목적 가계부 추가`);

@@ -32,12 +32,12 @@
   color: var(--muted);
 }
 .date-field .date-field-trigger:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #b0b8c1;
+  background: var(--surface-subtle);
+  border-color: var(--line-strong);
 }
 .date-field .date-field-trigger[aria-expanded='true'] {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px #3182f61a;
+  box-shadow: 0 0 0 3px var(--focus-soft);
 }
 .date-field-placeholder {
   color: var(--muted);
@@ -132,12 +132,12 @@
 .date-calendar .date-month-option.is-today:not(.is-selected) {
   color: var(--blue-strong);
   font-weight: 700;
-  box-shadow: inset 0 0 0 1px #3182f666;
+  box-shadow: inset 0 0 0 1px var(--accent-line);
 }
 .date-calendar .is-selected,
 .date-calendar .is-selected:hover {
   background: var(--blue-strong);
-  color: #fff;
+  color: var(--brand-on-primary);
   font-weight: 700;
 }
 .date-calendar button:disabled {
@@ -195,7 +195,7 @@
 .date-calendar .date-month-option.is-selected,
 .date-calendar .date-day-option.is-selected {
   background: var(--blue-strong);
-  color: #fff;
+  color: var(--brand-on-primary);
 }
 .month-picker .date-field,
 .ledger-period .date-field {

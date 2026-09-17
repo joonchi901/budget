@@ -127,20 +127,29 @@ async function bindIdentity(env: Env, userId: 'u1' | 'u2', subject: string, emai
   ).first<number>('count');
   if (incompatible)
     throw new ApiError(503, 'AUTH_DATABASE_MISMATCH', '운영 가구 초기 설정을 확인해 주세요.');
+  const existingHousehold = await env.DB.prepare(
+    "SELECT id FROM households WHERE id='home'",
+  ).first();
   await env.DB.batch([
     env.DB.prepare("INSERT OR IGNORE INTO households(id,name) VALUES('home','우리의 가계부')"),
     env.DB.prepare(
-      "INSERT OR IGNORE INTO users(id,household_id,name,color) VALUES('u1','home','나','#8d77bc')",
+      "INSERT OR IGNORE INTO users(id,household_id,name,color,role) VALUES('u1','home','나','#8d77bc','admin')",
     ),
     env.DB.prepare(
-      "INSERT OR IGNORE INTO users(id,household_id,name,color) VALUES('u2','home','와이프','#c88096')",
+      "INSERT OR IGNORE INTO users(id,household_id,name,color,role) VALUES('u2','home','와이프','#c88096','user')",
     ),
-    env.DB.prepare(
-      "INSERT OR IGNORE INTO ledgers(id,household_id,name,icon,kind,budget) VALUES('main','home','우리의 일상','🏡','main',0)",
-    ),
-    env.DB.prepare(
-      "INSERT OR IGNORE INTO payment_methods(id,household_id,name,type,owner_id) VALUES('cash','home','현금','cash','shared')",
-    ),
+    // A restored or reorganized household may have no legacy main/cash IDs.
+    // Login must not recreate records that its admins deliberately replaced.
+    ...(!existingHousehold
+      ? [
+          env.DB.prepare(
+            "INSERT OR IGNORE INTO ledgers(id,household_id,name,icon,kind,budget) VALUES('main','home','우리의 일상','🏡','main',0)",
+          ),
+          env.DB.prepare(
+            "INSERT OR IGNORE INTO payment_methods(id,household_id,name,type,owner_id) VALUES('cash','home','현금','cash','shared')",
+          ),
+        ]
+      : []),
     env.DB.prepare(
       'INSERT OR IGNORE INTO auth_identities(issuer,subject,user_id,email,created_at) VALUES(?,?,?,?,?)',
     ).bind(GOOGLE_ISSUER, subject, userId, email, new Date().toISOString()),

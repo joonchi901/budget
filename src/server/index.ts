@@ -1,6 +1,7 @@
 import type { MutationResult } from '../shared/types';
 import { authenticate, authConfiguration, login, logout, verifyOrigin, type Session } from './auth';
 import { startOidcLogin, finishOidcLogin } from './oidc';
+import { patchUserRole } from './users';
 import type { Env } from './env';
 import { ApiError, json } from './errors';
 import {
@@ -91,6 +92,13 @@ export default {
         return await room.fetch(target, { headers });
       }
       let result: MutationResult | undefined;
+      if (/^\/api\/users\/[^/]+\/role$/.test(url.pathname) && request.method === 'PATCH')
+        result = await patchUserRole(
+          env.DB,
+          session,
+          decodeURIComponent(url.pathname.split('/')[3]),
+          await readBody(request),
+        );
       if (/^\/api\/data\/source-records\/[^/]+$/.test(url.pathname) && request.method === 'PATCH')
         result = await patchSourceRecord(
           env.DB,
