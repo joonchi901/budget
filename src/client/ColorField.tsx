@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import './color-field.css';
 
 interface ColorFieldProps {
@@ -17,7 +17,9 @@ export function ColorField({
   disabled,
 }: ColorFieldProps) {
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
+  // Synchronize external color changes before the field becomes interactive.
+  // A deferred effect can overwrite the first edit after the field mounts.
+  useLayoutEffect(() => setDraft(value), [value]);
   return (
     <span className="color-field">
       <span className="color-field-swatch" style={{ backgroundColor: value }} aria-hidden="true" />

@@ -20,7 +20,12 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "check": "npm run typecheck && npm test && npm run build",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"scripts/*.mjs\" \"*.{ts,json,jsonc,html}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"scripts/*.mjs\" \"*.{ts,json,jsonc,html}\"",
+    "storybook": "storybook dev --host 127.0.0.1 --port 6006 --no-open --disable-telemetry",
+    "build:storybook": "npm run check:ui-spec && storybook build --disable-telemetry",
+    "test:storybook": "node scripts/test-storybook.mjs",
+    "check:ui-spec": "node scripts/check-ui-spec.mjs",
+    "check:ui": "npm run typecheck && npm run build:storybook && npm run test:storybook"
   },
   "dependencies": {
     "fast-xml-parser": "5.11.1",
@@ -33,16 +38,27 @@
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260916.1",
     "@playwright/test": "1.63.0",
+    "@storybook/addon-a11y": "10.6.0",
+    "@storybook/addon-docs": "10.6.0",
+    "@storybook/react-vite": "10.6.0",
+    "@storybook/test-runner": "0.24.5",
     "@types/node": "22.20.3",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.1",
+    "axe-playwright": "2.2.2",
     "esbuild": "0.28.2",
     "miniflare": "5.20260915.0-alpha",
     "prettier": "3.9.6",
+    "storybook": "10.6.0",
     "typescript": "6.0.3",
     "vite": "8.3.0",
     "vitest": "5.0.1",
     "wrangler": "4.132.0"
+  },
+  "overrides": {
+    "@storybook/test-runner": {
+      "uuid": "11.1.1"
+    }
   }
 }

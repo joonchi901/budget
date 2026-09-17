@@ -334,9 +334,12 @@ export function DateField(props: DateFieldProps) {
             name={name}
             disabled={disabled}
             aria-label={field.label || '날짜'}
-            aria-required={required || undefined}
             aria-invalid={validation.invalid || undefined}
-            aria-describedby={validation.invalid ? `${id}-error` : undefined}
+            aria-describedby={
+              [required ? `${id}-required` : '', validation.invalid ? `${id}-error` : '']
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
             data-value={value}
           >
             <span className={selected ? undefined : 'date-field-placeholder'}>
@@ -506,6 +509,11 @@ export function DateField(props: DateFieldProps) {
           setOpen(true);
         }}
       />
+      {required && (
+        <span id={`${id}-required`} className="sr-only">
+          필수 입력
+        </span>
+      )}
       {validation.invalid && (
         <span className="control-error" id={`${id}-error`} role="alert">
           {validation.message}
@@ -598,9 +606,12 @@ export function MonthField(props: DateFieldProps) {
             name={name}
             disabled={disabled}
             aria-label={field.label || '월'}
-            aria-required={required || undefined}
             aria-invalid={validation.invalid || undefined}
-            aria-describedby={validation.invalid ? `${id}-error` : undefined}
+            aria-describedby={
+              [required ? `${id}-required` : '', validation.invalid ? `${id}-error` : '']
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
             data-value={value}
           >
             <span className={selected ? undefined : 'date-field-placeholder'}>
@@ -695,6 +706,11 @@ export function MonthField(props: DateFieldProps) {
           setOpen(true);
         }}
       />
+      {required && (
+        <span id={`${id}-required`} className="sr-only">
+          필수 입력
+        </span>
+      )}
       {validation.invalid && (
         <span className="control-error" id={`${id}-error`} role="alert">
           {validation.message}

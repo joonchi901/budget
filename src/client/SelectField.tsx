@@ -215,8 +215,8 @@ export function SelectField({
             <div
               ref={list}
               id={`${id}-options`}
-              role="listbox"
-              aria-label={label || '항목'}
+              role={visible.length ? 'listbox' : undefined}
+              aria-label={visible.length ? label || '항목' : undefined}
               className="select-options"
             >
               {visible.map((option, index) => (
@@ -250,7 +250,11 @@ export function SelectField({
                   </button>
                 </Fragment>
               ))}
-              {!visible.length && <p className="control-empty">일치하는 항목이 없어요.</p>}
+              {!visible.length && (
+                <p className="control-empty" role="status">
+                  일치하는 항목이 없어요.
+                </p>
+              )}
             </div>
           </div>
         )}

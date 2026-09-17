@@ -13,5 +13,12 @@
     "esModuleInterop": true,
     "types": ["@cloudflare/workers-types", "node", "vite/client"]
   },
-  "include": ["src", "tests", "vite.config.ts", "vitest.config.ts", "playwright.config.ts"]
+  "include": [
+    "src",
+    "tests",
+    ".storybook",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts"
+  ]
 }

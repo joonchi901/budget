@@ -1,0 +1,136 @@
+[
+  {
+    "name": "색상·글자·간격·브랜드",
+    "layer": "기초 규칙",
+    "source": "src/client/brand/tokens.css",
+    "story": "src/stories/foundations/Foundations.stories.tsx",
+    "status": "shared",
+    "usage": "앱과 Storybook이 같은 CSS 토큰 및 SVG 컴포넌트를 사용"
+  },
+  {
+    "name": "Button / IconButton",
+    "layer": "기본 컴포넌트",
+    "source": "src/client/ui/Button.tsx",
+    "story": "src/stories/patterns/Actions.stories.tsx",
+    "status": "partial",
+    "usage": "가계부 생성·추가·방 헤더에서 사용. 기존 페이지 버튼은 점진 전환"
+  },
+  {
+    "name": "SelectField",
+    "layer": "기본 컴포넌트",
+    "source": "src/client/SelectField.tsx",
+    "story": "src/stories/controls/SelectField.stories.tsx",
+    "status": "shared",
+    "usage": "옵션 그룹·검색·키보드·선택 상태"
+  },
+  {
+    "name": "DateField / MonthField",
+    "layer": "기본 컴포넌트",
+    "source": "src/client/DateFields.tsx",
+    "story": "src/stories/controls/DateField.stories.tsx",
+    "status": "shared",
+    "usage": "자체 날짜·월 선택, 범위 제한"
+  },
+  {
+    "name": "TagBadge",
+    "layer": "기본 컴포넌트",
+    "source": "src/client/TagBadge.tsx",
+    "story": "src/stories/controls/TagBadge.stories.tsx",
+    "status": "shared",
+    "usage": "사용자 색상·보관 상태·해제 동작"
+  },
+  {
+    "name": "ColorField / FileField",
+    "layer": "기본 컴포넌트",
+    "source": "src/client/ColorField.tsx",
+    "story": "src/stories/controls/ColorField.stories.tsx",
+    "status": "shared",
+    "usage": "자체 색상 선택·파일 선택"
+  },
+  {
+    "name": "Tooltip / Popover",
+    "layer": "기본 컴포넌트",
+    "source": "src/client/Tooltip.tsx",
+    "story": "src/stories/controls/Tooltip.stories.tsx",
+    "status": "shared",
+    "usage": "포커스·Escape 및 선택 필드 내부 팝오버"
+  },
+  {
+    "name": "Dialog / Empty / Stat",
+    "layer": "기본 컴포넌트",
+    "source": "src/client/components.tsx",
+    "story": "src/stories/controls/Dialog.stories.tsx",
+    "status": "shared",
+    "usage": "모달·빈 상태·금액 요약"
+  },
+  {
+    "name": "Grid",
+    "layer": "배치",
+    "source": "src/client/ui/Layout.tsx",
+    "story": "src/stories/layout/Composition.stories.tsx",
+    "status": "partial",
+    "usage": "실제 방의 요약·하위 가계부 배치. 기존 페이지 전환은 남아 있음"
+  },
+  {
+    "name": "Stack / Inline / Surface",
+    "layer": "배치",
+    "source": "src/client/ui/Layout.tsx",
+    "story": "src/stories/layout/Composition.stories.tsx",
+    "status": "ready",
+    "usage": "새 화면 조립용 공통 구성 요소. 기존 페이지 전체에는 미적용"
+  },
+  {
+    "name": "RoomHeader",
+    "layer": "화면 패턴",
+    "source": "src/client/RoomHeader.tsx",
+    "story": "src/stories/patterns/RoomHeader.stories.tsx",
+    "status": "shared",
+    "usage": "실제 방 이름·계위·보기 전환·이동"
+  },
+  {
+    "name": "LedgerRooms",
+    "layer": "도메인",
+    "source": "src/client/LedgerRooms.tsx",
+    "story": "src/stories/domain/LedgerRooms.stories.tsx",
+    "status": "shared",
+    "usage": "목록·검색·관리자/사용자·보관·빈 상태"
+  },
+  {
+    "name": "LedgerCalendar",
+    "layer": "도메인",
+    "source": "src/client/LedgerCalendar.tsx",
+    "story": "src/stories/domain/LedgerCalendar.stories.tsx",
+    "status": "shared",
+    "usage": "월별 내역·날짜별 추가·상세 목록"
+  },
+  {
+    "name": "LedgerTree",
+    "layer": "도메인",
+    "source": "src/client/LedgerTree.tsx",
+    "story": "src/stories/domain/LedgerTree.stories.tsx",
+    "status": "shared",
+    "usage": "중첩 경로·보관·사용자 권한별 이동"
+  },
+  {
+    "name": "TagFields",
+    "layer": "도메인",
+    "source": "src/client/TagFields.tsx",
+    "story": "src/stories/domain/TagFields.stories.tsx",
+    "status": "partial",
+    "usage": "단일/복수·가계부 범위·상하위 옵션. 서버 옵션 생성은 E2E 검증"
+  },
+  {
+    "name": "입력 필드 / Checkbox / SegmentedControl",
+    "layer": "전환 대기",
+    "source": "src/client/TransactionForm.tsx",
+    "status": "legacy",
+    "usage": "기존 JSX와 공통 CSS. 독립 컴포넌트 명세로 분리 필요"
+  },
+  {
+    "name": "자산·카드/통장·통계·계획·데이터 관리 전체 화면",
+    "layer": "전환 대기",
+    "source": "src/client/App.tsx",
+    "status": "legacy",
+    "usage": "서버·상태 결합 화면. 현재 E2E가 전체 동작을 검증하며 Storybook 전체 화면 명세는 아직 없음"
+  }
+]

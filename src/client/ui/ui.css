@@ -1,0 +1,71 @@
+/* Reusable composition rules. App and Storybook load this same file. */
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--brand-space-2);
+  min-height: var(--brand-control-size);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.ui-button > svg,
+.ui-button > .uga-icon {
+  flex-shrink: 0;
+}
+.ui-icon-button {
+  width: var(--brand-control-size);
+  min-width: var(--brand-control-size);
+  height: var(--brand-control-size);
+  padding: 0;
+  flex-shrink: 0;
+}
+.ui-stack,
+.ui-inline,
+.ui-grid,
+.ui-surface {
+  min-width: 0;
+}
+.ui-stack > *,
+.ui-inline > *,
+.ui-grid > * {
+  min-width: 0;
+}
+.ui-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap);
+}
+.ui-inline {
+  display: flex;
+  flex-wrap: var(--ui-wrap);
+  align-items: var(--ui-align);
+  justify-content: var(--ui-justify);
+  gap: var(--ui-gap);
+}
+.ui-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--ui-grid-columns), minmax(0, 1fr));
+  gap: var(--ui-gap);
+}
+.ui-surface {
+  padding: var(--ui-padding);
+  border-radius: var(--brand-radius-card);
+  background: var(--brand-surface);
+  overflow-wrap: anywhere;
+}
+.ui-surface[data-tone='subtle'] {
+  background: var(--brand-surface-subtle);
+}
+.ui-surface[data-raised] {
+  box-shadow: var(--brand-shadow-card);
+}
+@media (min-width: 761px) and (max-width: 1000px) {
+  .ui-grid {
+    grid-template-columns: repeat(var(--ui-grid-tablet-columns), minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .ui-grid {
+    grid-template-columns: repeat(var(--ui-grid-mobile-columns), minmax(0, 1fr));
+  }
+}

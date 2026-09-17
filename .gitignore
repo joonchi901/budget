@@ -10,5 +10,7 @@ dist/
 output/playwright/
 test-results/
 playwright-report/
+storybook-static/
+output/storybook/
 *.log
 .DS_Store

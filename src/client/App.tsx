@@ -8,6 +8,8 @@ import {
 import { isRoomPage, type AppPage } from '../shared/app-route';
 import { useAppRoute } from './useAppRoute';
 import LedgerRooms from './LedgerRooms';
+import RoomHeader from './RoomHeader';
+import { Button, Grid } from './ui';
 import LedgerTree from './LedgerTree';
 import HierarchyDialog, { type MoveIntent } from './HierarchyDialog';
 import MemberRoles from './MemberRoles';
@@ -29,17 +31,14 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpRight,
   Check,
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
   Link2,
-  List,
   LogOut,
   Menu,
   Plus,
   Search,
-  Settings2,
   Sparkles,
   WifiOff,
   X,
@@ -488,85 +487,26 @@ export default function App() {
           </div>
         </header>
         {inRoom && (
-          <section className="room-context" aria-label="현재 가계부">
-            <div className="room-context-heading">
-              <button
-                className="icon-button room-back"
-                aria-label="가계부 목록"
-                onClick={() => changePage('rooms')}
-              >
-                <ChevronLeft size={23} />
-              </button>
-              <span className="room-context-icon">
-                <UgaLedgerIcon value={ledger.icon} size={34} />
-              </span>
-              <div className="room-context-title">
-                <Tooltip content={ledgerPath(data.ledgers, ledger.id) || ledger.name}>
-                  <h1 tabIndex={0}>{ledger.name}</h1>
-                </Tooltip>
-                <span>
-                  {isOverall
-                    ? '모든 가계부 모아보기'
-                    : `${
-                        ledgerAncestors(data.ledgers, ledger.id)
-                          .map((item) => item.name)
-                          .join(' / ') || '우리 집 공동 가계부'
-                      }${ledger.archived ? ' · 보관됨' : ''}`}{' '}
-                  · {roomTabName}
-                </span>
-              </div>
-              {!isOverall && (
-                <button
-                  className="icon-button room-settings-mobile"
-                  aria-label="가계부 설정"
-                  onClick={() => setSettingsLedger(ledger)}
-                >
-                  <Settings2 size={20} />
-                </button>
-              )}
-              <button
-                className="icon-button room-menu"
-                aria-label="우리 집 메뉴"
-                onClick={() => setMobileMenu(true)}
-              >
-                <Menu size={21} />
-              </button>
-            </div>
-            <div className="room-tabs" role="group" aria-label="가계부 보기">
-              <button
-                className={page === 'ledger' && ledgerView === 'list' ? 'selected' : ''}
-                aria-pressed={page === 'ledger' && ledgerView === 'list'}
-                onClick={() => changeLedgerView('list')}
-              >
-                <List size={17} />
-                목록
-              </button>
-              <button
-                className={page === 'ledger' && ledgerView === 'calendar' ? 'selected' : ''}
-                aria-pressed={page === 'ledger' && ledgerView === 'calendar'}
-                onClick={() => changeLedgerView('calendar')}
-              >
-                <CalendarDays size={17} />
-                캘린더
-              </button>
-              <button
-                className={page === 'analytics' ? 'selected' : ''}
-                aria-pressed={page === 'analytics'}
-                onClick={() => changePage('analytics')}
-              >
-                <UgaIcon name="analytics" size={19} />
-                통계
-              </button>
-              <button
-                className={page === 'planning' ? 'selected' : ''}
-                aria-pressed={page === 'planning'}
-                onClick={() => changePage('planning')}
-              >
-                <UgaIcon name="planning" size={19} />
-                계획 · 일정
-              </button>
-            </div>
-          </section>
+          <RoomHeader
+            name={ledger.name}
+            path={ledgerPath(data.ledgers, ledger.id) || ledger.name}
+            parentPath={ledgerAncestors(data.ledgers, ledger.id)
+              .map((item) => item.name)
+              .join(' / ')}
+            icon={ledger.icon}
+            archived={ledger.archived}
+            aggregate={isOverall}
+            view={
+              page === 'analytics' ? 'analytics' : page === 'planning' ? 'planning' : ledgerView
+            }
+            onBack={() => changePage('rooms')}
+            onMenu={() => setMobileMenu(true)}
+            onSettings={isOverall ? undefined : () => setSettingsLedger(ledger)}
+            onViewChange={(view) => {
+              if (view === 'list' || view === 'calendar') changeLedgerView(view);
+              else changePage(view);
+            }}
+          />
         )}
         <main className={`main-content page-${page}`} id="main-content" tabIndex={-1}>
           <div className="page-heading">
@@ -606,9 +546,9 @@ export default function App() {
             )}
             <div className="heading-actions">
               {page === 'rooms' && admin && (
-                <button className="primary" onClick={() => openNewLedger()}>
+                <Button variant="primary" onClick={() => openNewLedger()}>
                   <Plus size={17} />새 가계부
-                </button>
+                </Button>
               )}
               {page !== 'rooms' && page !== 'tags' && page !== 'data' && (
                 <div className="month-picker">
@@ -665,7 +605,7 @@ export default function App() {
                 하위 가계부 <span>{children.length}개</span>
                 <ChevronRight size={16} />
               </summary>
-              <div className="room-child-list">
+              <Grid className="room-child-list" columns={3} mobileColumns={2} gap={2}>
                 {children.map((child) => (
                   <button key={child.id} onClick={() => navigate(child.id)}>
                     <UgaLedgerIcon value={child.icon} size={24} />
@@ -682,7 +622,7 @@ export default function App() {
                     <span>하위 가계부 추가</span>
                   </button>
                 )}
-              </div>
+              </Grid>
             </details>
           )}
           {page === 'ledger' && (
@@ -1270,7 +1210,15 @@ function LedgerView({
             ? '모든 하위 가계부 포함'
             : '현재 가계부만'}
       </p>
-      <section className="stats-grid" aria-label="조회 기간 요약">
+      <Grid
+        as="section"
+        className="stats-grid"
+        columns={4}
+        tabletColumns={2}
+        mobileColumns={2}
+        gap={0}
+        aria-label="조회 기간 요약"
+      >
         <Stat
           label={period === 'month' ? '이번 달 지출' : '조회 기간 지출'}
           amount={sum.expense}
@@ -1318,7 +1266,7 @@ function LedgerView({
             hint={`예산 ${won(budget)}원 · ${budgetState.periodStart === '0001-01-01' && budgetState.periodEnd === '9999-12-31' ? '전체 기간' : `${budgetState.periodStart ?? '전체'} ~ ${budgetState.periodEnd ?? '전체'}`}`}
           />
         )}
-      </section>
+      </Grid>
       <div className="ledger-body-grid">
         <section className="panel transactions-panel">
           <div className="transactions-heading">

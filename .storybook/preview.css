@@ -1,0 +1,16 @@
+/* Canvas framing only. Component styling always comes from the product. */
+body {
+  background: var(--brand-canvas);
+}
+.ui-spec-canvas {
+  padding: var(--brand-space-6);
+  min-width: 0;
+}
+.ui-spec-canvas > * {
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .ui-spec-canvas {
+    padding: var(--brand-space-3);
+  }
+}
