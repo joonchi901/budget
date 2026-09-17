@@ -25,6 +25,8 @@ import { TagBadge } from './TagBadge';
 import './management.css';
 import './analytics-ux.css';
 
+const UNASSIGNED_PAYMENT = '__unassigned_payment__';
+
 export function downloadFile(name: string, content: string, type = 'text/csv;charset=utf-8') {
   const url = URL.createObjectURL(new Blob([content], { type }));
   const anchor = document.createElement('a');
@@ -94,7 +96,7 @@ export default function AnalyticsView({
     includeDescendants: includeDescendants && sourceId !== ledgerId,
     ...period,
     ownerId: owner,
-    paymentMethodId: payment,
+    paymentMethodId: payment === UNASSIGNED_PAYMENT ? null : payment,
     assetId: asset,
     type,
     tagIds: selected,
@@ -151,7 +153,10 @@ export default function AnalyticsView({
       ? [
           {
             id: 'payment',
-            label: data.paymentMethods.find((item) => item.id === payment)?.name ?? '결제수단',
+            label:
+              payment === UNASSIGNED_PAYMENT
+                ? '결제수단 미지정'
+                : (data.paymentMethods.find((item) => item.id === payment)?.name ?? '결제수단'),
             remove: () => setPayment(''),
           },
         ]
@@ -296,7 +301,10 @@ export default function AnalyticsView({
                 <td className="analysis-record-payment">
                   {ownerName(tx.ownerId)}
                   <small>
-                    {data.paymentMethods.find((p) => p.id === tx.paymentMethodId)?.name}
+                    {tx.paymentMethodId === null
+                      ? '미지정'
+                      : (data.paymentMethods.find((p) => p.id === tx.paymentMethodId)?.name ??
+                        '알 수 없는 결제수단')}
                   </small>
                 </td>
                 <td className="analysis-record-amount">
@@ -536,6 +544,7 @@ export default function AnalyticsView({
               결제수단
               <SelectField value={payment} onValueChange={(value) => setPayment(value)}>
                 <SelectOption value="">전체</SelectOption>
+                <SelectOption value={UNASSIGNED_PAYMENT}>미지정</SelectOption>
                 {data.paymentMethods.map((p) => (
                   <SelectOption key={p.id} value={p.id}>
                     {p.name}
@@ -1092,7 +1101,7 @@ export default function AnalyticsView({
                   {payments.map((paymentRow) => {
                     const matching = rows.filter((tx) => tx.paymentMethodId === paymentRow.id);
                     return (
-                      <tr key={paymentRow.id}>
+                      <tr key={paymentRow.id ?? UNASSIGNED_PAYMENT}>
                         <th scope="row">{paymentRow.name}</th>
                         <td>
                           <button

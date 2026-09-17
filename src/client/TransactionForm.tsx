@@ -70,7 +70,7 @@ function readDeviceDraft(key: string, ledgerId: string, originalId?: string): De
       !Number.isFinite(row.amount) ||
       !['income', 'expense'].includes(row.type) ||
       !['u1', 'u2', 'shared'].includes(row.ownerId) ||
-      typeof row.paymentMethodId !== 'string' ||
+      (row.paymentMethodId !== null && typeof row.paymentMethodId !== 'string') ||
       !Array.isArray(row.tagIds) ||
       row.tagIds.length > 100 ||
       !row.tagIds.every((id) => typeof id === 'string') ||
@@ -138,7 +138,7 @@ export default function TransactionForm({
         amount: 0,
         type: 'expense',
         ownerId: 'shared',
-        paymentMethodId: data.paymentMethods.find((p) => !p.archived)?.id ?? '',
+        paymentMethodId: null,
         tagIds: [],
         allocations: [],
       };
@@ -263,7 +263,6 @@ export default function TransactionForm({
       draft.amount <= 1000000000000 &&
       Number.isFinite(parsed.getTime()) &&
       parsed.toISOString().slice(0, 10) === draft.date &&
-      Boolean(draft.paymentMethodId) &&
       draft.allocations.every(
         (row) => Boolean(row.assetId) && Number.isSafeInteger(row.amount) && row.amount > 0,
       ) &&
@@ -614,9 +613,10 @@ export default function TransactionForm({
                   결제수단
                   <SelectField
                     name="paymentMethodId"
-                    value={draft.paymentMethodId}
-                    onValueChange={(value) => patch({ paymentMethodId: value })}
+                    value={draft.paymentMethodId ?? ''}
+                    onValueChange={(value) => patch({ paymentMethodId: value || null })}
                   >
+                    <SelectOption value="">미지정</SelectOption>
                     {data.paymentMethods
                       .filter(
                         (method) => !method.archived || method.id === original?.paymentMethodId,

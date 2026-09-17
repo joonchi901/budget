@@ -150,3 +150,74 @@ test('mobile entry exposes invalid asset allocation and keeps actions within the
     expect(box!.x + box!.width).toBeLessThanOrEqual(320);
   }
 });
+
+test('unassigned payment entries restore drafts, save, edit and remain visible in calendar and analytics', async ({
+  page,
+}) => {
+  await login(page);
+  let form = await openNew(page);
+  await expect(form.getByRole('combobox', { name: '결제수단', exact: true })).toHaveAttribute(
+    'data-value',
+    '',
+  );
+  await expect(form.getByRole('combobox', { name: '결제수단', exact: true })).toContainText(
+    '미지정',
+  );
+  await fill(form, '결제수단 미지정 기록 검증', '7345');
+  await chooseDate(form.getByLabel('날짜', { exact: true }), '2026-09-19');
+  await form.getByRole('button', { name: '닫기', exact: true }).last().click();
+  form = await openNew(page);
+  await expect(form.getByText('이 기기의 초안을 복원했어요.', { exact: true })).toBeVisible();
+  await expect(form.getByLabel('내용', { exact: true })).toHaveValue('결제수단 미지정 기록 검증');
+  await expect(form.getByRole('combobox', { name: '결제수단', exact: true })).toHaveAttribute(
+    'data-value',
+    '',
+  );
+  await form.getByRole('button', { name: '저장', exact: true }).click();
+  await expect(form).not.toBeVisible();
+  let stored = (await snapshot(page)).transactions.find(
+    (row) => row.description === '결제수단 미지정 기록 검증',
+  )!;
+  expect(stored.paymentMethodId).toBeNull();
+  await expect(page.getByRole('row').filter({ hasText: stored.description })).toContainText(
+    '미지정',
+  );
+
+  for (const payment of ['cash', '']) {
+    await page.getByRole('button', { name: '결제수단 미지정 기록 검증 수정', exact: true }).click();
+    const edit = page.getByRole('dialog', { name: '내역 수정', exact: true });
+    await edit.getByLabel('수정 내용 자동 저장', { exact: true }).uncheck();
+    await selectChoice(edit.getByRole('combobox', { name: '결제수단', exact: true }), payment);
+    await edit.getByRole('button', { name: '저장', exact: true }).click();
+    await expect(edit).not.toBeVisible();
+    stored = (await snapshot(page)).transactions.find((row) => row.id === stored.id)!;
+    expect(stored.paymentMethodId).toBe(payment || null);
+  }
+
+  await page
+    .getByRole('group', { name: '가계부 보기', exact: true })
+    .getByRole('button', { name: '캘린더', exact: true })
+    .click();
+  await page.getByRole('button', { name: /2026-09-19 내역 \d+건 보기/ }).click();
+  const day = page.getByRole('dialog', { name: '9월 19일 내역', exact: true });
+  await expect(
+    day.getByRole('button', { name: '결제수단 미지정 기록 검증 내역 열기', exact: true }),
+  ).toContainText('미지정');
+  await day.getByRole('button', { name: '닫기', exact: true }).last().click();
+  await page.getByRole('button', { name: '통계', exact: true }).click();
+  await page.locator('details.analysis-extra-filters > summary').click();
+  await selectChoice(page.getByRole('combobox', { name: '결제수단', exact: true }), {
+    label: '미지정',
+  });
+  await expect(
+    page.getByRole('button', { name: '결제수단 미지정 필터 해제', exact: true }),
+  ).toBeVisible();
+  const views = page.getByRole('group', { name: '분석 보기', exact: true });
+  await views.getByRole('button', { name: '거래 내역', exact: true }).click();
+  await expect(
+    page.getByRole('row').filter({ hasText: '결제수단 미지정 기록 검증' }),
+  ).toContainText('미지정');
+  await views.getByRole('button', { name: '가계부·결제수단', exact: true }).click();
+  const paymentTable = page.getByRole('region', { name: '결제수단별 사용액 표', exact: true });
+  await expect(paymentTable.getByRole('row').filter({ hasText: '미지정' })).toBeVisible();
+});

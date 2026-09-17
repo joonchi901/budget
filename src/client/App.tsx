@@ -683,7 +683,16 @@ export default function App() {
               onNotice={notice}
               excelImport={
                 <Suspense fallback={<p className="muted">엑셀 가져오기 준비 중…</p>}>
-                  <ExcelImportView data={data} onChanged={state.refresh} onNotice={notice} />
+                  <ExcelImportView
+                    data={data}
+                    onChanged={state.refresh}
+                    onNotice={notice}
+                    onOpenLedger={(id) => {
+                      navigate(id);
+                      setPeriod('period');
+                      changeLedgerView('list');
+                    }}
+                  />
                 </Suspense>
               }
             />
@@ -1289,7 +1298,10 @@ function LedgerView({
                         </div>
                       </td>
                       <td className="payment-cell">
-                        {data.paymentMethods.find((p) => p.id === tx.paymentMethodId)?.name}
+                        {tx.paymentMethodId === null
+                          ? '미지정'
+                          : (data.paymentMethods.find((p) => p.id === tx.paymentMethodId)?.name ??
+                            '알 수 없는 결제수단')}
                       </td>
                       <td className="owner-cell">
                         <span className={`owner-badge ${tx.ownerId}`}>{ownerName(tx.ownerId)}</span>

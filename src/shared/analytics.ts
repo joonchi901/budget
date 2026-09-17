@@ -20,7 +20,7 @@ export interface AnalysisFilter {
   startDate: string;
   endDate: string;
   ownerId?: string;
-  paymentMethodId?: string;
+  paymentMethodId?: string | null;
   assetId?: string;
   tagIds?: string[];
   type?: string;
@@ -50,7 +50,9 @@ export function analysisTransactions(data: Bootstrap, filter: AnalysisFilter): T
         tx.date >= filter.startDate &&
         tx.date <= filter.endDate &&
         (!filter.ownerId || tx.ownerId === filter.ownerId) &&
-        (!filter.paymentMethodId || tx.paymentMethodId === filter.paymentMethodId) &&
+        (filter.paymentMethodId === undefined ||
+          filter.paymentMethodId === '' ||
+          tx.paymentMethodId === filter.paymentMethodId) &&
         (!filter.assetId || tx.allocations.some((a) => a.assetId === filter.assetId)) &&
         (!filter.type || tx.type === filter.type) &&
         (!filter.search ||
@@ -218,7 +220,12 @@ export function paymentAnalysis(data: Bootstrap, rows: Transaction[]) {
     const payment = data.paymentMethods.find((method) => method.id === id);
     return {
       id,
-      name: payment ? `${payment.name}${payment.archived ? ' (보관)' : ''}` : '알 수 없는 결제수단',
+      name:
+        id === null
+          ? '미지정'
+          : payment
+            ? `${payment.name}${payment.archived ? ' (보관)' : ''}`
+            : '알 수 없는 결제수단',
       ...analysisMetrics(unique.filter((row) => row.paymentMethodId === id)),
     };
   });
@@ -280,7 +287,10 @@ export function transactionsCsv(data: Bootstrap, rows: Transaction[]) {
       t.description,
       t.amount,
       t.ownerId,
-      data.paymentMethods.find((p) => p.id === t.paymentMethodId)?.name,
+      t.paymentMethodId === null
+        ? '미지정'
+        : (data.paymentMethods.find((p) => p.id === t.paymentMethodId)?.name ??
+          '알 수 없는 결제수단'),
       t.tagIds.map((id) => data.tags.find((t) => t.id === id)?.name).join(' / '),
       t.allocations
         .map((a) => `${data.assets.find((s) => s.id === a.assetId)?.name}: ${a.amount}`)

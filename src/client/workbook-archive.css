@@ -1,0 +1,184 @@
+.workbook-archive-status:empty {
+  display: none;
+}
+.workbook-archive-list {
+  display: grid;
+  gap: 12px;
+}
+.workbook-archive-list > article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 18px;
+  background: var(--surface-subtle);
+  border-radius: var(--brand-radius-control);
+}
+.workbook-archive-list > article.is-open {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.workbook-archive-file {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.workbook-archive-file strong,
+.workbook-cell-viewer h3 {
+  overflow-wrap: anywhere;
+}
+.workbook-archive-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.workbook-archive-actions button {
+  min-height: 44px;
+}
+.workbook-cell-viewer {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.workbook-cell-filters {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(200px, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+  margin: 20px 0 14px;
+}
+.workbook-archive .workbook-cell-filters > label {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--brand-font-size-caption);
+  color: var(--text-secondary);
+}
+.workbook-cell-filters > label > .ui-select,
+.workbook-cell-filters > label > .ui-field {
+  margin-top: 0;
+}
+.workbook-cell-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  min-height: 48px;
+  margin-top: 0;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: var(--brand-radius-control);
+}
+.workbook-cell-search:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.workbook-archive .workbook-cell-search > input:not([type='checkbox']) {
+  min-width: 0;
+  width: 100%;
+  min-height: 46px;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 16px;
+}
+.workbook-cell-filters > .checkbox {
+  min-height: 48px;
+}
+.workbook-cell-table {
+  max-height: 620px;
+}
+.workbook-cell-table th[scope='row'] {
+  position: static;
+  background: transparent;
+  width: 90px;
+  font-variant-numeric: tabular-nums;
+}
+.workbook-cell-table td {
+  white-space: pre-wrap;
+}
+.workbook-cell-table .workbook-formula {
+  min-width: 220px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.workbook-cell-error {
+  color: var(--danger);
+}
+.workbook-archive-empty {
+  padding: 22px 16px;
+}
+.workbook-cell-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: var(--brand-font-size-caption);
+  font-variant-numeric: tabular-nums;
+}
+.source-transaction-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 16px 0 12px;
+}
+.source-transaction-summary h3 {
+  margin: 0;
+  min-width: 0;
+  flex: 1 1 220px;
+  font-size: 17px;
+  overflow-wrap: anywhere;
+}
+.source-transaction-summary > strong {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.source-transaction-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px 18px;
+  margin: 0 0 16px;
+}
+.source-transaction-fields > div {
+  min-width: 0;
+}
+.source-transaction-fields dt {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+.source-transaction-fields dd {
+  margin: 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+@media (max-width: 900px) {
+  .workbook-cell-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workbook-cell-filters > .checkbox {
+    grid-column: 1 / -1;
+  }
+  .source-transaction-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 540px) {
+  .workbook-cell-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workbook-archive-list > article {
+    padding: 14px;
+  }
+  .workbook-archive-actions {
+    width: 100%;
+  }
+  .workbook-archive-actions > button {
+    flex: 1;
+    min-width: 0;
+  }
+}

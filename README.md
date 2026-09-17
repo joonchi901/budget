@@ -49,21 +49,23 @@ npm run dev
 - 카드 구매만 소비 지출입니다. 청구 예상액·납부일은 별도 정보이며 지출을 다시 생성하지 않습니다. 할부·취소·이월·은행 휴일 보정은 아직 지원하지 않습니다.
 - 가구당 Durable Object 하나로 접속·편집 위치·변경 순번을 공유하고, 누락된 변경은 API 재조회로 복구하는 구조입니다.
 
-**운영 주소는 [우리의 가계부](https://our-budget-production.our-budget.workers.dev)이며, 등록한 두 Google 계정으로 로그인합니다.** 2026-09-17 소스 `1cbb067`의 최초 업로드 version은 `fe1fe4e5-5f00-464c-93c2-179d80bc1470`, 비밀값 등록 후 현재 활성 version은 `e044d481-5d20-4633-8c36-f3f6a5dc189a`입니다. Google 웹 클라이언트·운영 callback·최소 로그인 범위와 Worker secrets 네 개를 설정했습니다. 실제 이메일·비밀값은 Git에 기록하지 않습니다.
+**운영 주소는 [우리의 가계부](https://our-budget-production.our-budget.workers.dev)이며, 등록한 두 Google 계정으로 로그인합니다.** 2026-09-17 현재 활성 Worker version은 `9b45323c-23d1-4704-b0e5-d181f77e336c`입니다. 월별 가계부 이관·결제수단 미지정·엑셀 원본 보관 기능을 포함하며, 실제 자료의 반영 결과는 [엑셀 이력 가져오기](./docs/excel-history-import.md)에 기록합니다. Google 웹 클라이언트·운영 callback·최소 로그인 범위와 Worker secrets 네 개를 설정했습니다. 실제 이메일·비밀값은 Git에 기록하지 않습니다.
 
-인증 설정 완료 상태에서 HTTPS 화면, 운영 모드, 비로그인 API·백업·WebSocket의 `401 UNAUTHENTICATED`, 원격 데모의 `404 NOT_FOUND` 검사를 통과했습니다. 본인 Google 계정의 메인 가계부 접근·실시간 연결·새로고침 유지·로그아웃·재로그인을 확인했고 금융 기록은 만들지 않았습니다. **배우자 계정 로그인과 실제 2인 공동 동작은 아직 확인하지 않았습니다.**
+인증 설정 완료 상태에서 HTTPS 화면, 운영 모드, 비로그인 API·백업·WebSocket의 `401 UNAUTHENTICATED`, 원격 데모의 `404 NOT_FOUND` 검사를 통과했습니다. 본인 Google 계정의 메인 가계부 접근·실시간 연결·새로고침 유지·로그아웃·재로그인을 확인했습니다. 최초 로그인 검증 당시에는 금융 기록을 만들지 않았습니다. **배우자 계정 로그인과 실제 2인 공동 동작은 아직 확인하지 않았습니다.**
 
-운영 배포는 `wrangler.jsonc`의 `production` 환경을 사용합니다. 운영 D1 생성과 migration 11개 적용을 완료했고 가상 seed는 실행하지 않았습니다. `npm run deploy:preview`로 업로드 없이 패키징을 검사하고 `npm run deploy:production`으로 배포합니다. 후속 스키마 변경은 `npm run db:migrate:production`으로 적용합니다. 자세한 연결 상태와 비로그인 접근 검사는 [운영 로그인 설정](./docs/auth-deployment.md)을 따릅니다.
+운영 배포는 `wrangler.jsonc`의 `production` 환경을 사용합니다. 운영 D1 생성과 migration `0001`~`0013` 적용을 완료했고 가상 seed는 실행하지 않았습니다. `npm run deploy:preview`로 업로드 없이 패키징을 검사하고 `npm run deploy:production`으로 배포합니다. 후속 스키마 변경은 `npm run db:migrate:production`으로 적용합니다. 자세한 연결 상태와 비로그인 접근 검사는 [운영 로그인 설정](./docs/auth-deployment.md)을 따릅니다.
 
 Gmail이 아닌 주소의 Google 계정도 사용할 수 있습니다. 별칭·전달 주소 대신 각 계정이 실제 반환하는 기본 이메일 두 개를 허용목록에 등록해야 합니다. 데모 인증은 `DEMO_MODE=true`와 로컬 호스트 조건을 모두 요구하며 운영에서는 허용하지 않습니다. Cloudflare 실제 사용량·무료 운영 비용·원격 성능은 별도 검증이 필요합니다.
 
 ## Excel 가져오기와 백업
 
-- 데이터 관리 → 원본 XLSX 선택 → 결제수단 연결 → 미리보기 → 반영 순서로 사용합니다.
+- 데이터 관리 → 원본 XLSX 선택 → 가계부 구성 선택 → 미리보기 → 반영 순서로 사용합니다. 결제수단 연결은 선택이며, 미지정 거래도 원장·캘린더·통계에서 조회합니다.
+- 원본의 분류·내역·추가 태그와 예비금 항목을 구성하며, 새 가계부 아래 1~12월로 나누어 가져올 수 있습니다. 반영 후 ‘가져온 가계부 보기’에서 전체 기간의 이력을 확인합니다.
 - 같은 원본은 같은 식별자로 다시 가져옵니다. 원본 위치로 중복을 판별하며 변경된 원문은 조용히 덮어쓰지 않습니다.
 - 날짜 없는 기록, 저축 자산 연결, 예비금의 중복 여부는 검토함에 보존합니다. 검토 완료 상태를 바꾸는 것만으로 금액이 반영되지는 않습니다.
 - 최초 관측일 이전의 자산 잔액은 미확인입니다. 월말 관측 잔액과 이후 조정은 저축 실적을 만들지 않습니다.
 - JSON은 전체 복원용이며 현재 가구 자료를 교체합니다. CSV는 거래 교환용입니다. 세션과 로그인 비밀값은 백업하지 않습니다.
+- 엑셀 원본 탭은 보관된 전체 파일의 시트·셀 조회와 원본 다운로드를 제공합니다. 파일 복원 시 SHA-256을 검증합니다. 자세한 범위는 [엑셀 이력 가져오기](./docs/excel-history-import.md)를 참고하세요.
 
 ## 개발 명령
 
@@ -113,4 +115,5 @@ NODE_USE_SYSTEM_CA=1 npm ci
 - [시스템 구성 기준서](./docs/system-architecture-baseline.md): 운영 구조와 보안·복구 기준
 - [핵심 흐름 설계](./docs/core-design.md): 이번 구현의 업무 규칙과 데이터 관계
 - [UI/UX 개선 기준](./docs/ui-ux-design.md): Toss 공식 자료 조사, 화면 구조·디자인 규칙과 검증
+- [우가 디자인시스템](./docs/uga-design-system.md): 캐릭터 기반 SVG 38종, 브랜드·UI 보드, 공통 토큰과 앱 적용
 - [구현 현황](./docs/implementation-status.md): 현재 소스·검증 근거와 후속 필수 기능

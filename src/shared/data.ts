@@ -148,7 +148,7 @@ export function csvImportRows(
   const [headers, ...lines] = csv;
   if (!headers) return { rows: [], errors: ['CSV가 비어 있어요.'] };
   const errors: string[] = [];
-  for (const key of ['rowId', 'date', 'description', 'amount', 'type', 'payment'] as const)
+  for (const key of ['rowId', 'date', 'description', 'amount', 'type'] as const)
     if (!mapping[key] || !headers.includes(mapping[key]))
       errors.push(`${csvMappingLabels[key]} 열을 연결해 주세요.`);
   if (new Set(headers).size !== headers.length) errors.push('중복된 CSV 열 이름이 있어요.');
@@ -169,7 +169,7 @@ export function csvImportRows(
     const payments = data.paymentMethods.filter(
       (p) => p.id === paymentName || p.name === paymentName,
     );
-    if (payments.length !== 1)
+    if (paymentName && payments.length !== 1)
       errors.push(`${where}: 결제수단 “${paymentName}”을 하나로 확인할 수 없어요.`);
     const tagIds = value(line, 'tags')
       .split('|')
@@ -208,7 +208,7 @@ export function csvImportRows(
         amount: Number(rawAmount.replace(/,/g, '')),
         type: rawType === '수입' || rawType === 'income' ? 'income' : 'expense',
         ownerId: owners[0]?.id ?? ('shared' as OwnerId),
-        paymentMethodId: payments[0]?.id ?? '',
+        paymentMethodId: paymentName ? (payments[0]?.id ?? '') : null,
         tagIds,
         allocations: [],
       },

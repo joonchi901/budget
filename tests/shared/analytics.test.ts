@@ -323,6 +323,23 @@ describe('complete analysis views', () => {
       { id: 'missing', name: '알 수 없는 결제수단', income: 30, expense: 0, count: 1 },
     ]);
   });
+  it('keeps unassigned payments in totals, distinguishes their filter from all payments and exports their label', () => {
+    const d = data();
+    const missing = tx('unassigned', { paymentMethodId: null, amount: 250 });
+    d.transactions = [missing, tx('assigned', { amount: 100 })];
+    const filter = { ledgerId: 'main', startDate: '2026-09-01', endDate: '2026-09-30' };
+    expect(analysisTransactions(d, filter)).toHaveLength(2);
+    expect(analysisTransactions(d, { ...filter, paymentMethodId: '' })).toHaveLength(2);
+    expect(analysisTransactions(d, { ...filter, paymentMethodId: null })).toEqual([missing]);
+    expect(
+      analysisTransactions(d, { ...filter, paymentMethodId: 'cash' }).map((row) => row.id),
+    ).toEqual(['assigned']);
+    expect(paymentAnalysis(d, [missing, missing, ...d.transactions])).toEqual([
+      { id: null, name: '미지정', income: 0, expense: 250, count: 1 },
+      { id: 'cash', name: '알 수 없는 결제수단', income: 0, expense: 100, count: 1 },
+    ]);
+    expect(transactionsCsv(d, [missing])).toContain('"미지정"');
+  });
   it('shows parent names for dependent options and terminates malformed cycles safely', () => {
     const d = data();
     d.tags[1].parentId = 'food';

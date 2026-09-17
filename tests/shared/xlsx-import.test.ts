@@ -422,4 +422,320 @@ describe('synthetic XLSX import reconciliation', () => {
     expect(repeated.counts.source_records).toBe(0);
     expect(repeated.backup.tables.transactions).toHaveLength(1);
   });
+
+  it('imports clear income and expenses without a payment mapping or minor classification and keeps the unresolved facts', async () => {
+    const book = workbook(
+      {
+        ...expense,
+        X30: null,
+        Y30: '연결하지 않은 원본 표기',
+        Z30: '원본 사용자 태그',
+        T31: '2026-09-17',
+        U31: '합성 입금',
+        V31: 500,
+        W31: '수입',
+        X31: '급여',
+        Y31: null,
+      },
+      [],
+      { B7: null, C7: '상위 없는 원본 옵션', B8: '미사용 분류', C8: '미사용 옵션' },
+    );
+    const initial = baseline();
+    const before = structuredClone(initial);
+    const result = await buildWorkbookImport(book, initial, { ...options, payments: {} });
+    expect(initial).toEqual(before);
+    expect(result.transactions).toEqual({ count: 2, income: 500, expense: 120 });
+    expect(result.backup.tables.transactions.map((tx) => tx.payment_method_id)).toEqual([
+      null,
+      null,
+    ]);
+    expect(sourceAt(result.backup)).toMatchObject({ status: 'resolved' });
+    expect(String(sourceAt(result.backup).note)).toContain('연결하지 않은 원본 표기');
+    expect(String(sourceAt(result.backup).note)).toContain('결제수단 미지정');
+    expect(JSON.parse(String(sourceAt(result.backup).payload_json)).payment).toBe(
+      '연결하지 않은 원본 표기',
+    );
+    expect(result.pending).toEqual([
+      expect.objectContaining({ source: '1!T30:Z30', message: expect.stringContaining('소분류') }),
+    ]);
+    expect(result.backup.tables.tags.map((tag) => tag.name)).toEqual(
+      expect.arrayContaining([
+        '원본 사용자 태그',
+        '상위 없는 원본 옵션',
+        '미사용 분류',
+        '미사용 옵션',
+      ]),
+    );
+    expect(result.backup.tables.tags.map((tag) => tag.name)).not.toContain('미분류');
+    expect(result.backup.tables.tags.every((tag) => String(tag.name).trim())).toBe(true);
+    expect(result.counts.payment_methods).toBe(0);
+    const repeat = await buildWorkbookImport(book, result.backup, { ...options, payments: {} });
+    expect(repeat.transactions.count).toBe(0);
+    expect(repeat.counts.source_records).toBe(0);
+    expect(repeat.backup.tables.transactions).toEqual(result.backup.tables.transactions);
+  });
+
+  it('holds unknown direction, missing dates, negative amounts and savings without inventing financial effects', async () => {
+    const result = await buildWorkbookImport(
+      workbook({
+        ...expense,
+        W30: null,
+        X30: '방향 미확정 원본 옵션',
+        T31: null,
+        U31: '날짜 미확정',
+        V31: 100,
+        W31: '수입',
+        X31: '기타',
+        T32: '2026-09-18',
+        U32: '음수 원본',
+        V32: -100,
+        W32: '식비',
+        X32: '반환 여부 미확정',
+        T33: '2026-09-19',
+        U33: '자산 연결 없는 저축',
+        V33: 100,
+        W33: '저축',
+        X33: '미연결 저축 옵션',
+        Z33: '보류 중에도 보존할 태그',
+      }),
+      baseline(),
+      { ...options, payments: {} },
+    );
+    expect(result.transactions).toEqual({ count: 0, income: 0, expense: 0 });
+    expect(result.assetOperations).toEqual([]);
+    for (const row of [30, 31, 32, 33])
+      expect(sourceAt(result.backup, `1!T${row}:Z${row}`).status).toBe('pending');
+    expect(result.backup.tables.tags.map((tag) => tag.name)).toEqual(
+      expect.arrayContaining([
+        '방향 미확정 원본 옵션',
+        '반환 여부 미확정',
+        '미연결 저축 옵션',
+        '보류 중에도 보존할 태그',
+      ]),
+    );
+  });
+
+  it('preserves reserve category options even without a summary or amount and only tags explicitly listed assets', async () => {
+    const book = workbook({}, [
+      sheet('예비비', {
+        B10: '합성 예비금',
+        B26: '2026-09-16',
+        C26: 20,
+        D26: '합성 미등록 항목',
+        E26: '합성 유입',
+        K10: '2026-09-17',
+        L10: '합성 사용',
+        M10: 10,
+        N10: '합성 미등록 항목',
+        N11: '합성미등록 항목',
+        K12: '2026-09-18',
+        L12: '합성 확인 전 사용',
+        M12: 5,
+        N12: '합성 예비금',
+      }),
+    ]);
+    const result = await buildWorkbookImport(book, baseline(), options);
+    const group = result.backup.tables.tag_groups.find((row) => row.name === '예비금 항목')!;
+    expect(group).toMatchObject({ applies_to: 'asset', role: 'regular', ledger_ids: null });
+    const tags = result.backup.tables.tags.filter((tag) => tag.group_id === group.id);
+    expect(tags.map((tag) => tag.name)).toEqual([
+      '합성 예비금',
+      '합성 미등록 항목',
+      '합성미등록 항목',
+    ]);
+    expect(result.counts.assets).toBe(1);
+    const asset = result.backup.tables.assets.find((row) => row.name === '합성 예비금')!;
+    expect(JSON.parse(String(asset.tag_ids))).toContain(tags[0].id);
+    expect(
+      result.backup.tables.assets.some((row) =>
+        ['합성 미등록 항목', '합성미등록 항목'].includes(String(row.name)),
+      ),
+    ).toBe(false);
+    expect(result.transactions.count).toBe(0);
+    expect(result.assetOperations).toEqual([]);
+    const repeat = await buildWorkbookImport(book, result.backup, options);
+    expect(repeat.counts.tags).toBe(0);
+    expect(repeat.counts.tag_groups).toBe(0);
+    expect(repeat.backup.tables.assets).toEqual(result.backup.tables.assets);
+  });
+
+  it('reports every remaining source review on repeat preview and preserves user notes and resolved decisions', async () => {
+    const book = workbook({
+      ...expense,
+      X30: null,
+      T31: null,
+      U31: '날짜 미확정 합성 입금',
+      V31: 30,
+      W31: '수입',
+      X31: '급여',
+    });
+    const result = await buildWorkbookImport(book, baseline(), options);
+    expect(result.pending).toHaveLength(2);
+    const existing = structuredClone(result.backup);
+    const classification = existing.tables.source_records.find(
+      (row) => row.source_location === '1!T30:Z30' && row.status === 'pending',
+    )!;
+    classification.note = '사용자가 남긴 분류 검토 메모';
+    const undated = sourceAt(existing, '1!T31:Z31');
+    undated.note = '사용자가 입금 날짜를 확인 중';
+    existing.tables.source_records.push({
+      ...classification,
+      id: 'another-import-review',
+      source_id: 'another-workbook',
+      source_location: '다른 원본',
+    });
+    const repeat = await buildWorkbookImport(book, existing, options);
+    expect(repeat.counts.source_records).toBe(0);
+    expect(repeat.pending).toHaveLength(2);
+    expect(repeat.pending).toContainEqual({
+      source: '1!T30:Z30',
+      message: '사용자가 남긴 분류 검토 메모',
+    });
+    expect(repeat.pending.some((row) => row.source === '다른 원본')).toBe(false);
+    expect(repeat.pending.find((row) => row.source === '1!T31:Z31')?.message).toBe(
+      '사용자가 입금 날짜를 확인 중\n거래일을 확인해 주세요.',
+    );
+    expect(sourceAt(repeat.backup, '1!T31:Z31').note).toBe('사용자가 입금 날짜를 확인 중');
+    expect(repeat.backup.tables.transactions).toEqual(existing.tables.transactions);
+    classification.status = 'resolved';
+    const reviewed = await buildWorkbookImport(book, existing, options);
+    expect(reviewed.pending).toHaveLength(1);
+    expect(reviewed.pending[0].source).toBe('1!T31:Z31');
+    expect(
+      reviewed.backup.tables.source_records.find((row) => row.id === classification.id),
+    ).toMatchObject({ status: 'resolved', note: '사용자가 남긴 분류 검토 메모' });
+  });
+
+  it('preserves incomplete ordinary rows for review and empty fixed templates as references without inventing transactions', async () => {
+    const book = workbook(
+      {
+        U7: '금액 없는 고정 템플릿',
+        W7: '생활비',
+        X7: '정기 항목',
+        T30: '2026-09-16',
+        U31: '일반 원장 자유 메모',
+        U32: '0원 여부 확인',
+        V32: 0,
+      },
+      [sheet('예비비', { A22: '합성 자산 구분 메모' })],
+    );
+    const result = await buildWorkbookImport(book, baseline(), options);
+    expect(result.transactions.count).toBe(0);
+    expect(sourceAt(result.backup, '1!T7:Z7').status).toBe('reference');
+    for (const row of [30, 31, 32]) {
+      const source = sourceAt(result.backup, `1!T${row}:Z${row}`);
+      expect(source.status).toBe('pending');
+      expect(String(source.note)).toContain('추가 메모 행');
+    }
+    expect(JSON.parse(String(sourceAt(result.backup, '1!T32:Z32').payload_json)).cells.V32).toEqual(
+      { value: 0 },
+    );
+    expect(sourceAt(result.backup, '예비비!A22')).toMatchObject({ status: 'reference' });
+    expect(result.pending.some((row) => row.source === '1!T7:Z7')).toBe(false);
+    const repeat = await buildWorkbookImport(book, result.backup, options);
+    expect(repeat.counts.source_records).toBe(0);
+    expect(repeat.transactions.count).toBe(0);
+  });
+
+  it('creates a monthly hierarchy once and routes original numbered sheets independently of the transaction date', async () => {
+    const book = workbook(
+      { ...expense, T30: '2026-02-10', B57: '식비', C57: 1000 },
+      [
+        sheet('2', { ...expense, T30: '2026-01-10', U30: '두 번째 시트 지출', V30: 240 }),
+        sheet('월급관리', { A1: 2026, B1: '1월 예산', B2: 3000, A5: '생활비', B5: 0.1 }),
+      ],
+      { E3: 1 },
+    );
+    const monthlyOptions: WorkbookImportOptions = {
+      ...options,
+      newLedgerName: '2026 합성 가계부',
+      ledgerMode: 'monthly',
+      payments: {},
+    };
+    const result = await buildWorkbookImport(book, baseline(), monthlyOptions);
+    const children = result.backup.tables.ledgers.filter(
+      (ledger) => ledger.parent_id === result.ledgerId,
+    );
+    expect(result.counts.ledgers).toBe(13);
+    expect(children.map((ledger) => [ledger.name, ledger.sort_order])).toEqual(
+      Array.from({ length: 12 }, (_, index) => [`${index + 1}월`, index]),
+    );
+    expect(
+      result.backup.tables.ledgers.find((ledger) => ledger.id === result.ledgerId),
+    ).toMatchObject({
+      name: '2026 합성 가계부',
+      parent_id: null,
+    });
+    expect(result.backup.tables.transactions).toEqual([
+      expect.objectContaining({
+        ledger_id: result.monthlyLedgerIds!['1'],
+        date: '2026-02-10',
+        amount: 120,
+      }),
+      expect.objectContaining({
+        ledger_id: result.monthlyLedgerIds!['2'],
+        date: '2026-01-10',
+        amount: 240,
+      }),
+    ]);
+    const scoped = result.backup.tables.tag_groups.filter(
+      (group) => group.applies_to === 'transaction',
+    );
+    expect(scoped.every((group) => JSON.parse(String(group.ledger_ids)).length === 13)).toBe(true);
+    for (const tx of result.backup.tables.transactions) {
+      const tags: string[] = JSON.parse(String(tx.tag_ids));
+      const groups = result.backup.tables.tags
+        .filter((tag) => tags.includes(String(tag.id)))
+        .map((tag) => tag.group_id);
+      expect(
+        scoped
+          .filter((group) => groups.includes(group.id))
+          .every((group) => JSON.parse(String(group.ledger_ids)).includes(tx.ledger_id)),
+      ).toBe(true);
+    }
+    const monthlyBudget = result.backup.tables.planning_records.find(
+      (plan) => plan.kind === 'budget',
+    )!;
+    expect(monthlyBudget.ledger_id).toBe(result.monthlyLedgerIds!['1']);
+    expect(JSON.parse(String(monthlyBudget.payload_json)).ledgerId).toBe(
+      result.monthlyLedgerIds!['1'],
+    );
+    expect(
+      result.backup.tables.planning_records.find((plan) => plan.kind === 'payroll')!.ledger_id,
+    ).toBe(result.ledgerId);
+    expect(result.transactions).toEqual({ count: 2, income: 0, expense: 360 });
+
+    const repeat = await buildWorkbookImport(book, result.backup, monthlyOptions);
+    expect(repeat.monthlyLedgerIds).toEqual(result.monthlyLedgerIds);
+    expect(repeat.counts.ledgers).toBe(0);
+    expect(repeat.counts.tags).toBe(0);
+    expect(repeat.counts.planning_records).toBe(0);
+    expect(repeat.counts.source_records).toBe(0);
+    expect(repeat.transactions.count).toBe(0);
+    expect(repeat.backup.tables.transactions).toEqual(result.backup.tables.transactions);
+    await expect(
+      buildWorkbookImport(book, result.backup, { ...monthlyOptions, ledgerMode: 'single' }),
+    ).rejects.toThrow('처음 선택한 가계부 구성');
+  });
+
+  it('keeps single-ledger import as the default and does not silently change its layout on repeat import', async () => {
+    const book = workbook(expense);
+    const first = await buildWorkbookImport(book, baseline(), {
+      ...options,
+      newLedgerName: '단일 합성 원장',
+    });
+    expect(first.counts.ledgers).toBe(1);
+    expect(first.monthlyLedgerIds).toBeUndefined();
+    expect(first.backup.tables.transactions[0].ledger_id).toBe(first.ledgerId);
+    await expect(
+      buildWorkbookImport(book, first.backup, {
+        ...options,
+        newLedgerName: '단일 합성 원장',
+        ledgerMode: 'monthly',
+      }),
+    ).rejects.toThrow('처음 선택한 가계부 구성');
+    await expect(
+      buildWorkbookImport(book, baseline(), { ...options, ledgerMode: 'monthly' }),
+    ).rejects.toThrow('새 상위 가계부 이름');
+  });
 });

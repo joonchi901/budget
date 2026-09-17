@@ -21,6 +21,7 @@ import { bootstrap, getRevision, replay, type Binding } from './storage';
 import { date, identity, stable, text, type ObjectBody } from './validation';
 import { requireAdmin, hierarchyIncrement } from './hierarchy';
 import { ALL_LEDGERS_ID } from '../shared/hierarchy';
+import { jsonObjectColumns, jsonRowChunks } from './d1-json';
 
 const maximumBytes = 12_000_000;
 export async function readDataBody(request: Request): Promise<ObjectBody> {
@@ -82,7 +83,14 @@ const nullableColumns: Partial<Record<BackupTable, string[]>> = {
   tags: ['group_id', 'parent_id'],
   assets: ['opening_date'],
   payment_methods: ['closing_day', 'payment_day'],
-  transactions: ['asset_id', 'to_asset_id', 'deleted_at', 'created_by', 'created_at'],
+  transactions: [
+    'payment_method_id',
+    'asset_id',
+    'to_asset_id',
+    'deleted_at',
+    'created_by',
+    'created_at',
+  ],
   record_history: ['ledger_id', 'before_json', 'after_json'],
   asset_operations: [
     'from_asset_id',
@@ -109,25 +117,38 @@ async function schema(_db: D1Database): Promise<Schema> {
 }
 export async function exportBackup(db: D1Database, session: Session): Promise<BudgetBackup> {
   const h = session.householdId;
-  const results = await db.batch<Record<string, unknown>>([
-    ...backupTables.map((table) =>
-      db.prepare(`SELECT * FROM ${table} WHERE household_id=? ORDER BY id`).bind(h),
+  // One result per row avoids table-sized JSON; groups respect D1's compound SELECT limit.
+  const queries = [
+    ...backupTables.map(
+      (table) =>
+        `SELECT '${table}' AS table_name,id AS row_id,${jsonObjectColumns(rawColumns[table].split(' '))} AS row_json FROM ${table} WHERE household_id=?`,
     ),
-    db.prepare('SELECT id,name,color FROM users WHERE household_id=? ORDER BY id').bind(h),
-    db.prepare('SELECT revision FROM households WHERE id=?').bind(h),
-  ]);
+    "SELECT 'members' AS table_name,id AS row_id,json_object('id',id,'name',name,'color',color) AS row_json FROM users WHERE household_id=?",
+    "SELECT 'revision' AS table_name,id AS row_id,json_object('revision',revision) AS row_json FROM households WHERE id=?",
+  ];
+  const statements: D1PreparedStatement[] = [];
+  for (let i = 0; i < queries.length; i += 4) {
+    const group = queries.slice(i, i + 4);
+    statements.push(
+      db
+        .prepare(`${group.join(' UNION ALL ')} ORDER BY table_name,row_id`)
+        .bind(...group.map(() => h)),
+    );
+  }
+  const results = (await db.batch<{ table_name: string; row_json: string }>(statements)).flatMap(
+    (r) => r.results,
+  );
+  const rows = (table: string) =>
+    results.filter((r) => r.table_name === table).map((r) => JSON.parse(r.row_json));
   return {
     format: 'our-budget',
     schemaVersion: 2,
     exportedAt: new Date().toISOString(),
     sourceHouseholdId: h,
-    sourceRevision: Number(results.at(-1)!.results[0].revision),
-    members: results.at(-2)!.results as BudgetBackup['members'],
+    sourceRevision: Number(rows('revision')[0].revision),
+    members: rows('members') as BudgetBackup['members'],
     tables: Object.fromEntries(
-      backupTables.map((table, i) => [
-        table,
-        results[i].results.map(({ household_id: _household, ...row }) => row),
-      ]),
+      backupTables.map((table) => [table, rows(table)]),
     ) as BudgetBackup['tables'],
   };
 }
@@ -159,6 +180,7 @@ function parseBackup(value: unknown): BudgetBackup {
   if (Array.isArray(document.tables.transactions))
     for (const row of document.tables.transactions) {
       if (object(row)) {
+        row.payment_method_id ??= null;
         row.created_by ??= null;
         row.created_at ??= null;
       }
@@ -431,7 +453,7 @@ function referenceIssues(backup: BudgetBackup, columns: Schema): string[] {
       if (table === 'rules') ref(table, row, 'tag_id', 'tags', false);
       if (table === 'transactions') {
         ref(table, row, 'ledger_id', 'ledgers', false);
-        ref(table, row, 'payment_method_id', 'payment_methods', false);
+        ref(table, row, 'payment_method_id', 'payment_methods');
         ref(table, row, 'asset_id', 'assets');
         ref(table, row, 'to_asset_id', 'assets');
         member(table, row, 'updated_by');
@@ -622,7 +644,7 @@ function referenceIssues(backup: BudgetBackup, columns: Schema): string[] {
           !Array.isArray(payload.allocations) ||
           payload.allocations.some((a) => !object(a) || !ids.assets.has(a.assetId)) ||
           !ids.ledgers.has(payload.ledgerId) ||
-          !ids.payment_methods.has(payload.paymentMethodId) ||
+          (payload.paymentMethodId != null && !ids.payment_methods.has(payload.paymentMethodId)) ||
           (payload.ownerId !== 'shared' && !members.has(String(payload.ownerId)))
         )
           issue(table, row, '가져오기 원본 연결을 확인해 주세요.');
@@ -884,7 +906,8 @@ async function transformBackup(
       if (table === 'import_records') {
         const v = JSON.parse(String(row.payload_json)) as TransactionInput;
         v.ledgerId = String(ref('ledgers', v.ledgerId));
-        v.paymentMethodId = String(ref('payment_methods', v.paymentMethodId));
+        v.paymentMethodId =
+          v.paymentMethodId == null ? null : String(ref('payment_methods', v.paymentMethodId));
         v.ownerId = member(v.ownerId) as TransactionInput['ownerId'];
         v.tagIds = v.tagIds.map((id) => String(ref('tags', id)));
         v.allocations = v.allocations.map((a) => ({
@@ -996,13 +1019,13 @@ function auditStatements(
     after_json: a.after === null ? null : JSON.stringify(a.after),
   }));
   const columns = Object.keys(rows[0]);
-  return [
+  return jsonRowChunks(rows).map((chunk) =>
     db
       .prepare(
         `INSERT INTO record_history(household_id,${columns.join(',')}) SELECT ?,${columns.map((c) => `json_extract(value,'$.${c}')`).join(',')} FROM json_each(?)`,
       )
-      .bind(h, JSON.stringify(rows)),
-  ];
+      .bind(h, chunk),
+  );
 }
 async function dataCommit(
   db: D1Database,
@@ -1191,11 +1214,13 @@ export async function restoreBackup(db: D1Database, session: Session, body: Obje
     if (!tables[table].length) continue;
     const columns = c.columns[table].map((v) => v.name);
     statements.push(
-      db
-        .prepare(
-          `INSERT INTO ${table}(household_id,${columns.join(',')}) SELECT ?,${columns.map((v) => `json_extract(value,'$.${v}')`).join(',')} FROM json_each(?)`,
-        )
-        .bind(session.householdId, JSON.stringify(tables[table])),
+      ...jsonRowChunks(tables[table]).map((chunk) =>
+        db
+          .prepare(
+            `INSERT INTO ${table}(household_id,${columns.join(',')}) SELECT ?,${columns.map((v) => `json_extract(value,'$.${v}')`).join(',')} FROM json_each(?)`,
+          )
+          .bind(session.householdId, chunk),
+      ),
     );
   }
   return dataCommit(
@@ -1228,7 +1253,10 @@ function validateImportRow(row: ImportRow, data: Bootstrap): string[] {
   if (!['income', 'expense'].includes(t.type)) errors.push('유형은 수입 또는 지출이어야 해요.');
   if (t.ownerId !== 'shared' && !data.users.some((u) => u.id === t.ownerId))
     errors.push('귀속을 확인해 주세요.');
-  if (!data.paymentMethods.some((p) => p.id === t.paymentMethodId && !p.archived))
+  if (
+    t.paymentMethodId !== null &&
+    !data.paymentMethods.some((p) => p.id === t.paymentMethodId && !p.archived)
+  )
     errors.push('사용 중인 결제수단을 선택해 주세요.');
   if (
     !Array.isArray(t.tagIds) ||
@@ -1290,6 +1318,7 @@ function validateImportRow(row: ImportRow, data: Bootstrap): string[] {
 function normalizedImportTransaction(input: TransactionInput): TransactionInput {
   return {
     ...input,
+    paymentMethodId: input.paymentMethodId ?? null,
     description:
       typeof input.description === 'string'
         ? input.description.trim().normalize('NFC')
@@ -1305,7 +1334,13 @@ function importInput(body: ObjectBody): { sourceId: string; rows: ImportRow[] } 
       body.rows.every((r) => object(r) && object(r.transaction)),
     '가져오기 자료는 한 번에 1~2,000행으로 보내 주세요.',
   );
-  return { sourceId, rows: body.rows as unknown as ImportRow[] };
+  return {
+    sourceId,
+    rows: (body.rows as unknown as ImportRow[]).map((row) => ({
+      ...row,
+      transaction: { ...row.transaction, paymentMethodId: row.transaction.paymentMethodId ?? null },
+    })),
+  };
 }
 export async function previewImport(
   db: D1Database,
@@ -1438,11 +1473,13 @@ export async function applyImport(db: D1Database, session: Session, body: Object
     if (!rows.length) continue;
     const columns = Object.keys(rows[0]);
     statements.push(
-      db
-        .prepare(
-          `INSERT INTO ${table}(household_id,${columns.join(',')}) SELECT ?,${columns.map((c) => `json_extract(value,'$.${c}')`).join(',')} FROM json_each(?)`,
-        )
-        .bind(h, JSON.stringify(rows)),
+      ...jsonRowChunks(rows).map((chunk) =>
+        db
+          .prepare(
+            `INSERT INTO ${table}(household_id,${columns.join(',')}) SELECT ?,${columns.map((c) => `json_extract(value,'$.${c}')`).join(',')} FROM json_each(?)`,
+          )
+          .bind(h, chunk),
+      ),
     );
   }
   if (assets.size)

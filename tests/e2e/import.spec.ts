@@ -8,7 +8,7 @@ function workbook() {
   const sheets: Record<string, Record<string, string | number>> = {
     설정: { C3: 2026, E3: 9, G3: 1, B6: '식비', C6: '장보기' },
     '1': {
-      T30: '2026-09-16',
+      T30: '2026-01-16',
       U30: '엑셀 합성 장보기',
       V30: 12000,
       W30: '식비',
@@ -118,6 +118,16 @@ test('XLSX preview, review evidence and repeat import are usable from the data s
   expect(corrected.assets.find((a) => a.id === 'investment')?.balance).toBe(
     after.assets.find((a) => a.id === 'investment')!.balance + 5000,
   );
+  await page.getByRole('button', { name: '가져온 가계부 보기', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: '조회 기간', exact: true })).toHaveAttribute(
+    'data-value',
+    'period',
+  );
+  await expect(page.getByRole('combobox', { name: '조회 대상', exact: true })).toHaveAttribute(
+    'data-value',
+    'descendants',
+  );
+  await expect(page.getByRole('row').filter({ hasText: '엑셀 합성 장보기' })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

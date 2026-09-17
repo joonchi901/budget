@@ -21,6 +21,8 @@ import {
 } from '../shared/data';
 import { request, RequestError } from './api';
 import { Dialog, useUnsavedGuard, won } from './components';
+import { isWorkbookArchiveRecord } from '../shared/workbook-archive';
+import WorkbookArchiveView from './WorkbookArchiveView';
 import './data.css';
 interface Props {
   data: Bootstrap;
@@ -28,9 +30,10 @@ interface Props {
   onNotice(message: string): void;
   excelImport?: ReactNode;
 }
-type DataTab = 'excel' | 'review' | 'backup' | 'csv' | 'history';
+type DataTab = 'excel' | 'archive' | 'review' | 'backup' | 'csv' | 'history';
 const dataTabs = [
   { id: 'excel', label: '엑셀 가져오기', icon: 'ledger' },
+  { id: 'archive', label: '엑셀 원본', icon: 'ledger' },
   { id: 'review', label: '원본 검토함', icon: 'tags' },
   { id: 'backup', label: '백업·복원', icon: 'data' },
   { id: 'csv', label: 'CSV 가져오기', icon: 'data' },
@@ -82,6 +85,9 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
   const pending = useRef<{ url: string; body: Record<string, unknown> } | null>(null);
   const [history, setHistory] = useState<RecordHistory[]>([]),
     [historyError, setHistoryError] = useState('');
+  const [sourceRecords, setSourceRecords] = useState<SourceRecord[]>([]),
+    [sourceError, setSourceError] = useState(''),
+    [sourceLoading, setSourceLoading] = useState(true);
   useUnsavedGuard(busy || uncertain);
   useEffect(() => {
     let cancelled = false;
@@ -94,6 +100,26 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
       })
       .catch(() => {
         if (!cancelled) setHistoryError('변경 이력을 불러오지 못했어요.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data.revision]);
+  useEffect(() => {
+    let cancelled = false;
+    setSourceLoading(true);
+    void request<SourceRecord[]>('/api/data/source-records')
+      .then((records) => {
+        if (!cancelled) {
+          setSourceRecords(records);
+          setSourceError('');
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setSourceError((e as Error).message);
+      })
+      .finally(() => {
+        if (!cancelled) setSourceLoading(false);
       });
     return () => {
       cancelled = true;
@@ -325,6 +351,19 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
       )}
       <div
         className="data-tab-panel"
+        id="data-panel-archive"
+        role="tabpanel"
+        aria-labelledby="data-tab-archive"
+        hidden={activeTab !== 'archive'}
+      >
+        <WorkbookArchiveView
+          records={sourceRecords}
+          loading={sourceLoading}
+          loadError={sourceError}
+        />
+      </div>
+      <div
+        className="data-tab-panel"
         id="data-panel-excel"
         role="tabpanel"
         aria-labelledby="data-tab-excel"
@@ -347,7 +386,15 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
         aria-labelledby="data-tab-review"
         hidden={activeTab !== 'review'}
       >
-        <SourceInbox data={data} onChanged={onChanged} onNotice={onNotice} disabled={locked} />
+        <SourceInbox
+          data={data}
+          onChanged={onChanged}
+          onNotice={onNotice}
+          disabled={locked}
+          records={sourceRecords.filter((record) => !isWorkbookArchiveRecord(record))}
+          error={sourceError}
+          loading={sourceLoading}
+        />
       </div>
       <div
         className="data-tab-panel"
@@ -720,33 +767,30 @@ const sourceKindLabels = {
   management: '관리 정보',
   reference: '참고',
 };
-function SourceInbox({ data, onChanged, onNotice, disabled }: Props & { disabled: boolean }) {
-  const [records, setRecords] = useState<SourceRecord[]>([]),
-    [error, setError] = useState(''),
-    [status, setStatus] = useState('pending'),
+function SourceInbox({
+  data,
+  onChanged,
+  onNotice,
+  disabled,
+  records,
+  error,
+  loading,
+}: Props & {
+  disabled: boolean;
+  records: SourceRecord[];
+  error: string;
+  loading: boolean;
+}) {
+  const [status, setStatus] = useState('pending'),
     [search, setSearch] = useState(''),
     [page, setPage] = useState(0),
     [editor, setEditor] = useState<SourceRecord | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    void request<SourceRecord[]>('/api/data/source-records')
-      .then((rows) => {
-        if (!cancelled) {
-          setRecords(rows);
-          setError('');
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) setError((e as Error).message);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [data.revision]);
   const filtered = records.filter(
     (r) =>
       (!status || r.status === status) &&
-      `${r.sourceId} ${r.sourceLocation} ${r.note}`.toLowerCase().includes(search.toLowerCase()),
+      `${r.sourceId} ${r.sourceLocation} ${r.note} ${JSON.stringify(r.payload)}`
+        .toLocaleLowerCase()
+        .includes(search.trim().toLocaleLowerCase()),
   );
   const pages = Math.max(1, Math.ceil(filtered.length / 50)),
     currentPage = Math.min(page, pages - 1),
@@ -789,14 +833,14 @@ function SourceInbox({ data, onChanged, onNotice, disabled }: Props & { disabled
           </SelectField>
         </label>
         <label>
-          출처·메모 검색
+          원본 내역·출처·메모 검색
           <input
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
               setPage(0);
             }}
-            placeholder="시트 이름, 셀 위치, 메모"
+            placeholder="내역, 금액, 분류, 시트 이름, 메모"
           />
         </label>
       </div>
@@ -815,6 +859,7 @@ function SourceInbox({ data, onChanged, onNotice, disabled }: Props & { disabled
                 검토 메모·상태
               </button>
             </div>
+            <SourcePayloadSummary record={record} />
             {record.note && <p className="data-source-note">{record.note}</p>}
             <details>
               <summary>원본 내용 보기</summary>
@@ -822,7 +867,12 @@ function SourceInbox({ data, onChanged, onNotice, disabled }: Props & { disabled
             </details>
           </article>
         ))}
-        {!visible.length && !error && (
+        {loading && (
+          <p className="small muted" role="status">
+            원본 검토 자료를 불러오고 있어요…
+          </p>
+        )}
+        {!visible.length && !error && !loading && (
           <p className="muted">이 조건에 맞는 원본 검토 자료가 없어요.</p>
         )}
       </div>
@@ -862,6 +912,49 @@ function SourceInbox({ data, onChanged, onNotice, disabled }: Props & { disabled
         />
       )}
     </section>
+  );
+}
+function SourcePayloadSummary({ record }: { record: SourceRecord }) {
+  if (
+    record.kind !== 'transaction' ||
+    !record.payload ||
+    typeof record.payload !== 'object' ||
+    Array.isArray(record.payload)
+  )
+    return null;
+  const payload = record.payload as Record<string, unknown>;
+  const text = (key: string, fallback: string) => {
+    const value = payload[key];
+    return (typeof value === 'string' && value.trim()) || typeof value === 'number'
+      ? String(value)
+      : fallback;
+  };
+  const amount =
+    typeof payload.amount === 'number' && Number.isFinite(payload.amount)
+      ? `${won(payload.amount)}원`
+      : text('amount', '금액 미확정');
+  const fields = [
+    ['날짜', text('date', '미확정')],
+    ['대분류', text('major', '미분류')],
+    ['소분류', text('minor', '미분류')],
+    ['결제수단', text('payment', '미지정')],
+    ['원본 태그', text('tag', '없음')],
+  ];
+  return (
+    <>
+      <div className="source-transaction-summary">
+        <h3>{text('description', '내역 미기록')}</h3>
+        <strong>{amount}</strong>
+      </div>
+      <dl className="source-transaction-fields">
+        {fields.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </>
   );
 }
 function SourceEditor({
@@ -1107,7 +1200,12 @@ function HistoryComparison({ row, data }: { row: RecordHistory; data: Bootstrap 
     (k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]),
   );
   function display(key: string, value: unknown): string {
-    if (value == null) return ['createdBy', 'createdAt'].includes(key) ? '미확인' : '없음';
+    if (value == null)
+      return key === 'paymentMethodId'
+        ? '미지정'
+        : ['createdBy', 'createdAt'].includes(key)
+          ? '미확인'
+          : '없음';
     if (['createdBy', 'updatedBy', 'ownerId', 'actorId'].includes(key))
       return value === 'shared'
         ? '공동'

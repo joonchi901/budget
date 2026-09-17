@@ -38,7 +38,7 @@ export interface Transaction {
   amount: number;
   type: TransactionType;
   ownerId: OwnerId;
-  paymentMethodId: string;
+  paymentMethodId: string | null;
   tagIds: string[];
   allocations: Allocation[];
   version: number;

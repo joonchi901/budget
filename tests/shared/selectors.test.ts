@@ -408,6 +408,11 @@ describe('cardStatement', () => {
       transaction('before', { date: '2026-07-31' }),
       transaction('after', { date: '2026-09-01' }),
       transaction('other-card', { date: '2026-08-15', paymentMethodId: 'other' }),
+      transaction('unassigned-payment', {
+        date: '2026-08-15',
+        paymentMethodId: null,
+        amount: 99000,
+      }),
       transaction('income', { date: '2026-08-15', type: 'income' }),
     ];
     const original = structuredClone(source);

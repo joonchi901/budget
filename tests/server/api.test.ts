@@ -8,6 +8,7 @@ import type {
   Transaction,
   TransactionInput,
 } from '../../src/shared/types';
+import { cardStatement, totals } from '../../src/shared/selectors';
 
 let runtime: Miniflare;
 let db: Awaited<ReturnType<Miniflare['getD1Database']>>;
@@ -160,6 +161,99 @@ afterAll(async () => {
 });
 
 describe('real Worker + D1 ledger API', () => {
+  test('an unspecified payment remains a real transaction and can be assigned and cleared safely', async () => {
+    const before = await snapshot();
+    const card = before.paymentMethods.find((p) => p.id === 'card-j')!;
+    const beforeBill = cardStatement(before.transactions, card, '2026-10').amount;
+    const response = await call('/api/transactions', 'POST', {
+      mutationId: 'unspecified-creation',
+      transaction: { ...expense(), paymentMethodId: undefined },
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const created = ((await response.json()) as MutationResult).transaction!;
+    expect(created.paymentMethodId).toBeNull();
+    let data = await snapshot();
+    expect(totals(data.transactions).expense).toBe(totals(before.transactions).expense + 30000);
+    expect(data.assets.find((a) => a.id === 'reserve')!.balance).toBe(
+      before.assets.find((a) => a.id === 'reserve')!.balance - 30000,
+    );
+    expect(cardStatement(data.transactions, card, '2026-10').amount).toBe(beforeBill);
+    expect(
+      (
+        await call('/api/transactions', 'POST', {
+          mutationId: 'unspecified-assignment',
+          expectedVersion: created.version,
+          transaction: { ...created, paymentMethodId: card.id },
+        })
+      ).status,
+    ).toBe(200);
+    data = await snapshot();
+    const assigned = data.transactions.find((t) => t.id === created.id)!;
+    expect(assigned.paymentMethodId).toBe(card.id);
+    expect(cardStatement(data.transactions, card, '2026-10').amount).toBe(beforeBill + 30000);
+    const cleared = await call('/api/transactions', 'POST', {
+      mutationId: 'unspecified-clear',
+      expectedVersion: assigned.version,
+      transaction: { ...assigned, paymentMethodId: null },
+    });
+    expect(cleared.status).toBe(200);
+    expect(((await cleared.json()) as MutationResult).transaction!.paymentMethodId).toBeNull();
+    data = await snapshot();
+    expect(data.transactions.filter((t) => t.id === created.id)).toHaveLength(1);
+    expect(cardStatement(data.transactions, card, '2026-10').amount).toBe(beforeBill);
+    expect(data.assetMovements.filter((m) => m.transactionId === created.id)).toHaveLength(1);
+    expect(data.assets.find((a) => a.id === 'reserve')!.balance).toBe(
+      before.assets.find((a) => a.id === 'reserve')!.balance - 30000,
+    );
+    expect(
+      (
+        await call('/api/transactions', 'POST', {
+          mutationId: 'stale-unspecified-update',
+          expectedVersion: assigned.version,
+          transaction: { ...assigned, paymentMethodId: null },
+        })
+      ).status,
+    ).toBe(409);
+  });
+
+  test('optional payment does not allow unknown, foreign, empty or newly archived payment IDs', async () => {
+    await db.prepare("INSERT INTO households(id,name) VALUES('payment-foreign','Foreign')").run();
+    await db
+      .prepare(
+        "INSERT INTO payment_methods(id,household_id,name,type,owner_id) VALUES('foreign-card','payment-foreign','Foreign card','card','shared')",
+      )
+      .run();
+    const original = (await create(expense({ paymentMethodId: 'card-j' }))).transaction!;
+    await db
+      .prepare("UPDATE payment_methods SET archived=1,version=version+1 WHERE id='card-j'")
+      .run();
+    const before = await snapshot();
+    for (const paymentMethodId of ['', 'missing-payment', 'foreign-card', 'card-j', 'null']) {
+      const response = await call('/api/transactions', 'POST', {
+        mutationId: crypto.randomUUID(),
+        transaction: expense({ paymentMethodId }),
+      });
+      expect(response.status, paymentMethodId).toBe(400);
+    }
+    expect((await snapshot()).revision).toBe(before.revision);
+    const retained = await call('/api/transactions', 'POST', {
+      mutationId: 'retained-archived-payment',
+      expectedVersion: original.version,
+      transaction: { ...original, description: '기존 결제수단 유지' },
+    });
+    expect(retained.status).toBe(200);
+    const updated = ((await retained.json()) as MutationResult).transaction!;
+    const clear = await call('/api/transactions', 'POST', {
+      mutationId: 'clear-archived-payment',
+      expectedVersion: updated.version,
+      transaction: { ...updated, paymentMethodId: null },
+    });
+    expect(clear.status).toBe(200);
+    expect(((await clear.json()) as MutationResult).transaction!.paymentMethodId).toBeNull();
+    await db.prepare("DELETE FROM payment_methods WHERE id='foreign-card'").run();
+    await db.prepare("DELETE FROM households WHERE id='payment-foreign'").run();
+  });
+
   test('requires a current session and rejects hostile browser origins', async () => {
     expect((await call('/api/bootstrap', 'GET', undefined, null)).status).toBe(401);
     expect(

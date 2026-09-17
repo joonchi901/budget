@@ -8,8 +8,8 @@
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Cloudflare 계정 | OAuth 로그인과 사용자 이메일 인증 완료                                                                                                                               |
 | 운영 D1         | `budget-production`, ID `700713f0-f352-463f-aea1-a05336091a66`, APAC 생성 및 운영 설정 반영                                                                          |
-| 운영 스키마     | `0001`~`0011` 원격 migration 적용 완료. 최초 배포 전 조회에서 migration 11개와 빈 가구·사용자·거래·자산·세션 확인                                                    |
-| 운영 배포       | 소스 `1cbb067`의 최초 업로드 version `fe1fe4e5-5f00-464c-93c2-179d80bc1470`. 우가 UI 적용 후 현재 활성 version `7036cc3b-5cf6-4332-9975-1b23b5a7f833`                 |
+| 운영 스키마     | `0001`~`0013` 원격 migration 적용 완료. `0013` 적용 후 결제수단 nullable 및 외래키 오류 0건 확인                                                    |
+| 운영 배포       | 현재 활성 version `9b45323c-23d1-4704-b0e5-d181f77e336c`. 월별 이력 이관·결제수단 미지정·엑셀 원본 보관 포함                 |
 | 공개 HTTPS 주소 | [https://our-budget-production.our-budget.workers.dev](https://our-budget-production.our-budget.workers.dev)                                                         |
 | Google OAuth    | 전용 프로젝트 `Our Budget` (`our-budget-508823`)의 `Budget Web` 웹 클라이언트 생성 완료. 운영 callback과 `openid`·`userinfo.email` 범위 저장 확인                    |
 | Worker secrets  | 사용자 승인 후 `APP_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_ALLOWED_EMAILS` 네 값 등록 완료                                                       |

@@ -13,6 +13,11 @@ import {
 import { extractWorkbookManagement } from '../../src/shared/xlsx-management';
 import { assetBalanceAt } from '../../src/shared/assets';
 import {
+  appendWorkbookArchive,
+  restoreWorkbookArchive,
+  isWorkbookArchiveRecord,
+} from '../../src/shared/workbook-archive';
+import {
   backupTables,
   csvImportRows,
   defaultCsvMapping,
@@ -22,6 +27,7 @@ import {
   type ImportPreview,
   type RestorePreview,
   type RecordHistory,
+  type SourceRecord,
 } from '../../src/shared/data';
 let runtime: Miniflare, script: string, cookie: string;
 let db: Awaited<ReturnType<Miniflare['getD1Database']>>;
@@ -105,7 +111,20 @@ async function apply(preview: ImportPreview, extra: Record<string, unknown> = {}
 beforeAll(async () => {
   script = (
     await build({
-      entryPoints: ['src/server/index.ts'],
+      stdin: {
+        contents: `import worker from './src/server/index.ts';
+          import { instrumentDatabase } from './tests/server/d1-probe.ts';
+          export { HouseholdRoom } from './src/server/index.ts';
+          export default { async fetch(request, env, ctx) {
+            const probe = instrumentDatabase(env.DB);
+            const response = await worker.fetch(request, { ...env, DB: probe.db }, ctx);
+            const result = new Response(response.body, response);
+            result.headers.set('X-Test-D1-Metrics', JSON.stringify(probe.metrics));
+            return result;
+          } };`,
+        resolveDir: process.cwd(),
+        loader: 'js',
+      },
       bundle: true,
       write: false,
       format: 'esm',
@@ -200,6 +219,80 @@ function syntheticWorkbook(): Workbook {
   };
 }
 describe('portable data backup and import', () => {
+  it('imports missing payments as null and preserves null through backup restore and portable rebinding', async () => {
+    const missing = input();
+    delete (missing as Partial<TransactionInput>).paymentMethodId;
+    const preview = await importPreview(
+      [{ rowId: 'unspecified:1', transaction: missing }],
+      'unspecified-import',
+    );
+    expect(preview.errors).toBe(0);
+    expect(preview.rows[0].transaction.paymentMethodId).toBeNull();
+    expect((await apply(preview)).status).toBe(200);
+    const original = await backup();
+    const record = original.tables.import_records.find(
+      (r) => r.source_id === 'unspecified-import',
+    )!;
+    const transactionId = String(record.transaction_id);
+    expect(
+      original.tables.transactions.find((t) => t.id === transactionId)!.payment_method_id,
+    ).toBeNull();
+    expect(JSON.parse(String(record.payload_json)).paymentMethodId).toBeNull();
+    expect(
+      (await state()).transactions.find((t) => t.id === transactionId)!.paymentMethodId,
+    ).toBeNull();
+    const samePreview = await previewRestore(original);
+    expect(samePreview.issues).toEqual([]);
+    expect((await restore(original, samePreview)).status).toBe(200);
+    const duplicate = await importPreview(
+      [{ rowId: 'unspecified:1', transaction: { ...missing, paymentMethodId: null } }],
+      'unspecified-import',
+    );
+    expect(duplicate).toMatchObject({ ready: 0, duplicate: 1, errors: 0 });
+    const portable = await backup();
+    portable.sourceHouseholdId = 'other-unspecified-household';
+    const portablePreview = await previewRestore(portable);
+    expect(portablePreview.issues).toEqual([]);
+    expect((await restore(portable, portablePreview)).status).toBe(200);
+    const rebound = await backup();
+    const reboundRecord = rebound.tables.import_records.find(
+      (r) => r.source_id === 'unspecified-import',
+    )!;
+    expect(JSON.parse(String(reboundRecord.payload_json)).paymentMethodId).toBeNull();
+    expect(
+      rebound.tables.transactions.find((t) => t.id === reboundRecord.transaction_id)!
+        .payment_method_id,
+    ).toBeNull();
+    expect((await previewRestore(rebound)).issues).toEqual([]);
+  });
+
+  it('nullable import and backup references still reject nonempty unknown or archived payments', async () => {
+    await db.prepare("UPDATE payment_methods SET archived=1 WHERE id='card-j'").run();
+    for (const paymentMethodId of ['card-j', 'does-not-exist', 'null', '']) {
+      const preview = await importPreview([
+        { rowId: 'invalid-payment', transaction: { ...input(), paymentMethodId } },
+      ]);
+      expect(preview.errors, paymentMethodId).toBe(1);
+      expect((await apply(preview)).status).toBe(400);
+    }
+    const candidate = await backup();
+    candidate.tables.transactions[0].payment_method_id = 'does-not-exist';
+    expect(
+      (await previewRestore(candidate)).issues.some((v) => v.includes('payment_method_id')),
+    ).toBe(true);
+    candidate.tables.transactions[0].payment_method_id = null;
+    expect((await previewRestore(candidate)).issues).toEqual([]);
+    delete candidate.tables.transactions[0].payment_method_id;
+    const omitted = await previewRestore(candidate);
+    expect(omitted.issues).toEqual([]);
+    expect((await restore(candidate, omitted)).status).toBe(200);
+    expect(
+      (await backup()).tables.transactions.find(
+        (t) => t.id === candidate.tables.transactions[0].id,
+      )!.payment_method_id,
+    ).toBeNull();
+  });
+
   it('round-trips arbitrary parent chains and sibling order while preserving independent finances', async () => {
     const original = await backup();
     expect(original.schemaVersion).toBe(2);
@@ -1017,25 +1110,72 @@ describe('portable data backup and import', () => {
   it.runIf(Boolean(process.env.BUDGET_WORKBOOK))(
     'privately verifies supplied workbook transactions, observations and backup round-trip in temporary D1',
     async () => {
-      const book = readXlsx(new Uint8Array(await readFile(process.env.BUDGET_WORKBOOK!)));
-      const originals = originalTransactions(book),
+      const bytes = new Uint8Array(await readFile(process.env.BUDGET_WORKBOOK!));
+      const book = readXlsx(bytes),
+        originals = originalTransactions(book),
         management = extractWorkbookManagement(book);
       const sourceId = 'private-verification',
         before = await backup(),
         beforeState = await state();
-      const payments = Object.fromEntries(originals.map((row) => [row.payment, 'cash']));
-      const candidate = await buildWorkbookImport(book, before, {
+      const options = {
         sourceId,
         ledgerId: 'main',
         actorId: 'u1',
-        payments,
+        newLedgerName: '2026',
+        ledgerMode: 'monthly' as const,
+        payments: {},
+      };
+      const candidate = await buildWorkbookImport(book, before, options);
+      const archive = await appendWorkbookArchive(
+        candidate.backup,
+        sourceId,
+        'private-workbook.xlsx',
+        bytes,
+      );
+      const metrics = {
+        maxQueries: 0,
+        maxBatch: 0,
+        maxBindingBytes: 0,
+        maxSqlBytes: 0,
+        maxCompoundTerms: 0,
+      };
+      const verifyMetrics = (response: { headers: { get(name: string): string | null } }) => {
+        const value = JSON.parse(response.headers.get('X-Test-D1-Metrics')!);
+        metrics.maxQueries = Math.max(metrics.maxQueries, value.queries);
+        for (const key of [
+          'maxBatch',
+          'maxBindingBytes',
+          'maxSqlBytes',
+          'maxCompoundTerms',
+        ] as const)
+          metrics[key] = Math.max(metrics[key], value[key]);
+        expect(value.queries, 'Private workbook queries per request').toBeLessThanOrEqual(50);
+        expect(
+          value.maxBindingBytes,
+          'Private workbook maximum UTF-8 binding bytes',
+        ).toBeLessThanOrEqual(1_500_000);
+        expect(value.maxSqlBytes, 'Private workbook maximum SQL bytes').toBeLessThanOrEqual(
+          100_000,
+        );
+        expect(
+          value.maxCompoundTerms,
+          'Private workbook maximum compound SELECT terms',
+        ).toBeLessThanOrEqual(5);
+      };
+      const previewResponse = await call('/api/data/restore/preview', 'POST', {
+        backup: candidate.backup,
+        memberMap: members,
+        mode: 'replace',
       });
-      const preview = await previewRestore(candidate.backup);
+      verifyMetrics(previewResponse);
+      expect(previewResponse.status, 'Private workbook preflight status').toBe(200);
+      const preview = (await previewResponse.json()) as RestorePreview;
       expect(
         preview.issues.length,
         'Private workbook preflight issue count; source values are intentionally omitted',
       ).toBe(0);
       const result = await restore(candidate.backup, preview);
+      verifyMetrics(result);
       expect(result.status, 'Private workbook restore status').toBe(200);
       const imported = await state(),
         beforeIds = new Set(beforeState.transactions.map((t) => t.id)),
@@ -1046,10 +1186,9 @@ describe('portable data backup and import', () => {
           /^\d{4}-\d{2}-\d{2}$/.test(row.date) &&
           Number.isFinite(Date.parse(`${row.date}T00:00:00Z`)) &&
           new Date(`${row.date}T00:00:00Z`).toISOString().slice(0, 10) === row.date &&
-          row.description.length > 0 &&
-          row.description.length <= 240 &&
-          row.major &&
-          row.minor &&
+          row.description.trim().length > 0 &&
+          row.description.trim().length <= 240 &&
+          row.major.trim() &&
           Number.isSafeInteger(row.amount) &&
           row.amount > 0 &&
           row.amount <= 1_000_000_000_000,
@@ -1061,8 +1200,7 @@ describe('portable data backup and import', () => {
           valid.filter((t) => t.kind === type).reduce((sum, t) => sum + t.amount, 0)
         )
           transactionMismatches++;
-      const months = new Set(valid.map((t) => t.date.slice(0, 7)));
-      for (const month of months)
+      for (const month of new Set(valid.map((t) => t.date.slice(0, 7))))
         for (const type of ['income', 'expense'] as const)
           if (
             added
@@ -1073,10 +1211,6 @@ describe('portable data backup and import', () => {
               .reduce((sum, t) => sum + t.amount, 0)
           )
             transactionMismatches++;
-      expect(
-        transactionMismatches,
-        'Private workbook transaction count/total/month mismatch count',
-      ).toBe(0);
       const hex = async (value: unknown) =>
         Array.from(
           new Uint8Array(
@@ -1085,6 +1219,101 @@ describe('portable data backup and import', () => {
           (v) => v.toString(16).padStart(2, '0'),
         ).join('');
       const prefix = `xlsx:${(await hex([before.sourceHouseholdId, sourceId])).slice(0, 20)}`;
+      const sourceResponse = await call('/api/data/source-records');
+      verifyMetrics(sourceResponse);
+      expect(sourceResponse.status).toBe(200);
+      const sources = (await sourceResponse.json()) as SourceRecord[];
+      const sourceMap = new Map(sources.map((row) => [row.id, row]));
+      let sourceMismatches = 0,
+        routingMismatches = 0,
+        tagMismatches = 0;
+      for (const row of originals) {
+        const source = sourceMap.get(
+          `${prefix}:source:${(await hex(`transaction:${row.rowId}`)).slice(0, 24)}`,
+        );
+        if (
+          !source ||
+          !source.payload ||
+          typeof source.payload !== 'object' ||
+          Object.entries(row).some(
+            ([key, value]) =>
+              JSON.stringify((source.payload as Record<string, unknown>)[key]) !==
+              JSON.stringify(value),
+          )
+        )
+          sourceMismatches++;
+      }
+      for (const row of valid) {
+        const transactionId = `${prefix}:transaction:${(await hex(`transaction:${row.rowId}`)).slice(0, 24)}`;
+        const current = added.find((t) => t.id === transactionId);
+        if (
+          !current ||
+          current.date !== row.date ||
+          current.type !== row.kind ||
+          current.amount !== row.amount ||
+          current.description !== row.description.trim()
+        )
+          transactionMismatches++;
+        if (!current || current.ledgerId !== candidate.monthlyLedgerIds?.[row.sheet])
+          routingMismatches++;
+        for (const name of [row.major, row.minor, row.tag].filter(Boolean))
+          if (
+            !current ||
+            !current.tagIds.some(
+              (id) => imported.tags.find((tag) => tag.id === id)?.name === name.trim(),
+            )
+          )
+            tagMismatches++;
+      }
+      for (const original of candidate.backup.tables.source_records) {
+        const source = sourceMap.get(String(original.id));
+        if (
+          !source ||
+          source.sourceId !== original.source_id ||
+          source.sourceLocation !== original.source_location ||
+          source.status !== original.status ||
+          source.kind !== original.kind ||
+          source.note !== original.note ||
+          JSON.stringify(source.payload) !== original.payload_json
+        )
+          sourceMismatches++;
+      }
+      // Verify options on both transaction and amount-less source rows, including pending memos.
+      for (const sheet of book.sheets.filter((s) => /^(?:[1-9]|1[0-2])$/.test(s.name)))
+        for (const row of [
+          ...Array.from({ length: 20 }, (_, i) => i + 7),
+          ...Array.from({ length: 300 }, (_, i) => i + 30),
+        ])
+          for (const column of ['W', 'X', 'Z']) {
+            const name = String(sheet.cells[`${column}${row}`]?.value ?? '').trim();
+            if (
+              name &&
+              !imported.tags.some((tag) => tag.name === name && tag.id.startsWith(prefix))
+            )
+              tagMismatches++;
+          }
+      expect(
+        transactionMismatches,
+        'Private workbook transaction count/row/total/month mismatch count',
+      ).toBe(0);
+      expect(sourceMismatches, 'Private workbook raw source/status/branch mismatch count').toBe(0);
+      expect(routingMismatches, 'Private workbook source-sheet ledger routing mismatch count').toBe(
+        0,
+      );
+      expect(tagMismatches, 'Private workbook missing source tag count').toBe(0);
+      expect(
+        imported.ledgers.filter((l) => l.parentId === candidate.ledgerId).length,
+        'Private workbook monthly child ledger count',
+      ).toBe(12);
+      expect(
+        imported.ledgers.find((l) => l.id === candidate.ledgerId)?.parentId === null,
+        'Private workbook independent root',
+      ).toBe(true);
+      expect(
+        added.filter((t) => t.paymentMethodId !== null && !t.paymentMethodId.startsWith(prefix))
+          .length,
+        'Private workbook invented payment mapping count',
+      ).toBe(0);
       let observationMismatches = 0,
         observationCount = 0;
       for (const source of management.assets) {
@@ -1099,21 +1328,33 @@ describe('portable data backup and import', () => {
             observationMismatches++;
         }
       }
-      expect(observationCount > 0, 'Private workbook must contain asset observation evidence').toBe(
-        true,
-      );
+      expect(observationCount, 'Private workbook asset observation count').toBe(68);
       expect(observationMismatches, 'Private workbook asset observation mismatch count').toBe(0);
+      const restoredBytes = await restoreWorkbookArchive(sources, archive.id);
+      expect(
+        restoredBytes.length === bytes.length &&
+          restoredBytes.every((byte, index) => byte === bytes[index]),
+        'Private workbook archive bytes and validated SHA-256 match',
+      ).toBe(true);
       const saved = await backup(),
-        again = await buildWorkbookImport(book, saved, {
-          sourceId,
-          ledgerId: 'main',
-          actorId: 'u1',
-          payments,
-        });
+        again = await buildWorkbookImport(book, saved, options);
+      const archiveAgain = await appendWorkbookArchive(
+        again.backup,
+        sourceId,
+        'private-workbook.xlsx',
+        bytes,
+      );
       expect(again.transactions.count, 'Private workbook reimport new transaction count').toBe(0);
+      expect(
+        Object.values(again.counts).reduce((sum, count) => sum + count, 0),
+        'Private workbook reimport new database row count',
+      ).toBe(0);
+      expect(archiveAgain.added, 'Private workbook reimport new archive row count').toBe(0);
       const roundTrip = await previewRestore(saved);
       expect(roundTrip.issues.length, 'Private workbook round-trip issue count').toBe(0);
-      expect((await restore(saved, roundTrip)).status).toBe(200);
+      const roundTripResponse = await restore(saved, roundTrip);
+      verifyMetrics(roundTripResponse);
+      expect(roundTripResponse.status, 'Private workbook round-trip status').toBe(200);
       const restored = await backup();
       let effectMismatches = Number(
         restored.tables.asset_effects.length !== saved.tables.asset_effects.length,
@@ -1124,11 +1365,59 @@ describe('portable data backup and import', () => {
       for (const row of restored.tables.asset_effects)
         if (oldEffects.get(row.id) !== JSON.stringify(row)) effectMismatches++;
       expect(effectMismatches, 'Private workbook round-trip asset effect mismatch count').toBe(0);
+      const afterSources = (await (
+        await call('/api/data/source-records')
+      ).json()) as SourceRecord[];
+      let roundTripSourceMismatches = Number(afterSources.length !== sources.length);
+      for (const row of afterSources) {
+        const prior = sourceMap.get(row.id);
+        if (
+          !prior ||
+          prior.status !== row.status ||
+          prior.note !== row.note ||
+          JSON.stringify(prior.payload) !== JSON.stringify(row.payload)
+        )
+          roundTripSourceMismatches++;
+      }
       expect(
-        restored.tables.source_records.length === saved.tables.source_records.length,
-        'Private workbook source evidence count preserved',
+        roundTripSourceMismatches,
+        'Private workbook round-trip pending/raw source mismatch count',
+      ).toBe(0);
+      const secondBytes = await restoreWorkbookArchive(afterSources, archive.id);
+      expect(
+        secondBytes.length === bytes.length &&
+          secondBytes.every((byte, index) => byte === bytes[index]),
+        'Private workbook round-trip archive integrity',
       ).toBe(true);
+      console.info(
+        'Private workbook verification counts only',
+        JSON.stringify({
+          originalRows: originals.length,
+          transactions: added.length,
+          baselineWithMinor: valid.filter((row) => row.minor).length,
+          addedWithoutMinor: valid.filter((row) => !row.minor).length,
+          unassignedPayment: added.filter((t) => t.paymentMethodId === null).length,
+          monthlyLedgers: Object.keys(candidate.monthlyLedgerIds ?? {}).length,
+          observations: observationCount,
+          sourceRecords: sources.length,
+          pending: sources.filter((row) => row.status === 'pending').length,
+          resolved: sources.filter((row) => row.status === 'resolved').length,
+          reference: sources.filter((row) => row.status === 'reference').length,
+          archiveRecords: sources.filter(isWorkbookArchiveRecord).length,
+          ...metrics,
+          mismatches:
+            transactionMismatches +
+            sourceMismatches +
+            routingMismatches +
+            tagMismatches +
+            observationMismatches +
+            effectMismatches +
+            roundTripSourceMismatches,
+          reimportAdded: again.transactions.count + archiveAgain.added,
+        }),
+      );
     },
+    300_000,
   );
   it('parses multiline CSV, rejects unknown mappings and neutralizes formula-like exported text', async () => {
     const data = await state();

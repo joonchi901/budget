@@ -8,6 +8,8 @@ export interface WorkbookImportOptions {
   ledgerId: string;
   actorId: string;
   newLedgerName?: string;
+  /** Monthly mode creates a new root plus one child for each original numbered sheet. */
+  ledgerMode?: 'single' | 'monthly';
   payments?: Record<string, string>;
   corrections?: Record<
     string,
@@ -19,6 +21,7 @@ export interface WorkbookImportOptions {
 export interface WorkbookImportResult {
   backup: BudgetBackup;
   ledgerId: string;
+  monthlyLedgerIds?: Record<string, string>;
   counts: Record<BackupTable, number>;
   transactions: { income: number; expense: number; count: number };
   monthly: { month: string; count: number; income: number; expense: number }[];
@@ -54,6 +57,11 @@ export async function buildWorkbookImport(
     throw new Error('원본 식별자는 1~160자로 입력해 주세요.');
   if (!current.members.some((m) => m.id === options.actorId))
     throw new Error('현재 사용자를 확인해 주세요.');
+  const ledgerMode = options.ledgerMode ?? 'single';
+  if (!['single', 'monthly'].includes(ledgerMode))
+    throw new Error('가져올 가계부 구성을 확인해 주세요.');
+  if (ledgerMode === 'monthly' && !options.newLedgerName)
+    throw new Error('월별 가계부를 구성하려면 새 상위 가계부 이름을 입력해 주세요.');
   if (
     !book.sheets.some((s) => /^(?:[1-9]|1[0-2])$/.test(s.name)) ||
     !book.sheets.some((s) => s.name === '설정')
@@ -70,7 +78,7 @@ export async function buildWorkbookImport(
     BackupTable,
     number
   >;
-  const pending: WorkbookImportResult['pending'] = [];
+  const latestPendingNotes = new Map<string, string>();
   let duplicates = 0;
   const add = (table: BackupTable, row: DataRow) => {
     if (tables[table].some((r) => r.id === row.id)) return false;
@@ -88,15 +96,16 @@ export async function buildWorkbookImport(
   ) => {
     const sourceId = await id('source', key),
       old = tables.source_records.find((r) => r.id === sourceId);
+    if (status === 'pending') latestPendingNotes.set(sourceId, note);
     const serialized = JSON.stringify(payload);
     if (old && old.payload_json !== serialized) {
-      pending.push({
-        source: location,
-        message:
-          '이미 가져온 원본이 변경되었어요. 기존 기록을 유지하며 변경 원문을 검토 목록에 보존해요.',
-      });
+      const changedId = await id('changed', `${key}:${await digest(payload)}`);
+      latestPendingNotes.set(
+        changedId,
+        '이미 가져온 원본이 변경되었어요. 기존 기록을 유지하며 변경 원문을 검토 목록에 보존해요.',
+      );
       add('source_records', {
-        id: await id('changed', `${key}:${await digest(payload)}`),
+        id: changedId,
         source_id: options.sourceId,
         source_location: location,
         kind,
@@ -111,7 +120,6 @@ export async function buildWorkbookImport(
       duplicates++;
       return false;
     }
-    if (status === 'pending') pending.push({ source: location, message: note });
     if (old) {
       // Preserve the user's review note; append the decision only when it fits the note limit.
       if (old.status !== status) {
@@ -135,14 +143,35 @@ export async function buildWorkbookImport(
   };
   const existing = tables.ledgers.find((l) => l.id === options.ledgerId);
   const ledgerId = options.newLedgerName ? await id('ledger', 'workbook') : options.ledgerId;
+  const monthlyLedgerIds: Record<string, string> | undefined =
+    ledgerMode === 'monthly'
+      ? Object.fromEntries(
+          await Promise.all(
+            Array.from({ length: 12 }, async (_, index) => {
+              const month = String(index + 1);
+              return [month, await id('ledger', `month:${month}`)] as const;
+            }),
+          ),
+        )
+      : undefined;
   const priorGroupId = await id('group', 'major');
   const priorGroup = tables.tag_groups.find((g) => g.id === priorGroupId);
   if (priorGroup?.ledger_ids && !JSON.parse(String(priorGroup.ledger_ids)).includes(ledgerId))
     throw new Error(
       '같은 원본은 처음 가져온 가계부를 선택해 주세요. 원본 행의 중복과 분류 연결을 유지해야 해요.',
     );
+  if (priorGroup) {
+    const previousScope: string[] = JSON.parse(String(priorGroup.ledger_ids ?? '[]'));
+    const hadMonthlyLedgers = previousScope.includes(await id('ledger', 'month:1'));
+    if (hadMonthlyLedgers !== (ledgerMode === 'monthly'))
+      throw new Error(
+        '같은 원본은 처음 선택한 가계부 구성을 유지해 주세요. 기존 거래의 가계부를 자동으로 옮기지 않아요.',
+      );
+  }
   if (!options.newLedgerName && (!existing || existing.archived))
     throw new Error('사용 중인 가계부를 선택해 주세요.');
+  if (tables.ledgers.some((l) => l.id === ledgerId && l.archived))
+    throw new Error('처음 가져온 가계부가 보관되어 있어요. 보관을 해제한 뒤 다시 가져와 주세요.');
   const startDay = Number(cellValue(book, '설정', 'G3'));
   if (options.newLedgerName)
     add('ledgers', {
@@ -168,6 +197,31 @@ export async function buildWorkbookImport(
       fixed_expense_tag_ids: '[]',
       tag_mappings: '{}',
     });
+  if (monthlyLedgerIds)
+    for (const [month, childId] of Object.entries(monthlyLedgerIds)) {
+      if (tables.ledgers.some((l) => l.id === childId && l.archived))
+        throw new Error(
+          `${month}월 가계부가 보관되어 있어요. 보관을 해제한 뒤 다시 가져와 주세요.`,
+        );
+      add('ledgers', {
+        id: childId,
+        name: `${month}월`,
+        icon: '📒',
+        kind: 'purpose',
+        parent_id: ledgerId,
+        sort_order: Number(month) - 1,
+        budget: 0,
+        start_date: null,
+        end_date: null,
+        archived: 0,
+        version: 1,
+        period_start_day:
+          Number.isInteger(startDay) && startDay >= 1 && startDay <= 31 ? startDay : 1,
+        fixed_expense_tag_ids: '[]',
+        tag_mappings: '{}',
+      });
+    }
+  const ledgerScope = [ledgerId, ...Object.values(monthlyLedgerIds ?? {})];
   const group = async (key: string, name: string, appliesTo = 'transaction', role = 'regular') => {
     const value = await id('group', key);
     add('tag_groups', {
@@ -176,7 +230,7 @@ export async function buildWorkbookImport(
       selection_mode: 'single',
       applies_to: appliesTo,
       role,
-      ledger_ids: appliesTo === 'transaction' ? JSON.stringify([ledgerId]) : null,
+      ledger_ids: appliesTo === 'transaction' ? JSON.stringify(ledgerScope) : null,
       sort_order: tables.tag_groups.length,
       archived: 0,
       version: 1,
@@ -212,9 +266,12 @@ export async function buildWorkbookImport(
   const fixedTag = await tag(groups.fixed, '고정지출'),
     variableTag = await tag(groups.fixed, '비고정지출');
   if (options.newLedgerName) {
-    const ledger = tables.ledgers.find((l) => l.id === ledgerId)!;
-    if (!JSON.parse(String(ledger.fixed_expense_tag_ids)).includes(fixedTag))
-      ledger.fixed_expense_tag_ids = JSON.stringify([fixedTag]);
+    for (const targetId of ledgerScope) {
+      const ledger = tables.ledgers.find((l) => l.id === targetId)!;
+      const fixedTags: string[] = JSON.parse(String(ledger.fixed_expense_tag_ids));
+      if (!fixedTags.includes(fixedTag))
+        ledger.fixed_expense_tag_ids = JSON.stringify([...fixedTags, fixedTag]);
+    }
   }
   const tagsFor = async (
     names: { major?: string; minor?: string; tag?: string },
@@ -238,8 +295,7 @@ export async function buildWorkbookImport(
   // The visible settings table is authoritative. Hidden S:AH cells only check duplicates.
   for (let row = 6; row <= 29; row++) {
     const major = String(cellValue(book, '설정', `B${row}`) ?? '').trim();
-    if (!major) continue;
-    const parent = await tag(groups.major, major);
+    const parent = major ? await tag(groups.major, major) : null;
     for (let col = 67; col <= 81; col++) {
       const minor = String(
         cellValue(book, '설정', `${String.fromCharCode(col)}${row}`) ?? '',
@@ -247,8 +303,65 @@ export async function buildWorkbookImport(
       if (minor) await tag(groups.minor, minor, parent);
     }
   }
+  // Preserve actual source options even when the corresponding transaction needs review.
+  for (const sheet of book.sheets.filter((s) => /^(?:[1-9]|1[0-2])$/.test(s.name)))
+    for (const row of [
+      ...Array.from({ length: 20 }, (_, index) => index + 7),
+      ...Array.from({ length: 300 }, (_, index) => index + 30),
+    ]) {
+      const names = Object.fromEntries(
+        [
+          ['major', 'W'],
+          ['minor', 'X'],
+          ['tag', 'Z'],
+        ].map(([key, column]) => [key, String(sheet.cells[`${column}${row}`]?.value ?? '').trim()]),
+      );
+      if (Object.values(names).some(Boolean)) await tagsFor(names);
+      const amount = sheet.cells[`V${row}`]?.value;
+      if (amount !== null && amount !== undefined && amount !== '' && amount !== 0) continue;
+      const cells = Object.fromEntries(
+        ['T', 'U', 'V', 'W', 'X', 'Y', 'Z'].map((column) => [
+          `${column}${row}`,
+          sheet.cells[`${column}${row}`] ?? { value: null },
+        ]),
+      );
+      if (
+        !Object.values(cells).some(
+          (cell) =>
+            (cell.value !== null && cell.value !== undefined && cell.value !== '') || cell.error,
+        )
+      )
+        continue;
+      await source(
+        `memo:${sheet.name}!${row}`,
+        `${sheet.name}!T${row}:Z${row}`,
+        'reference',
+        { sheet: sheet.name, row, cells },
+        row < 27
+          ? '금액이 없는 고정 항목 원문입니다. 실제 거래로 반영하지 않았어요.'
+          : '추가 메모 행: 금액이 없거나 0원이라 거래로 반영하지 않았어요. 기록 내용과 반영 여부를 확인해 주세요.',
+        row < 27 ? 'reference' : 'pending',
+      );
+    }
   const management = extractWorkbookManagement(book),
     plans = extractWorkbookPlans(book);
+  const reserveSheet = book.sheets.find((sheet) => sheet.name === '예비비');
+  const reserveNames = new Set<string>();
+  if (reserveSheet)
+    for (const [column, firstRow, lastRow] of [
+      ['B', 10, 23],
+      ['D', 26, 310],
+      ['N', 10, 310],
+    ] as const)
+      for (let row = firstRow; row <= lastRow; row++) {
+        const name = String(reserveSheet.cells[`${column}${row}`]?.value ?? '').trim();
+        if (name) reserveNames.add(name);
+      }
+  const reserveTags = new Map<string, string>();
+  if (reserveNames.size) {
+    const reserveGroup = await group('reserve-category', '예비금 항목', 'asset');
+    for (const name of reserveNames) reserveTags.set(name, await tag(reserveGroup, name));
+  }
   const paymentNames = new Map<string, string[]>();
   const rememberPayment = (name: string, value: string) =>
     paymentNames.set(name, [...new Set([...(paymentNames.get(name) ?? []), value])]);
@@ -333,6 +446,9 @@ export async function buildWorkbookImport(
     const assetTags = await Promise.all(
       a.classifications.filter(Boolean).map((name) => tag(groups.asset, name)),
     );
+    // Only the original reserve summary establishes an asset; unmatched row labels stay options.
+    const reserveTag = a.key.startsWith('예비비!category:') && reserveTags.get(a.name);
+    if (reserveTag) assetTags.push(reserveTag);
     // Hierarchical source labels form one path. A multiple group preserves all levels independently.
     tables.tag_groups.find((g) => g.id === groups.asset)!.selection_mode = 'multiple';
     add('assets', {
@@ -396,6 +512,7 @@ export async function buildWorkbookImport(
     raw: unknown,
     row: ExcelTransactionRow,
     allocation?: { assetId: string; paymentMethodId: string },
+    targetLedgerId = ledgerId,
   ) => {
     const errors: string[] = [];
     if (!validDate(row.date)) errors.push('거래일을 확인해 주세요.');
@@ -403,7 +520,7 @@ export async function buildWorkbookImport(
       errors.push('내역은 1~240자로 입력해 주세요.');
     if (!Number.isSafeInteger(row.amount) || row.amount <= 0 || row.amount > 1_000_000_000_000)
       errors.push('양의 정수 원 단위 금액을 확인해 주세요.');
-    if (!row.major || !row.minor) errors.push('대분류·소분류를 확인해 주세요.');
+    if (!row.major) errors.push('대분류가 없어 수입·지출·저축 구분을 확인해야 해요.');
     if (errors.length) {
       await source(key, location, 'transaction', raw, errors.join(' '), 'pending');
       return;
@@ -497,18 +614,7 @@ export async function buildWorkbookImport(
         });
       return;
     }
-    const paymentId = allocation?.paymentMethodId || (await paymentFor(row.payment));
-    if (!paymentId) {
-      await source(
-        key,
-        location,
-        'transaction',
-        raw,
-        `결제수단 “${row.payment || '미기록'}”의 종류나 연결을 확인해 주세요.`,
-        'pending',
-      );
-      return;
-    }
+    const paymentId = allocation?.paymentMethodId || (await paymentFor(row.payment)) || null;
     const allocations = allocation ? [{ assetId: allocation.assetId, amount: row.amount }] : [];
     if (allocation) {
       const asset = tables.assets.find((a) => a.id === allocation.assetId);
@@ -549,7 +655,13 @@ export async function buildWorkbookImport(
         location,
         'transaction',
         raw,
-        `거래로 가져옴${options.corrections?.[row.rowId] ? ' (미리보기에서 보완한 값 사용)' : ''}`,
+        [
+          `거래로 가져옴${options.corrections?.[row.rowId] ? ' (미리보기에서 보완한 값 사용)' : ''}`,
+          !paymentId ? `결제수단 미지정(나중에 연결). 원본 표기: ${row.payment || '미기록'}` : '',
+          !row.minor ? '소분류 미지정. 원문에 없는 태그는 만들지 않았어요.' : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
         'resolved',
       ))
     )
@@ -557,7 +669,7 @@ export async function buildWorkbookImport(
     const txId = await id('transaction', key);
     add('transactions', {
       id: txId,
-      ledger_id: ledgerId,
+      ledger_id: targetLedgerId,
       date: row.date,
       description: row.description,
       amount: row.amount,
@@ -576,6 +688,15 @@ export async function buildWorkbookImport(
       deleted_at: null,
       allocations_json: JSON.stringify(allocations),
     });
+    if (!row.minor)
+      await source(
+        `review:classification:${key}`,
+        location,
+        'reference',
+        { transactionId: txId, major: row.major, minor: row.minor },
+        '거래는 반영했으며 소분류는 비워 두었어요. 필요한 경우 원본 거래에서 태그를 지정해 주세요.',
+        'pending',
+      );
     if (allocation) {
       const asset = tables.assets.find((a) => a.id === allocation.assetId)!;
       add('asset_effects', {
@@ -619,6 +740,8 @@ export async function buildWorkbookImport(
       `${raw.sheet}!T${raw.row}:Z${raw.row}`,
       evidence,
       row,
+      undefined,
+      monthlyLedgerIds?.[raw.sheet] ?? ledgerId,
     );
   }
   for (const row of management.reserveRows) {
@@ -649,7 +772,7 @@ export async function buildWorkbookImport(
         amount: row.amount,
         kind: 'expense',
         major: '예비금 사용',
-        minor: row.category || '미분류',
+        minor: row.category,
         payment: row.paymentName ?? '',
         tag: row.tag ?? '',
         fixed: false,
@@ -671,15 +794,16 @@ export async function buildWorkbookImport(
     )
       continue;
     const planId = await id('plan', entry.key),
+      planLedgerId = monthlyLedgerIds?.[entry.source.split('!')[0]] ?? ledgerId,
       plan = {
         ...entry.plan,
-        ledgerId,
+        ledgerId: planLedgerId,
         includeLinked: true,
         tagIds: await tagsFor(entry.tagNames ?? {}),
       };
     add('planning_records', {
       id: planId,
-      ledger_id: ledgerId,
+      ledger_id: planLedgerId,
       kind: plan.kind,
       payload_json: JSON.stringify(plan),
       archived: 0,
@@ -705,6 +829,16 @@ export async function buildWorkbookImport(
       '원본 공통 메모',
       'reference',
     );
+  const reserveNote = book.sheets.find((s) => s.name === '예비비')?.cells.A22;
+  if (reserveNote && reserveNote.value !== null && reserveNote.value !== '')
+    await source(
+      'note:예비비!A22',
+      '예비비!A22',
+      'reference',
+      reserveNote,
+      '원본 예비금 공통 메모. 수입·지출이나 자산 변동으로 반영하지 않았어요.',
+      'reference',
+    );
   const settings = book.sheets.find((s) => s.name === '설정');
   if (settings)
     await source(
@@ -720,10 +854,21 @@ export async function buildWorkbookImport(
   return {
     backup,
     ledgerId,
+    ...(monthlyLedgerIds ? { monthlyLedgerIds } : {}),
     counts,
     transactions,
     monthly: [...monthly.values()].sort((a, b) => a.month.localeCompare(b.month)),
-    pending,
+    pending: tables.source_records
+      .filter((row) => row.source_id === options.sourceId && row.status === 'pending')
+      .map((row) => {
+        const saved = String(row.note),
+          latest = latestPendingNotes.get(String(row.id));
+        return {
+          source: String(row.source_location),
+          message:
+            latest && !saved.includes(latest) ? [saved, latest].filter(Boolean).join('\n') : saved,
+        };
+      }),
     duplicates,
     assetOperations: tables.asset_operations.filter(
       (op) => !current.tables.asset_operations.some((old) => old.id === op.id),

@@ -6,6 +6,7 @@ import type { Bootstrap } from '../shared/types';
 import type { BudgetBackup, RestorePreview } from '../shared/data';
 import { originalTransactions, readXlsx, cellValue, type Workbook } from '../shared/xlsx';
 import { extractWorkbookManagement } from '../shared/xlsx-management';
+import { appendWorkbookArchive } from '../shared/workbook-archive';
 import {
   buildWorkbookImport,
   type WorkbookImportOptions,
@@ -18,14 +19,19 @@ interface Props {
   data: Bootstrap;
   onChanged(): Promise<void>;
   onNotice(message: string): void;
+  onOpenLedger?(id: string): void;
 }
-export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
+export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedger }: Props) {
   const isAdmin = data.user.role === 'admin';
   const [book, setBook] = useState<Workbook | null>(null),
     [fileName, setFileName] = useState('');
   const [sourceId, setSourceId] = useState(''),
     [ledgerId, setLedgerId] = useState(data.ledgers.find((l) => !l.archived)?.id ?? '');
   const [newLedgerName, setNewLedgerName] = useState('엑셀 가계부');
+  const [ledgerMode, setLedgerMode] = useState<'single' | 'monthly'>('single');
+  const sourceBytes = useRef<Uint8Array | null>(null);
+  const [importedLedgerId, setImportedLedgerId] = useState<string | null>(null);
+  const pendingLedgerId = useRef<string | null>(null);
   const [payments, setPayments] = useState<NonNullable<WorkbookImportOptions['payments']>>({});
   const [corrections, setCorrections] = useState<NonNullable<WorkbookImportOptions['corrections']>>(
     {},
@@ -67,12 +73,15 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
     if (!file) return;
     clearPreview();
     setBook(null);
+    sourceBytes.current = null;
     setBusy(true);
     try {
-      const value = readXlsx(new Uint8Array(await file.arrayBuffer()));
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const value = readXlsx(bytes);
       if (!value.sheets.some((s) => s.name === '설정'))
         throw new Error('기존 가계부와 같은 형식의 XLSX를 선택해 주세요.');
       setBook(value);
+      sourceBytes.current = bytes;
       setFileName(file.name);
       setSourceId(file.name);
       setPayments({});
@@ -95,12 +104,22 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
         sourceId,
         ledgerId,
         newLedgerName: ledgerId === '@new' ? newLedgerName : undefined,
+        ledgerMode: ledgerId === '@new' ? ledgerMode : 'single',
         actorId: data.user.id,
         payments,
         corrections,
         savings,
         reserveExpenses: reserve,
       });
+      if (sourceBytes.current) {
+        const archived = await appendWorkbookArchive(
+          local.backup,
+          sourceId,
+          fileName,
+          sourceBytes.current,
+        );
+        local.counts.source_records += archived.added;
+      }
       const server = await request<RestorePreview>('/api/data/restore/preview', 'POST', {
         backup: local.backup,
         baseRevision: local.backup.sourceRevision,
@@ -116,7 +135,8 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
   }
   async function apply() {
     if (busy || !isAdmin) return;
-    if (!pending.current && preview && confirmed && !preview.server.issues.length)
+    if (!pending.current && preview && confirmed && !preview.server.issues.length) {
+      pendingLedgerId.current = preview.local.ledgerId;
       pending.current = {
         mutationId: crypto.randomUUID(),
         backup: preview.local.backup,
@@ -127,6 +147,7 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
         baseRevision: preview.local.backup.sourceRevision,
         digest: preview.server.digest,
       };
+    }
     if (!pending.current) return;
     setBusy(true);
     setError('');
@@ -137,6 +158,7 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
       setPreview(null);
       setConfirmed(false);
       await onChanged();
+      setImportedLedgerId(pendingLedgerId.current);
       onNotice('엑셀 자료를 반영했어요. 확인이 필요한 원문은 아래 검토함에 보존했어요.');
     } catch (e) {
       setError((e as Error).message);
@@ -160,6 +182,14 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
         월별 거래·계획·카드·통장·자산·분류를 함께 읽어요. 원본 수식은 실행하지 않고 저장된 값과
         메모를 사용해요. 의료비 전용 정산 시트는 제외해요.
       </p>
+      {importedLedgerId && onOpenLedger && (
+        <div className="data-actions">
+          <button className="primary" onClick={() => onOpenLedger(importedLedgerId)}>
+            가져온 가계부 보기
+          </button>
+          <span className="small muted">하위 가계부를 포함해 전체 기간의 기록을 보여줘요.</span>
+        </div>
+      )}
       {error && (
         <div className="alert error" role="alert">
           {error}
@@ -225,24 +255,42 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
                 </SelectField>
               </label>
               {ledgerId === '@new' && (
-                <label>
-                  새 가계부 이름
-                  <input
-                    value={newLedgerName}
-                    maxLength={80}
-                    onChange={(e) => {
-                      setNewLedgerName(e.target.value);
-                      clearPreview();
-                    }}
-                  />
-                </label>
+                <>
+                  <label>
+                    새 가계부 이름
+                    <input
+                      value={newLedgerName}
+                      maxLength={80}
+                      onChange={(e) => {
+                        setNewLedgerName(e.target.value);
+                        clearPreview();
+                      }}
+                    />
+                  </label>
+                  <label>
+                    가계부 구성
+                    <SelectField
+                      value={ledgerMode}
+                      onValueChange={(value) => {
+                        setLedgerMode(value as 'single' | 'monthly');
+                        clearPreview();
+                      }}
+                    >
+                      <SelectOption value="single">하나의 가계부</SelectOption>
+                      <SelectOption value="monthly">월별 하위 가계부</SelectOption>
+                    </SelectField>
+                    <small>
+                      월별 구성은 1월부터 12월까지 만들고 원본 시트별로 기록을 배치해요.
+                    </small>
+                  </label>
+                </>
               )}
             </div>
             <details open>
               <summary>결제수단 연결 ({names.length})</summary>
               <p className="small muted">
                 원본 카드 관리와 이름이 정확히 일치하면 연결해요. 다른 이름은 기존 항목 또는 새
-                항목의 종류를 선택해 주세요. 미지정 거래는 검토함에 보관해요.
+                항목의 종류를 선택할 수 있어요. 연결하지 않아도 결제수단 미지정으로 거래를 가져와요.
               </p>
               <div className="data-column-mapping">
                 {names.map((name) => (
@@ -259,7 +307,7 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
                       <SelectOption value="">
                         {management?.payments.filter((p) => p.name === name).length === 1
                           ? '원본 관리 항목에 연결'
-                          : '미지정 · 검토함에 보관'}
+                          : '미지정 · 연결 없이 가져오기'}
                       </SelectOption>
                       <SelectGroup label="현재 결제수단">
                         {data.paymentMethods
@@ -291,7 +339,9 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
               <details>
                 <summary>불완전한 월별 기록 보완 ({invalidRows.length})</summary>
                 <p className="small muted">
-                  원문은 그대로 보관하며 아래에서 지정한 값을 사용해요. 미입력 행도 검토함에 남아요.
+                  원문은 보관하며 아래에서 지정한 값을 사용해요. 내역 분류나 결제수단만 없어도
+                  거래를 가져올 수 있어요. 날짜·금액·수입/지출 구분이 불명확한 행은 검토함에서
+                  확인해 주세요.
                 </p>
                 <div className="data-table-wrap">
                   <table>
@@ -494,7 +544,8 @@ export default function ExcelImportView({ data, onChanged, onNotice }: Props) {
           </p>
           <p className="small muted">
             현재 기록에 새 자료를 추가해요. 거래의 기본 귀속은 공동이며, 수입·지출의 자산 배분은
-            별도로 지정해요. 월말 관측 잔액은 저축 실적이 되지 않아요.
+            별도로 지정해요. 월말 관측 잔액은 저축 실적이 되지 않아요. 원본 파일은 엑셀 원본 탭에서
+            다시 열거나 내려받을 수 있어요.
           </p>
           <p>
             자산 이동 {preview.local.assetOperations.filter((op) => op.type === 'transfer').length}

@@ -268,7 +268,10 @@ export default function LedgerCalendar({
                       <strong>{entry.description}</strong>
                       <span className="calendar-detail-meta">
                         {ownerName(entry.ownerId)}
-                        {payment ? ` · ${payment.name}` : ''}
+                        {' · '}
+                        {entry.paymentMethodId === null
+                          ? '미지정'
+                          : (payment?.name ?? '알 수 없는 결제수단')}
                       </span>
                       <span className="calendar-detail-source">
                         {ledgerPath(data.ledgers, entry.ledgerId)}

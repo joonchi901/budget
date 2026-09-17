@@ -60,7 +60,7 @@ export async function saveTransaction(
     amount: money(r.amount),
     type: r.type,
     ownerId: r.ownerId as TransactionInput['ownerId'],
-    paymentMethodId: text(r.paymentMethodId, '결제수단'),
+    paymentMethodId: r.paymentMethodId == null ? null : text(r.paymentMethodId, '결제수단'),
     tagIds: tagIds(r.tagIds),
     allocations: [],
   };
@@ -104,13 +104,18 @@ export async function saveTransaction(
       .bind(h, id),
   ]);
   requireValue(results[0].results.length === 1, '접근할 수 있는 원본 가계부를 선택해 주세요.');
-  requireValue(results[1].results.length === 1, '사용할 수 있는 결제수단을 선택해 주세요.');
+  requireValue(
+    tx.paymentMethodId === null || results[1].results.length === 1,
+    '사용할 수 있는 결제수단을 선택해 주세요.',
+  );
   requireValue(
     !results[0].results[0].archived || existing?.ledgerId === tx.ledgerId,
     '보관된 가계부에 새 내역을 추가할 수 없습니다.',
   );
   requireValue(
-    !results[1].results[0].archived || existing?.paymentMethodId === tx.paymentMethodId,
+    tx.paymentMethodId === null ||
+      !results[1].results[0].archived ||
+      existing?.paymentMethodId === tx.paymentMethodId,
     '보관된 결제수단은 새로 선택할 수 없습니다.',
   );
   for (const allocation of tx.allocations) {
@@ -141,9 +146,10 @@ export async function saveTransaction(
     tx.ledgerId,
     existing?.tagIds,
   );
-  guards.push(
-    existsGuard('payment_methods', h, tx.paymentMethodId, Number(results[1].results[0].version)),
-  );
+  if (tx.paymentMethodId !== null)
+    guards.push(
+      existsGuard('payment_methods', h, tx.paymentMethodId, Number(results[1].results[0].version)),
+    );
   guards.push(existsGuard('ledgers', h, tx.ledgerId, Number(results[0].results[0].version)));
   if (tx.allocations.length) {
     // Guard configuration, not the balance version, so independent transactions
