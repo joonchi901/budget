@@ -1,6 +1,18 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { X } from 'lucide-react';
 import { UgaIllustration, UgaMascot } from './brand/Uga';
+import {
+  navigationWarning,
+  registerNavigationGuard,
+  subscribeNavigationWarning,
+} from './navigation-guard';
 
 export const won = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
 export const labels = { expense: '지출', income: '수입' };
@@ -19,14 +31,18 @@ export const fieldName = (field: string | null) =>
   })[field ?? ''] ?? '내역';
 export const ownerName = (id: string) => (id === 'shared' ? '공동' : id === 'u1' ? '나' : '와이프');
 export function useUnsavedGuard(hasUnsavedChanges: boolean) {
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!hasUnsavedChanges) return;
+    const unregister = registerNavigationGuard();
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
+    return () => {
+      unregister();
+      window.removeEventListener('beforeunload', warn);
+    };
   }, [hasUnsavedChanges]);
 }
 export function Dialog({
@@ -44,6 +60,7 @@ export function Dialog({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [validationMessage, setValidationMessage] = useState('');
+  const blockedNavigation = useSyncExternalStore(subscribeNavigationWarning, navigationWarning);
   const invalidFocus = useRef(false);
   useLayoutEffect(() => {
     const el = ref.current!;
@@ -93,6 +110,11 @@ export function Dialog({
       {validationMessage && (
         <div className="dialog-validation-message" role="alert">
           {validationMessage}
+        </div>
+      )}
+      {blockedNavigation && (
+        <div className="dialog-validation-message" role="alert">
+          {blockedNavigation}
         </div>
       )}
       {children}

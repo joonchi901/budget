@@ -1,3 +1,4 @@
+import { openGlobalView, openRoom } from './helpers/navigation';
 import { chooseDate, chooseMonth, selectChoice } from './helpers/controls';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
@@ -6,6 +7,7 @@ import type { Bootstrap } from '../../src/shared/types';
 async function login(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: '나로 시작하기' }).click();
+  await openRoom(page);
   await expect(page.getByRole('heading', { name: '우리의 일상' })).toBeVisible();
   await chooseMonth(page.getByLabel('조회 월'), '2026-09');
 }
@@ -72,7 +74,7 @@ test('users create, edit, archive and restore their own accounts and cards with 
 }) => {
   await login(page);
   const before = await snapshot(page);
-  await page.getByRole('button', { name: '카드 · 통장', exact: true }).click();
+  await openGlobalView(page, '카드 · 통장');
   await page.getByRole('button', { name: '통장 추가', exact: true }).click();
   let form = page.getByRole('dialog');
   await form.getByLabel('통장 이름', { exact: true }).fill('관리 검증 통장');
@@ -119,9 +121,9 @@ test('users create, edit, archive and restore their own accounts and cards with 
   const configured = await snapshot(page);
   expect(configured.transactions).toEqual(before.transactions);
   expect(configured.assetMovements).toEqual(before.assetMovements);
-  await page.getByRole('button', { name: '가계부', exact: true }).click();
+  await openRoom(page);
   await transaction(page, '관리 검증 카드 사용', '26400', false, card.id);
-  await page.getByRole('button', { name: '카드 · 통장', exact: true }).click();
+  await openGlobalView(page, '카드 · 통장');
   await chooseMonth(page.getByLabel('조회 월'), '2026-10');
   const cardView = page.locator('.payment-card').filter({ hasText: '관리 검증 카드' });
   await expect(cardView.locator('.bill-amount')).toHaveText('26,400원');
@@ -271,7 +273,7 @@ test('a purpose ledger supports monthly/category/weekly budgets, goals, payroll,
   expect(after.plans?.filter((p) => p.ledgerId === ledger.id)).toHaveLength(7);
   expect(after.transactions).toEqual(before.transactions);
   expect(after.assetMovements).toEqual(before.assetMovements);
-  await page.getByRole('button', { name: '가계부', exact: true }).click();
+  await openRoom(page, '계획 검증 가계부');
   await expect(page.locator('.budget-panel')).toContainText('110,000원');
   await expect(page.locator('.stats-grid').first().locator('.stat').last()).toContainText(
     '90,000원',
@@ -282,7 +284,7 @@ test('loan terms and date-based asset adjustments preserve historical month-end 
   page,
 }) => {
   await login(page);
-  await page.getByRole('button', { name: '자산', exact: true }).click();
+  await openGlobalView(page, '자산');
   await page.getByRole('button', { name: '자산 추가', exact: true }).click();
   let form = page.getByRole('dialog');
   await form.getByLabel('자산 이름', { exact: true }).fill('검증 대출');

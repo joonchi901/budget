@@ -1,3 +1,4 @@
+import { openGlobalView, openRoom } from './helpers/navigation';
 import { expect, test } from '@playwright/test';
 import type { Transaction, TransactionInput } from '../../src/shared/types';
 
@@ -6,6 +7,7 @@ test('saved transaction history exposes before and after values including delete
 }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '나로 시작하기' }).click();
+  await openRoom(page);
   await expect(page.getByRole('heading', { name: '우리의 일상' })).toBeVisible();
   const input: TransactionInput = {
     ledgerId: 'main',
@@ -42,7 +44,7 @@ test('saved transaction history exposes before and after values including delete
     data: { mutationId: crypto.randomUUID(), expectedVersion: edited.version },
   });
   expect(remove.status()).toBe(200);
-  await page.getByRole('button', { name: '데이터 관리', exact: true }).click();
+  await openGlobalView(page, '데이터 관리');
   await page.getByRole('tab', { name: '변경 이력', exact: true }).click();
   await expect(page.getByRole('heading', { name: '최근 변경 이력', exact: true })).toBeVisible();
   const updateHistory = page

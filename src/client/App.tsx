@@ -3,7 +3,11 @@ import {
   ledgerAncestors,
   ledgerDescendantIds,
   ledgerPath,
+  sortedLedgerChildren,
 } from '../shared/hierarchy';
+import { isRoomPage, type AppPage } from '../shared/app-route';
+import { useAppRoute } from './useAppRoute';
+import LedgerRooms from './LedgerRooms';
 import LedgerTree from './LedgerTree';
 import HierarchyDialog, { type MoveIntent } from './HierarchyDialog';
 import MemberRoles from './MemberRoles';
@@ -21,7 +25,7 @@ import {
 } from './brand/Uga';
 import { SelectField, SelectOption } from './SelectField';
 import { MonthField } from './DateFields';
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpRight,
   Check,
@@ -35,6 +39,7 @@ import {
   Menu,
   Plus,
   Search,
+  Settings2,
   Sparkles,
   WifiOff,
   X,
@@ -56,37 +61,41 @@ import DataView from './DataView';
 import { transactionForLedger } from '../shared/classification';
 const ExcelImportView = lazy(() => import('./ExcelImportView'));
 
-type Page = 'ledger' | 'assets' | 'payments' | 'analytics' | 'tags' | 'planning' | 'data';
+type Page = AppPage;
 const monthLabel = (month: string) => `${month.slice(0, 4)}년 ${Number(month.slice(5))}월`;
-const currentMonth = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
 const colors = UGA_CHART_COLORS;
 const navigation = [
-  { id: 'ledger', label: '가계부', icon: 'home' },
+  { id: 'rooms', label: '가계부', icon: 'home' },
   { id: 'assets', label: '자산', icon: 'assets' },
   { id: 'payments', label: '카드 · 통장', icon: 'payments' },
-  { id: 'analytics', label: '통계', icon: 'analytics' },
-  { id: 'planning', label: '계획 · 일정', icon: 'planning' },
   { id: 'tags', label: '태그 설정', icon: 'tags' },
   { id: 'data', label: '데이터 관리', icon: 'data' },
 ] as const;
 
 export default function App() {
-  const [ledgerId, setLedgerId] = useState('main');
-  const [page, setPage] = useState<Page>('ledger');
+  const { route, go, navigationWarning } = useAppRoute();
+  const { ledgerId, page, month, view: ledgerView } = route;
+  const inRoom = isRoomPage(page);
   const [mobileMenu, setMobileMenu] = useState(false);
-  const [month, setMonth] = useState(currentMonth);
   const state = useBudget(ledgerId);
-  const [edit, setEdit] = useState<{ original?: Transaction; initialDate?: string } | null>(null);
+  const [edit, setEdit] = useState<{
+    ledgerId: string;
+    original?: Transaction;
+    initialDate?: string;
+  } | null>(null);
+  useEffect(() => {
+    if (edit && (!inRoom || edit.ledgerId !== ledgerId)) {
+      setEdit(null);
+      state.presence(null, null);
+    }
+  }, [edit, inRoom, ledgerId, state.presence]);
   useEffect(() => {
     if (edit?.original?.ledgerId === ledgerId) state.presence(edit.original.id, null);
   }, [ledgerId, edit?.original?.id, state.presence]);
-  const [ledgerView, setLedgerView] = useState<'list' | 'calendar'>('list');
   const [calendarAddDate, setCalendarAddDate] = useState<string | null>(null);
   const [calendarTarget, setCalendarTarget] = useState('');
   const [newLedger, setNewLedger] = useState(false);
+  const [newLedgerParent, setNewLedgerParent] = useState<string | null>(null);
   const [moveIntent, setMoveIntent] = useState<MoveIntent | null>(null);
   const [memberRoles, setMemberRoles] = useState(false);
   const [includeDescendants, setIncludeDescendants] = useState(true);
@@ -106,23 +115,12 @@ export default function App() {
   const [loginBusy, setLoginBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const data = state.data;
-  useEffect(() => {
-    if (!data?.user.id) return;
-    try {
-      setLedgerView(
-        localStorage.getItem(`budget:ledger-view:${data.user.id}`) === 'calendar'
-          ? 'calendar'
-          : 'list',
-      );
-    } catch {
-      setLedgerView('list');
-    }
-  }, [data?.user.id]);
+  const setMonth = (value: string) => go({ ...route, month: value }, { replace: true });
   const changeLedgerView = (view: 'list' | 'calendar') => {
-    setLedgerView(view);
+    go({ ...route, page: 'ledger', view });
     if (!data) return;
     try {
-      localStorage.setItem(`budget:ledger-view:${data.user.id}`, view);
+      localStorage.setItem(`budget:ledger-view:${data.user.id}:${ledgerId}`, view);
     } catch {
       // Viewing the ledger must remain available when device storage is blocked.
     }
@@ -145,10 +143,26 @@ export default function App() {
       : (data?.ledgers.find((l) => l.id === ledgerId) ?? data?.ledgers[0] ?? overall);
   const admin = data?.user.role === 'admin';
   const isOverall = ledger.id === ALL_LEDGERS_ID;
+  const initializedLedger = useRef('');
   useEffect(() => {
-    if (data && ledgerId !== ALL_LEDGERS_ID && !data.ledgers.some((item) => item.id === ledgerId))
-      setLedgerId(ALL_LEDGERS_ID);
-  }, [data, ledgerId]);
+    if (!data || !inRoom) {
+      initializedLedger.current = '';
+      return;
+    }
+    if (ledgerId !== ALL_LEDGERS_ID && !data.ledgers.some((item) => item.id === ledgerId)) {
+      go({ ...route, page: 'rooms', ledgerId: ALL_LEDGERS_ID }, { replace: true });
+      setActionError('이 가계부를 찾을 수 없어 목록으로 돌아왔어요.');
+      return;
+    }
+    if (initializedLedger.current !== ledgerId) {
+      initializedLedger.current = ledgerId;
+      setPeriod(ledger.startDate && ledger.endDate ? 'period' : 'month');
+      setIncludeDescendants(true);
+    }
+  }, [data, inRoom, ledgerId, ledger.startDate, ledger.endDate, go, route]);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [page, ledgerId, ledgerView]);
   const entries = useMemo(
     () => (data ? visibleTransactions(data, ledgerId, month, { includeDescendants, period }) : []),
     [data, ledgerId, month, includeDescendants, period],
@@ -168,30 +182,51 @@ export default function App() {
     if (isOverall) {
       setCalendarTarget('');
       setCalendarAddDate(date);
-    } else setEdit({ initialDate: date });
+    } else setEdit({ ledgerId, initialDate: date });
   }
   function notice(message: string) {
     setToast(message);
   }
-  function navigate(id: string) {
+  function navigate(id: string, view?: 'list' | 'calendar', createdLedger?: Ledger) {
     state.presence(null, null);
-    const target = data?.ledgers.find((item) => item.id === id);
-    const start = target?.kind === 'purpose' ? target.startDate : null;
-    const end = target?.kind === 'purpose' ? target.endDate : null;
-    setLedgerId(id);
+    const target = createdLedger ?? data?.ledgers.find((item) => item.id === id);
+    const start = target?.startDate;
+    const end = target?.endDate;
     setIncludeDescendants(true);
     setPeriod(start && end ? 'period' : 'month');
-    if (start && end && (month < start.slice(0, 7) || month > end.slice(0, 7)))
-      setMonth(start.slice(0, 7));
-    setPage('ledger');
+    let preferredView = view ?? 'list';
+    if (!view && data) {
+      try {
+        preferredView =
+          localStorage.getItem(`budget:ledger-view:${data.user.id}:${id}`) === 'calendar'
+            ? 'calendar'
+            : 'list';
+      } catch {
+        /* Device storage is optional. */
+      }
+    }
+    go({
+      page: 'ledger',
+      ledgerId: id,
+      view: preferredView,
+      month:
+        start && end && (month < start.slice(0, 7) || month > end.slice(0, 7))
+          ? start.slice(0, 7)
+          : month,
+    });
     setActionError('');
     setMobileMenu(false);
   }
   function changePage(next: Page) {
-    setPage(next);
+    go({ ...route, page: next });
     setMobileMenu(false);
     state.presence(null, null);
     window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+  function openNewLedger(parentId: string | null = null) {
+    setNewLedgerParent(parentId);
+    setMobileMenu(false);
+    setNewLedger(true);
   }
   async function login(userId: 'u1' | 'u2') {
     setLoginBusy(true);
@@ -299,6 +334,7 @@ export default function App() {
       </div>
     );
   const pageTitle = {
+    rooms: '가계부',
     ledger: ledger.name,
     assets: '우리의 자산',
     payments: '카드와 통장',
@@ -307,8 +343,17 @@ export default function App() {
     planning: '계획과 일정',
     data: '데이터 관리',
   }[page];
+  const roomTabName =
+    page === 'analytics'
+      ? '통계'
+      : page === 'planning'
+        ? '계획 · 일정'
+        : ledgerView === 'calendar'
+          ? '캘린더'
+          : '목록';
+  const children = !isOverall ? sortedLedgerChildren(data.ledgers, ledgerId) : [];
   return (
-    <div className="app-shell">
+    <div className={`app-shell room-layout ${inRoom ? 'in-room' : 'outside-room'}`}>
       <a className="skip-link" href="#main-content">
         본문으로 바로가기
       </a>
@@ -318,7 +363,7 @@ export default function App() {
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            navigate(ALL_LEDGERS_ID);
+            changePage('rooms');
           }}
         >
           <UgaLogo size={170} alt="우가 · 우리의 가계부" />
@@ -337,7 +382,7 @@ export default function App() {
           {navigation.map((item) => (
             <button
               key={item.id}
-              className={page === item.id ? 'active' : ''}
+              className={page === item.id || (item.id === 'rooms' && inRoom) ? 'active' : ''}
               aria-current={page === item.id ? 'page' : undefined}
               onClick={() => changePage(item.id)}
             >
@@ -353,7 +398,7 @@ export default function App() {
               <button
                 className="icon-button"
                 aria-label="가계부 추가"
-                onClick={() => setNewLedger(true)}
+                onClick={() => openNewLedger()}
               >
                 <Plus size={17} />
               </button>
@@ -399,8 +444,9 @@ export default function App() {
       <div className="workspace">
         <header className="topbar">
           <div className="breadcrumb">
-            우리 집 <ChevronRight size={13} />
-            <span>{page === 'ledger' ? '가계부' : pageTitle}</span>
+            {inRoom ? '내 가계부' : page === 'rooms' ? '우리 집' : '우리 집 공통'}{' '}
+            <ChevronRight size={13} />
+            <span>{inRoom ? roomTabName : pageTitle}</span>
           </div>
           <div className="collaboration">
             <div className="avatar-group">
@@ -441,39 +487,130 @@ export default function App() {
             {data.mode === 'demo' && <span className="demo-chip">로컬 환경</span>}
           </div>
         </header>
+        {inRoom && (
+          <section className="room-context" aria-label="현재 가계부">
+            <div className="room-context-heading">
+              <button
+                className="icon-button room-back"
+                aria-label="가계부 목록"
+                onClick={() => changePage('rooms')}
+              >
+                <ChevronLeft size={23} />
+              </button>
+              <span className="room-context-icon">
+                <UgaLedgerIcon value={ledger.icon} size={34} />
+              </span>
+              <div className="room-context-title">
+                <Tooltip content={ledgerPath(data.ledgers, ledger.id) || ledger.name}>
+                  <h1 tabIndex={0}>{ledger.name}</h1>
+                </Tooltip>
+                <span>
+                  {isOverall
+                    ? '모든 가계부 모아보기'
+                    : `${
+                        ledgerAncestors(data.ledgers, ledger.id)
+                          .map((item) => item.name)
+                          .join(' / ') || '우리 집 공동 가계부'
+                      }${ledger.archived ? ' · 보관됨' : ''}`}{' '}
+                  · {roomTabName}
+                </span>
+              </div>
+              {!isOverall && (
+                <button
+                  className="icon-button room-settings-mobile"
+                  aria-label="가계부 설정"
+                  onClick={() => setSettingsLedger(ledger)}
+                >
+                  <Settings2 size={20} />
+                </button>
+              )}
+              <button
+                className="icon-button room-menu"
+                aria-label="우리 집 메뉴"
+                onClick={() => setMobileMenu(true)}
+              >
+                <Menu size={21} />
+              </button>
+            </div>
+            <div className="room-tabs" role="group" aria-label="가계부 보기">
+              <button
+                className={page === 'ledger' && ledgerView === 'list' ? 'selected' : ''}
+                aria-pressed={page === 'ledger' && ledgerView === 'list'}
+                onClick={() => changeLedgerView('list')}
+              >
+                <List size={17} />
+                목록
+              </button>
+              <button
+                className={page === 'ledger' && ledgerView === 'calendar' ? 'selected' : ''}
+                aria-pressed={page === 'ledger' && ledgerView === 'calendar'}
+                onClick={() => changeLedgerView('calendar')}
+              >
+                <CalendarDays size={17} />
+                캘린더
+              </button>
+              <button
+                className={page === 'analytics' ? 'selected' : ''}
+                aria-pressed={page === 'analytics'}
+                onClick={() => changePage('analytics')}
+              >
+                <UgaIcon name="analytics" size={19} />
+                통계
+              </button>
+              <button
+                className={page === 'planning' ? 'selected' : ''}
+                aria-pressed={page === 'planning'}
+                onClick={() => changePage('planning')}
+              >
+                <UgaIcon name="planning" size={19} />
+                계획 · 일정
+              </button>
+            </div>
+          </section>
+        )}
         <main className={`main-content page-${page}`} id="main-content" tabIndex={-1}>
           <div className="page-heading">
-            <div>
-              <h1>
-                <span className="heading-emoji">
-                  {page === 'ledger' ? (
-                    <UgaLedgerIcon value={ledger.icon} size={30} />
-                  ) : (
-                    <UgaIcon name={page} size={30} />
-                  )}
-                </span>
-                {pageTitle}
-              </h1>
-              <p>
-                {page === 'ledger'
-                  ? isOverall
-                    ? '모든 가계부의 원본 기록을 중복 없이 모아 봐요.'
-                    : '이 가계부와 하위 가계부의 기록을 함께 살펴보세요.'
-                  : page === 'assets'
-                    ? '어디에 얼마가 있는지, 우리의 자산을 함께 살펴보세요.'
-                    : page === 'payments'
-                      ? '사용 내역과 앞으로 나갈 카드 대금을 확인해요.'
-                      : page === 'tags'
-                        ? '태그 유형과 옵션을 우리 생활에 맞게 구성해요.'
-                        : page === 'planning'
-                          ? '예산과 목표, 급여 배분과 일정을 함께 계획해요.'
-                          : page === 'data'
-                            ? '원본 자료를 가져오고, 기록을 검토하고 보관해요.'
-                            : '태그로 기록을 모아, 소비의 흐름을 발견해 보세요.'}
-              </p>
-            </div>
+            {!inRoom && (
+              <div>
+                {page !== 'rooms' && <span className="common-scope-label">우리 집 공통</span>}
+                <h1>
+                  <span className="heading-emoji">
+                    {page === 'ledger' ? (
+                      <UgaLedgerIcon value={ledger.icon} size={30} />
+                    ) : (
+                      <UgaIcon name={page === 'rooms' ? 'home' : page} size={30} />
+                    )}
+                  </span>
+                  {pageTitle}
+                </h1>
+                <p>
+                  {page === 'rooms'
+                    ? '함께 기록할 가계부를 선택하세요.'
+                    : page === 'ledger'
+                      ? isOverall
+                        ? '모든 가계부의 원본 기록을 중복 없이 모아 봐요.'
+                        : '이 가계부와 하위 가계부의 기록을 함께 살펴보세요.'
+                      : page === 'assets'
+                        ? '어디에 얼마가 있는지, 우리의 자산을 함께 살펴보세요.'
+                        : page === 'payments'
+                          ? '사용 내역과 앞으로 나갈 카드 대금을 확인해요.'
+                          : page === 'tags'
+                            ? '태그 유형과 옵션을 우리 생활에 맞게 구성해요.'
+                            : page === 'planning'
+                              ? '예산과 목표, 급여 배분과 일정을 함께 계획해요.'
+                              : page === 'data'
+                                ? '원본 자료를 가져오고, 기록을 검토하고 보관해요.'
+                                : '태그로 기록을 모아, 소비의 흐름을 발견해 보세요.'}
+                </p>
+              </div>
+            )}
             <div className="heading-actions">
-              {page !== 'tags' && page !== 'data' && (
+              {page === 'rooms' && admin && (
+                <button className="primary" onClick={() => openNewLedger()}>
+                  <Plus size={17} />새 가계부
+                </button>
+              )}
+              {page !== 'rooms' && page !== 'tags' && page !== 'data' && (
                 <div className="month-picker">
                   <button
                     className="icon-button"
@@ -502,17 +639,17 @@ export default function App() {
                   </button>
                 </div>
               )}
-              {page === 'ledger' && !isOverall && (
+              {inRoom && !isOverall && (
                 <button className="secondary" onClick={() => setSettingsLedger(ledger)}>
                   가계부 설정
                 </button>
               )}
-              {page === 'ledger' && !isOverall && (
+              {inRoom && !isOverall && (
                 <button
                   className="primary"
                   disabled={ledger.archived}
                   onClick={() => {
-                    setEdit({});
+                    setEdit({ ledgerId });
                     state.presence(null, '새 내역');
                   }}
                 >
@@ -522,6 +659,32 @@ export default function App() {
               )}
             </div>
           </div>
+          {inRoom && !isOverall && (children.length > 0 || admin) && (
+            <details className="room-child-ledgers" key={`children:${ledger.id}`}>
+              <summary>
+                하위 가계부 <span>{children.length}개</span>
+                <ChevronRight size={16} />
+              </summary>
+              <div className="room-child-list">
+                {children.map((child) => (
+                  <button key={child.id} onClick={() => navigate(child.id)}>
+                    <UgaLedgerIcon value={child.icon} size={24} />
+                    <span>
+                      {child.name}
+                      {child.archived && <small>보관됨</small>}
+                    </span>
+                    <ChevronRight size={16} />
+                  </button>
+                ))}
+                {admin && !ledger.archived && (
+                  <button className="room-child-create" onClick={() => openNewLedger(ledger.id)}>
+                    <Plus size={18} />
+                    <span>하위 가계부 추가</span>
+                  </button>
+                )}
+              </div>
+            </details>
+          )}
           {page === 'ledger' && (
             <>
               <div className="ledger-context-toolbar">
@@ -567,28 +730,6 @@ export default function App() {
                       </SelectField>
                     </label>
                   )}
-                  <div
-                    className="segmented ledger-view-toggle"
-                    role="group"
-                    aria-label="가계부 보기"
-                  >
-                    <button
-                      type="button"
-                      className={ledgerView === 'list' ? 'selected' : ''}
-                      aria-pressed={ledgerView === 'list'}
-                      onClick={() => changeLedgerView('list')}
-                    >
-                      <List size={16} /> 목록
-                    </button>
-                    <button
-                      type="button"
-                      className={ledgerView === 'calendar' ? 'selected' : ''}
-                      aria-pressed={ledgerView === 'calendar'}
-                      onClick={() => changeLedgerView('calendar')}
-                    >
-                      <CalendarDays size={16} /> 캘린더
-                    </button>
-                  </div>
                 </div>
               </div>
               {isOverall && (
@@ -616,6 +757,11 @@ export default function App() {
               )}
             </>
           )}
+          {navigationWarning && (
+            <div className="alert" role="alert">
+              {navigationWarning}
+            </div>
+          )}
           {(state.error || actionError) && (
             <div className="alert error" role="alert">
               {actionError || state.error}
@@ -636,6 +782,9 @@ export default function App() {
               연결을 복구하고 있어요. 재연결되면 최신 기록을 불러와요.
             </div>
           )}
+          {page === 'rooms' && (
+            <LedgerRooms data={data} onOpen={navigate} onCreate={() => openNewLedger()} />
+          )}
           {page === 'ledger' && ledgerView === 'calendar' && (
             <LedgerCalendar
               data={data}
@@ -645,20 +794,20 @@ export default function App() {
               onAdd={addOnDate}
               onOpen={(tx) => {
                 navigate(tx.ledgerId);
-                setEdit({ original: tx });
+                setEdit({ ledgerId: tx.ledgerId, original: tx });
               }}
             />
           )}
           {page === 'ledger' && ledgerView === 'list' && (
             <LedgerView
-              key={ledger.id}
+              key={`transactions:${ledger.id}`}
               data={data}
               ledger={ledger}
               entries={entries}
               month={month}
               peers={state.peers}
               onEdit={(tx) => {
-                setEdit({ original: tx });
+                setEdit({ ledgerId: tx.ledgerId, original: tx });
               }}
               onNavigate={navigate}
               period={period}
@@ -674,6 +823,8 @@ export default function App() {
           )}
           {page === 'planning' && (
             <PlanningView
+              key={`plans:${ledgerId}`}
+              lockedLedger
               data={data}
               month={month}
               ledgerId={ledgerId}
@@ -693,9 +844,8 @@ export default function App() {
                     onChanged={state.refresh}
                     onNotice={notice}
                     onOpenLedger={(id) => {
-                      navigate(id);
+                      navigate(id, 'list');
                       setPeriod('period');
-                      changeLedgerView('list');
                     }}
                   />
                 </Suspense>
@@ -704,13 +854,15 @@ export default function App() {
           )}
           {page === 'analytics' && (
             <AnalyticsView
+              key={`analytics:${ledgerId}`}
+              lockedLedger
               data={data}
               ledgerId={ledgerId}
-              setLedgerId={setLedgerId}
+              setLedgerId={(id) => go({ ...route, ledgerId: id })}
               month={month}
               onEdit={(tx) => {
                 navigate(tx.ledgerId);
-                setEdit({ original: tx });
+                setEdit({ ledgerId: tx.ledgerId, original: tx });
               }}
             />
           )}
@@ -727,17 +879,39 @@ export default function App() {
         aria-label="모바일 주 메뉴"
         aria-hidden={mobileMenu || undefined}
       >
-        {navigation.slice(0, 4).map((item) => (
-          <button
-            key={item.id}
-            className={page === item.id ? 'active' : ''}
-            aria-current={page === item.id ? 'page' : undefined}
-            onClick={() => changePage(item.id)}
-          >
-            <UgaIcon name={item.icon} size={24} />
-            <span>{item.label}</span>
-          </button>
-        ))}
+        {inRoom ? (
+          <>
+            <button onClick={() => changePage('rooms')}>
+              <ChevronLeft size={22} />
+              <span>가계부 목록</span>
+            </button>
+            {!isOverall && (
+              <button
+                className="room-add-entry"
+                disabled={ledger.archived}
+                onClick={() => {
+                  setEdit({ ledgerId });
+                  state.presence(null, '새 내역');
+                }}
+              >
+                <Plus size={22} />
+                <span>내역 추가</span>
+              </button>
+            )}
+          </>
+        ) : (
+          navigation.slice(0, 4).map((item) => (
+            <button
+              key={item.id}
+              className={page === item.id ? 'active' : ''}
+              aria-current={page === item.id ? 'page' : undefined}
+              onClick={() => changePage(item.id)}
+            >
+              <UgaIcon name={item.icon} size={24} />
+              <span>{item.label}</span>
+            </button>
+          ))
+        )}
         <button onClick={() => setMobileMenu(true)} aria-expanded={mobileMenu}>
           <Menu size={22} />
           <span>더보기</span>
@@ -761,7 +935,7 @@ export default function App() {
                   className="text-button"
                   onClick={() => {
                     setMobileMenu(false);
-                    setNewLedger(true);
+                    openNewLedger();
                   }}
                 >
                   <Plus size={16} />
@@ -822,11 +996,11 @@ export default function App() {
           </button>
         </div>
       )}
-      {edit && (
+      {edit && inRoom && edit.ledgerId === ledgerId && (
         <TransactionForm
-          key={`${data.householdId ?? data.mode}:${data.user.id}:${ledgerId}:${edit.original?.id ?? `new:${edit.initialDate ?? ''}`}`}
+          key={`${data.householdId ?? data.mode}:${data.user.id}:${edit.ledgerId}:${edit.original?.id ?? `new:${edit.initialDate ?? ''}`}`}
           data={data}
-          ledgerId={ledgerId}
+          ledgerId={edit.ledgerId}
           month={month}
           original={edit.original}
           initialDate={edit.initialDate}
@@ -873,7 +1047,7 @@ export default function App() {
                 const date = calendarAddDate;
                 navigate(calendarTarget);
                 setCalendarAddDate(null);
-                setEdit({ initialDate: date });
+                setEdit({ ledgerId: calendarTarget, initialDate: date });
               }}
             >
               이 가계부에 기록
@@ -900,12 +1074,12 @@ export default function App() {
       {newLedger && (
         <LedgerForm
           data={data}
-          initialParentId={isOverall || ledger.archived ? null : ledger.id}
+          initialParentId={newLedgerParent}
           onChanged={state.refresh}
           onClose={() => setNewLedger(false)}
-          onSaved={(id) => {
+          onSaved={(created) => {
             setNewLedger(false);
-            void state.refresh().then(() => navigate(id));
+            void state.refresh().then(() => navigate(created.id, 'list', created));
             notice('새 가계부를 만들었어요.');
           }}
         />

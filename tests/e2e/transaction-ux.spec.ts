@@ -1,3 +1,4 @@
+import { openRoom } from './helpers/navigation';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { Bootstrap } from '../../src/shared/types';
 import { chooseDate, chooseMonth, selectChoice } from './helpers/controls';
@@ -5,6 +6,7 @@ import { chooseDate, chooseMonth, selectChoice } from './helpers/controls';
 async function login(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: /나로 시작하기/ }).click();
+  await openRoom(page);
   await expect(page.getByRole('heading', { name: '우리의 일상', exact: true })).toBeVisible();
   await chooseMonth(page.getByLabel('조회 월'), '2026-09');
   await expect(page.getByTestId('connection')).toHaveText('실시간 연결됨');

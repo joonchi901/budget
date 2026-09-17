@@ -1,3 +1,4 @@
+import { openRoom, openRoomTab } from './helpers/navigation';
 import { expect, test } from '@playwright/test';
 import { chooseDate, chooseMonth, selectChoice } from './helpers/controls';
 import type { Bootstrap, MutationResult } from '../../src/shared/types';
@@ -7,6 +8,7 @@ test('analysis keeps collapsed filters visible and resets scope without changing
 }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '나로 시작하기' }).click();
+  await openRoom(page);
   await expect(page.getByRole('heading', { name: '우리의 일상', exact: true })).toBeVisible();
   const bootstrap = (await (await page.request.get('/api/bootstrap')).json()) as Bootstrap;
   const ledgerName = `통계 조회 조건과 긴 이름 검증 ${crypto.randomUUID()}`;
@@ -40,8 +42,8 @@ test('analysis keeps collapsed filters visible and resets scope without changing
   expect(saved.status(), await saved.text()).toBe(200);
   await page.reload();
   await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2026-09');
-  await page.getByRole('button', { name: '통계', exact: true }).click();
-  await selectChoice(page.getByRole('combobox', { name: '분석할 가계부', exact: true }), ledgerId);
+  await openRoom(page, ledgerName);
+  await openRoomTab(page, '통계');
   const controls = page.getByRole('region', { name: '분석 조회 조건', exact: true });
   await expect(controls.getByRole('status')).toHaveText('조회 결과 1건');
   const advanced = controls.locator('details.analysis-extra-filters');
@@ -55,9 +57,11 @@ test('analysis keeps collapsed filters visible and resets scope without changing
   await expect(page.getByRole('region', { name: '빈 조회 결과', exact: true })).toBeVisible();
   await controls.getByRole('button', { name: '모두 초기화', exact: true }).click();
   await expect(controls.getByRole('status')).toHaveText('조회 결과 1건');
-  await expect(
-    controls.getByRole('combobox', { name: '분석할 가계부', exact: true }),
-  ).toHaveAttribute('data-value', ledgerId);
+  await expect(controls.getByLabel('분석 가계부', { exact: true })).toContainText(ledgerName);
+  await expect(controls.getByRole('combobox', { name: '분석할 가계부', exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page).toHaveURL(new RegExp(`ledger=${ledgerId}`));
   await selectChoice(controls.getByRole('combobox', { name: '조회 범위', exact: true }), 'range');
   await chooseDate(controls.getByLabel('통계 시작일', { exact: true }), '2027-01-01');
   await expect(controls.getByRole('alert')).toBeVisible();

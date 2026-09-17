@@ -1,3 +1,4 @@
+import { openGlobalView, openRoom } from './helpers/navigation';
 import { expect, test, type Page } from '@playwright/test';
 import { strToU8, zipSync } from 'fflate';
 import { backupTables, type BudgetBackup, type SourceRecord } from '../../src/shared/data';
@@ -71,8 +72,9 @@ async function openData(page: Page, records: SourceRecord[]) {
   await page.route('**/api/data/source-records', (route) => route.fulfill({ json: records }));
   await page.goto('/');
   await page.getByRole('button', { name: /나로 시작하기/ }).click();
+  await openRoom(page);
   await expect(page.getByTestId('connection')).toHaveText('실시간 연결됨');
-  await page.getByRole('button', { name: '데이터 관리', exact: true }).click();
+  await openGlobalView(page, '데이터 관리');
 }
 
 test('preserved workbook cells are searchable and paged, hidden sheets remain accessible and original bytes download unchanged', async ({

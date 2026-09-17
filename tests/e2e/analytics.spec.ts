@@ -1,3 +1,4 @@
+import { openRoom, openRoomTab } from './helpers/navigation';
 import { chooseMonth, selectChoice } from './helpers/controls';
 import { expect, test } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
@@ -21,6 +22,7 @@ test('annual category matrix and payment drilldown agree on accounting periods',
   }
   await page.goto('/');
   await page.getByRole('button', { name: '나로 시작하기' }).click();
+  await openRoom(page);
   await expect(page.getByRole('heading', { name: '우리의 일상' })).toBeVisible();
   const bootstrap = await page.request.get('/api/bootstrap');
   const data = (await bootstrap.json()) as Bootstrap;
@@ -106,8 +108,8 @@ test('annual category matrix and payment drilldown agree on accounting periods',
   }
   await page.reload();
   await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2026-01');
-  await page.getByRole('button', { name: '통계', exact: true }).click();
-  await selectChoice(page.getByRole('combobox', { name: '분석할 가계부', exact: true }), ledgerId);
+  await openRoom(page, '분석 검증 가계부');
+  await openRoomTab(page, '통계');
   await showView('소비 흐름');
   const flow = page.getByRole('group', { name: '2026년 수입 지출 가구 순저축 추이', exact: true });
   const januaryFlow = flow.getByRole('button', {
@@ -214,20 +216,18 @@ test('annual category matrix and payment drilldown agree on accounting periods',
   expect(connected.status()).toBe(200);
   await page.reload();
   await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2026-01');
-  await page.getByRole('button', { name: '통계', exact: true }).click();
-  await selectChoice(page.getByRole('combobox', { name: '분석할 가계부', exact: true }), 'main');
+  await openRoom(page);
+  await openRoomTab(page, '통계');
   await page.locator('summary').filter({ hasText: '추가 필터' }).click();
   await selectChoice(page.getByRole('combobox', { name: '거래 출처', exact: true }), ledgerId);
   await showView('가계부·결제수단');
   const contributions = page.locator('.analysis-ledgers');
-  const linkedRow = contributions
-    .getByRole('row')
-    .filter({
-      has: page.getByRole('rowheader', {
-        name: '분석 검증 가계부',
-        exact: true,
-      }),
-    });
+  const linkedRow = contributions.getByRole('row').filter({
+    has: page.getByRole('rowheader', {
+      name: '분석 검증 가계부',
+      exact: true,
+    }),
+  });
   await expect(linkedRow).toContainText('100.0%');
   await linkedRow
     .getByRole('button', { name: '분석 검증 가계부 지출 9,100원 거래 보기', exact: true })

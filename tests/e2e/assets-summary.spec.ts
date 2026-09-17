@@ -1,3 +1,4 @@
+import { openGlobalView, openRoom } from './helpers/navigation';
 import { expect, test, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import type { Asset, Bootstrap } from '../../src/shared/types';
@@ -89,9 +90,10 @@ async function openAssetSummary(page: Page) {
   });
   await page.goto('/');
   await page.getByRole('button', { name: '나로 시작하기' }).click();
+  await openRoom(page);
   await expect(page.getByRole('heading', { name: '우리의 일상' })).toBeVisible();
   await chooseMonth(page.getByLabel('조회 월'), '2026-01');
-  await page.getByRole('button', { name: '자산', exact: true }).click();
+  await openGlobalView(page, '자산');
   await expect(page.getByRole('heading', { name: '우리의 자산', exact: true })).toBeVisible();
 }
 

@@ -1,3 +1,4 @@
+import { openRoom } from './helpers/navigation';
 import { expect, test, type Page } from '@playwright/test';
 import type { Bootstrap, Ledger, Transaction } from '../../src/shared/types';
 import { chooseMonth, selectChoice } from './helpers/controls';
@@ -5,6 +6,7 @@ import { chooseMonth, selectChoice } from './helpers/controls';
 async function login(page: Page, user: '나' | '와이프' = '나') {
   await page.goto('/');
   await page.getByRole('button', { name: `${user}로 시작하기` }).click();
+  await openRoom(page);
   await expect(page.getByTestId('connection')).toHaveText('실시간 연결됨');
   await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2026-09');
 }
@@ -157,7 +159,7 @@ test('ledger view survives reload and stays separate when two accounts share one
   await calendar.click();
   await expect(calendar).toHaveAttribute('aria-pressed', 'true');
   await expect
-    .poll(() => page.evaluate(() => localStorage.getItem('budget:ledger-view:u1')))
+    .poll(() => page.evaluate(() => localStorage.getItem('budget:ledger-view:u1:main')))
     .toBe('calendar');
 
   await page.reload();
@@ -169,7 +171,9 @@ test('ledger view survives reload and stays separate when two accounts share one
   await login(page, '와이프');
   await expect(list).toHaveAttribute('aria-pressed', 'true');
   await expect(calendar).toHaveAttribute('aria-pressed', 'false');
-  expect(await page.evaluate(() => localStorage.getItem('budget:ledger-view:u1'))).toBe('calendar');
+  expect(await page.evaluate(() => localStorage.getItem('budget:ledger-view:u1:main'))).toBe(
+    'calendar',
+  );
 
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
   await login(page);

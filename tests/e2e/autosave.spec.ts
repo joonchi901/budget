@@ -1,9 +1,11 @@
+import { openRoom } from './helpers/navigation';
 import { chooseDate, chooseMonth, selectChoice } from './helpers/controls';
 import { expect, test, type Page } from '@playwright/test';
 import type { Bootstrap, Transaction } from '../../src/shared/types';
 async function login(page: Page, name = '나') {
   await page.goto('/');
   await page.getByRole('button', { name: new RegExp(`${name}로 시작하기`) }).click();
+  await openRoom(page);
   await expect(page.getByRole('heading', { name: '우리의 일상', exact: true })).toBeVisible();
   await chooseMonth(page.getByLabel('조회 월'), '2026-09');
   await expect(page.getByTestId('connection')).toHaveText('실시간 연결됨');
@@ -51,11 +53,13 @@ test('new entries remain device drafts until saved and drafts are isolated betwe
   await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).last().click();
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
   await page.getByRole('button', { name: /와이프로 시작하기/ }).click();
+  await openRoom(page);
   await page.getByRole('button', { name: '내역 추가', exact: true }).click();
   await expect(page.getByRole('dialog').getByLabel('내용', { exact: true })).toHaveValue('');
   await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).last().click();
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
   await page.getByRole('button', { name: /나로 시작하기/ }).click();
+  await openRoom(page);
   await page
     .getByRole('complementary')
     .getByRole('button', { name: '제주에서 보내는 가을', exact: true })

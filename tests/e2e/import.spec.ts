@@ -1,3 +1,4 @@
+import { openGlobalView, openRoom } from './helpers/navigation';
 import { chooseMonth, selectChoice } from './helpers/controls';
 import { expect, test } from '@playwright/test';
 import { strToU8, zipSync } from 'fflate';
@@ -59,10 +60,11 @@ test('XLSX preview, review evidence and repeat import are usable from the data s
 }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '나로 시작하기' }).click();
+  await openRoom(page);
   await expect(page.getByRole('heading', { name: '우리의 일상' })).toBeVisible();
   await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2027-09');
   const before: Bootstrap = await (await page.request.get('/api/bootstrap')).json();
-  await page.getByRole('button', { name: '데이터 관리', exact: true }).click();
+  await openGlobalView(page, '데이터 관리');
   await page.getByLabel('원본 가계부 XLSX').setInputFiles({
     name: 'synthetic.xlsx',
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

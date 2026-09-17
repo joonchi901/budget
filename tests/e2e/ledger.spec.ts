@@ -1,3 +1,4 @@
+import { openGlobalView, openRoom, openRoomTab } from './helpers/navigation';
 import { chooseDate, chooseMonth, selectChoice } from './helpers/controls';
 import { expect, test, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
@@ -6,6 +7,7 @@ import type { Bootstrap } from '../../src/shared/types';
 async function login(page: Page, user: '나' | '와이프') {
   await page.goto('/');
   await page.getByRole('button', { name: `${user}로 시작하기` }).click();
+  await openRoom(page);
   await expect(page.getByRole('heading', { name: '우리의 일상' })).toBeVisible();
   await chooseMonth(page.getByLabel('조회 월'), '2026-09');
   await expect(page.getByTestId('connection')).toHaveText('실시간 연결됨');
@@ -28,6 +30,10 @@ test('two users share source-ledger transactions, asset effects and link changes
     await first.getByRole('button', { name: '가계부 추가' }).click();
     await first.getByLabel('가계부 이름').fill('우리의 테스트 여행');
     await first.getByLabel('전체 예산 (원)').fill('300000');
+    await selectChoice(
+      first.getByRole('dialog').getByRole('combobox', { name: '상위 가계부', exact: true }),
+      'main',
+    );
     await first.getByRole('button', { name: '가계부 만들기', exact: true }).click();
     await expect(first.getByRole('heading', { name: '우리의 테스트 여행' })).toBeVisible();
     await first.getByRole('button', { name: '내역 추가', exact: true }).click();
@@ -51,7 +57,7 @@ test('two users share source-ledger transactions, asset effects and link changes
       row.getByRole('button', { name: '여행 중 저녁 식사 원본 가계부 열기' }),
     ).toBeVisible();
     await expect(row.getByRole('button', { name: '여행 중 저녁 식사 수정' })).toHaveCount(0);
-    await second.getByRole('button', { name: '자산', exact: true }).click();
+    await openGlobalView(second, '자산');
     await expect(second.getByTestId('asset-checking')).toHaveText(
       balanceText(checkingBefore - 27000),
     );
@@ -67,7 +73,7 @@ test('two users share source-ledger transactions, asset effects and link changes
       .getByRole('button', { name: '이 위치로 이동', exact: true })
       .click();
     await expect(first.getByRole('dialog')).toHaveCount(0);
-    await second.getByRole('button', { name: '가계부', exact: true }).click();
+    await openRoom(second);
     await expect(second.getByRole('row').filter({ hasText: '여행 중 저녁 식사' })).toHaveCount(0);
     await first.getByRole('button', { name: '우리의 테스트 여행 관리 메뉴', exact: true }).click();
     await first.getByRole('button', { name: '우리의 테스트 여행 위치 변경', exact: true }).click();
@@ -81,11 +87,11 @@ test('two users share source-ledger transactions, asset effects and link changes
       .click();
     await expect(first.getByRole('dialog')).toHaveCount(0);
     await expect(second.getByRole('row').filter({ hasText: '여행 중 저녁 식사' })).toHaveCount(1);
-    await second.getByRole('button', { name: '자산', exact: true }).click();
+    await openGlobalView(second, '자산');
     await expect(second.getByTestId('asset-checking')).toHaveText(
       balanceText(checkingBefore - 27000),
     );
-    await second.getByRole('button', { name: '가계부', exact: true }).click();
+    await openRoom(second);
     await second.getByRole('button', { name: '여행 중 저녁 식사 원본 가계부 열기' }).click();
     await expect(second.getByRole('heading', { name: '우리의 테스트 여행' })).toBeVisible();
     await first.getByRole('button', { name: '여행 중 저녁 식사 수정' }).click();
@@ -129,7 +135,7 @@ test('two users share source-ledger transactions, asset effects and link changes
     );
     await second.reload();
     await chooseMonth(second.getByLabel('조회 월'), '2026-09');
-    await second.getByRole('button', { name: '자산', exact: true }).click();
+    await openGlobalView(second, '자산');
     await expect(second.getByTestId('asset-checking')).toHaveText(
       balanceText(checkingBefore - 30000),
     );
@@ -182,23 +188,24 @@ test('desktop and mobile screens render without page overflow or runtime errors'
   await page.screenshot({ path: 'output/playwright/login-desktop.png', fullPage: true });
   await login(page, '나');
   await page.screenshot({ path: 'output/playwright/ledger-desktop.png', fullPage: true });
-  await page.getByRole('button', { name: '자산', exact: true }).click();
+  await openGlobalView(page, '자산');
   await page.screenshot({ path: 'output/playwright/assets-desktop.png', fullPage: true });
-  await page.getByRole('button', { name: '카드 · 통장', exact: true }).click();
+  await openGlobalView(page, '카드 · 통장');
   await chooseMonth(page.getByLabel('조회 월'), '2026-10');
   await expect(
     page.getByRole('region', { name: '카드 사용 요약' }).getByText('2026년 10월'),
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: '이번 달 납부 예정', exact: true })).toBeVisible();
   await page.screenshot({ path: 'output/playwright/cards-desktop.png', fullPage: true });
-  await page.getByRole('button', { name: '통계', exact: true }).click();
+  await openRoom(page);
+  await openRoomTab(page, '통계');
   await page.locator('.analysis-extra-filters summary').click();
   await page.getByRole('button', { name: '# 함께', exact: true }).click();
   await expect(page.getByText('선택한 기록의 지출')).toBeVisible();
-  await page.getByRole('button', { name: '태그 설정', exact: true }).click();
+  await openGlobalView(page, '태그 설정');
   await page.screenshot({ path: 'output/playwright/tags-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: '가계부', exact: true }).click();
+  await openRoom(page);
   await expect(page.getByRole('heading', { name: '우리의 일상' })).toBeVisible();
   await chooseMonth(page.getByLabel('조회 월'), '2026-09');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -213,16 +220,20 @@ test('desktop and mobile screens render without page overflow or runtime errors'
     for (const [menu, heading] of [
       ['자산', '우리의 자산'],
       ['카드 · 통장', '카드와 통장'],
-      ['통계', '기록으로 보는 우리'],
+      ['통계', '우리의 일상'],
       ['태그 설정', '우리만의 태그'],
-      ['계획 · 일정', '계획과 일정'],
+      ['계획 · 일정', '우리의 일상'],
       ['데이터 관리', '데이터 관리'],
       ['가계부', '우리의 일상'],
     ]) {
-      if (['태그 설정', '계획 · 일정', '데이터 관리'].includes(menu)) {
-        await page.getByRole('button', { name: '더보기', exact: true }).click();
+      if (menu === '통계' || menu === '계획 · 일정') {
+        await openRoom(page);
+        await openRoomTab(page, menu);
+      } else if (menu === '가계부') {
+        await openRoom(page);
+      } else {
+        await openGlobalView(page, menu);
       }
-      await page.getByRole('button', { name: menu, exact: true }).click();
       await expect(page.getByRole('heading', { name: heading })).toBeVisible();
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
@@ -245,7 +256,7 @@ test('custom tag types, inline options and archived history are shared', async (
   try {
     await login(first, '나');
     await login(second, '와이프');
-    await first.getByRole('button', { name: '태그 설정', exact: true }).click();
+    await openGlobalView(first, '태그 설정');
     await first.getByRole('button', { name: '유형 만들기', exact: true }).click();
     await first.getByLabel('유형 이름').fill('이동수단');
     await selectChoice(first.getByLabel('선택 방식'), 'single');
@@ -328,7 +339,7 @@ test('income allocation, savings transfers and balance correction preserve one l
   page,
 }) => {
   await login(page, '나');
-  await page.getByRole('button', { name: '자산', exact: true }).click();
+  await openGlobalView(page, '자산');
   async function createAsset(name: string, track: boolean) {
     await page.getByRole('button', { name: '자산 추가', exact: true }).click();
     const form = page.getByRole('dialog');
@@ -345,7 +356,7 @@ test('income allocation, savings transfers and balance correction preserve one l
   const normal = data.assets.find((a: { name: string }) => a.name === '테스트 생활자산');
   const saved = data.assets.find((a: { name: string }) => a.name === '테스트 저축 A');
   const other = data.assets.find((a: { name: string }) => a.name === '테스트 저축 B');
-  await page.getByRole('button', { name: '가계부', exact: true }).click();
+  await openRoom(page);
   await page.getByRole('button', { name: '내역 추가', exact: true }).click();
   let form = page.getByRole('dialog');
   await form.getByRole('button', { name: '수입', exact: true }).click();
@@ -361,7 +372,7 @@ test('income allocation, savings transfers and balance correction preserve one l
   await form.getByLabel('배분 금액 2').fill('500000');
   await form.getByRole('button', { name: '저장', exact: true }).click();
   await expect(form).toHaveCount(0);
-  await page.getByRole('button', { name: '자산', exact: true }).click();
+  await openGlobalView(page, '자산');
   await expect(page.getByTestId(`asset-${normal.id}`)).toHaveText('2,500,000원');
   await expect(page.getByTestId(`asset-${saved.id}`)).toHaveText('500,000원');
   await expect(page.locator('.stat').filter({ hasText: '순저축' })).toContainText('500,000');

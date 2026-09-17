@@ -41,12 +41,14 @@ export default function AnalyticsView({
   setLedgerId,
   month,
   onEdit,
+  lockedLedger = false,
 }: {
   data: Bootstrap;
   ledgerId: string;
   setLedgerId(id: string): void;
   month: string;
   onEdit?(tx: Transaction): void;
+  lockedLedger?: boolean;
 }) {
   const flowCaptionId = useId();
   const [section, setSection] = useState<'flow' | 'category' | 'sources' | 'transactions'>('flow');
@@ -375,7 +377,7 @@ export default function AnalyticsView({
             amount={sum.income}
             hint={`${rows.length}건의 고유 기록`}
           />
-          <Stat label="기간 순저축" amount={savings} hint="가구 전체 자산 변동 기준" />
+          <Stat label="가구 전체 순저축" amount={savings} hint="선택 기간의 가구 전체 자산 변동" />
           {asset && (
             <Stat
               label="연결 자산 반영액"
@@ -401,7 +403,8 @@ export default function AnalyticsView({
             <strong>
               {householdIncome ? `${((savings / householdIncome) * 100).toFixed(1)}%` : '수입 없음'}
             </strong>
-            <span className="analysis-foot-separator">·</span>거래 필터와 별도로 집계해요
+            <span className="analysis-foot-separator">·</span>
+            순저축과 저축률은 가계부·거래 필터와 별도로 가구 전체를 집계해요
           </span>
           <button type="button" onClick={() => setSection('transactions')}>
             선택한 거래 {rows.length}건<ArrowRight size={16} aria-hidden="true" />
@@ -412,7 +415,11 @@ export default function AnalyticsView({
         <div className="analysis-controls-heading">
           <div>
             <h2>조회 조건</h2>
-            <p>기간과 가계부를 정하고, 필요한 조건만 좁혀 보세요.</p>
+            <p>
+              {lockedLedger
+                ? '이 가계부의 기록을 기간과 조건으로 좁혀 보세요.'
+                : '기간과 가계부를 정하고, 필요한 조건만 좁혀 보세요.'}
+            </p>
           </div>
           <Tooltip content="현재 가계부의 선택 월로 돌아가고, 모든 추가 조건을 해제해요.">
             <button
@@ -426,25 +433,32 @@ export default function AnalyticsView({
           </Tooltip>
         </div>
         <div className="management-filters analysis-basic-filters">
-          <label>
-            가계부
-            <SelectField
-              aria-label="분석할 가계부"
-              value={ledgerId}
-              onValueChange={(value) => {
-                setSourceLedgerId('');
-                setIncludeDescendants(true);
-                setLedgerId(value);
-              }}
-            >
-              <SelectOption value={ALL_LEDGERS_ID}>전체 가계부</SelectOption>
-              {data.ledgers.map((l) => (
-                <SelectOption key={l.id} value={l.id}>
-                  {ledgerPath(data.ledgers, l.id)}
-                </SelectOption>
-              ))}
-            </SelectField>
-          </label>
+          {lockedLedger ? (
+            <div className="room-scope-label" aria-label="분석 가계부">
+              <span>분석 가계부</span>
+              <strong>{ledgerId === ALL_LEDGERS_ID ? '전체 가계부' : ledger?.name}</strong>
+            </div>
+          ) : (
+            <label>
+              가계부
+              <SelectField
+                aria-label="분석할 가계부"
+                value={ledgerId}
+                onValueChange={(value) => {
+                  setSourceLedgerId('');
+                  setIncludeDescendants(true);
+                  setLedgerId(value);
+                }}
+              >
+                <SelectOption value={ALL_LEDGERS_ID}>전체 가계부</SelectOption>
+                {data.ledgers.map((l) => (
+                  <SelectOption key={l.id} value={l.id}>
+                    {ledgerPath(data.ledgers, l.id)}
+                  </SelectOption>
+                ))}
+              </SelectField>
+            </label>
+          )}
           <label>
             조회 범위
             <SelectField value={mode} onValueChange={(value) => setMode(value)}>

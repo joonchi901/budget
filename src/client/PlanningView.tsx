@@ -27,6 +27,7 @@ interface Props {
   data: Bootstrap;
   month: string;
   ledgerId: string;
+  lockedLedger?: boolean;
   onChanged(): Promise<void>;
   onNotice(message: string): void;
 }
@@ -87,14 +88,24 @@ function initialPlan(data: Bootstrap, ledgerId: string, month: string, kind: Pla
       return { ...base, kind, endDate: period.startDate, repeat: 'once', payments: [] };
   }
 }
-export default function PlanningView({ data, month, ledgerId, onChanged, onNotice }: Props) {
+export default function PlanningView({
+  data,
+  month,
+  ledgerId,
+  lockedLedger = false,
+  onChanged,
+  onNotice,
+}: Props) {
   const [kind, setKind] = useState<PlanKind>('budget');
   const [editor, setEditor] = useState<Plan | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [allDates, setAllDates] = useState(false);
   const [selectedLedger, setSelectedLedger] = useState(ledgerId === ALL_LEDGERS_ID ? '' : ledgerId);
   useEffect(() => setSelectedLedger(ledgerId === ALL_LEDGERS_ID ? '' : ledgerId), [ledgerId]);
-  const ledger = data.ledgers.find((l) => l.id === selectedLedger);
+  const scopedToRoom = lockedLedger && ledgerId !== ALL_LEDGERS_ID;
+  const ledger = data.ledgers.find((l) => l.id === (scopedToRoom ? ledgerId : selectedLedger));
+  if (!ledger && scopedToRoom)
+    return <Empty>이 가계부를 찾을 수 없어요. 가계부 목록에서 다시 열어 주세요.</Empty>;
   if (!ledger)
     return (
       <section className="panel">
@@ -145,17 +156,26 @@ export default function PlanningView({ data, month, ledgerId, onChanged, onNotic
         </button>
       </div>
       <div className="planning-toolbar">
-        <label>
-          계획 가계부
-          <SelectField value={ledger.id} onValueChange={(value) => setSelectedLedger(value)}>
-            {data.ledgers.map((l) => (
-              <SelectOption key={l.id} value={l.id}>
-                <UgaLedgerIcon value={l.icon} size={20} /> {ledgerPath(data.ledgers, l.id)}
-                {l.archived ? ' · 보관됨' : ''}
-              </SelectOption>
-            ))}
-          </SelectField>
-        </label>
+        {scopedToRoom ? (
+          <div className="room-scope-label" aria-label="계획 가계부">
+            <span>계획 가계부</span>
+            <strong>
+              <UgaLedgerIcon value={ledger.icon} size={20} /> {ledger.name}
+            </strong>
+          </div>
+        ) : (
+          <label>
+            계획 가계부
+            <SelectField value={ledger.id} onValueChange={(value) => setSelectedLedger(value)}>
+              {data.ledgers.map((l) => (
+                <SelectOption key={l.id} value={l.id}>
+                  <UgaLedgerIcon value={l.icon} size={20} /> {ledgerPath(data.ledgers, l.id)}
+                  {l.archived ? ' · 보관됨' : ''}
+                </SelectOption>
+              ))}
+            </SelectField>
+          </label>
+        )}
         <label className="checkbox">
           <input
             type="checkbox"
@@ -248,7 +268,11 @@ export default function PlanningView({ data, month, ledgerId, onChanged, onNotic
           />
         ))}
       </div>
-      <p className="planning-info">계획을 저장해도 실제 수입·지출과 자산 잔액은 바뀌지 않아요.</p>
+      <p className="planning-info">
+        {scopedToRoom &&
+          '이 가계부에 저장한 계획이에요. 하위 가계부의 계획은 해당 방에서 볼 수 있어요. '}
+        계획을 저장해도 실제 수입·지출과 자산 잔액은 바뀌지 않아요.
+      </p>
       {editor && (
         <PlanEditor
           key={editor.id || `new-${editor.kind}`}

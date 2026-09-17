@@ -1,3 +1,4 @@
+import { openGlobalView, openRoom } from './helpers/navigation';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import type { Bootstrap } from '../../src/shared/types';
@@ -6,6 +7,7 @@ import { chooseDate, chooseMonth, controlPopup, selectChoice } from './helpers/c
 async function login(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: '나로 시작하기' }).click();
+  await openRoom(page);
   await expect(page.getByRole('heading', { level: 1, name: /우리의 일상/ })).toBeVisible();
   await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2026-09');
 }
@@ -40,7 +42,7 @@ test('custom asset and month menus support keyboard selection, dismissal and con
   page,
 }) => {
   await login(page);
-  await page.getByRole('button', { name: '자산', exact: true }).click();
+  await openGlobalView(page, '자산');
   const asset = page.getByRole('combobox', { name: '변동 내역 자산', exact: true });
   await asset.click();
   const menu = await controlPopup(asset);
@@ -174,7 +176,7 @@ for (const width of [320, 390]) {
   }) => {
     await page.setViewportSize({ width, height: 844 });
     await login(page);
-    await page.getByRole('button', { name: '자산', exact: true }).click();
+    await openGlobalView(page, '자산');
     const asset = page.getByRole('combobox', { name: '변동 내역 자산', exact: true });
     await asset.click();
     await withinViewport(await controlPopup(asset));
@@ -185,7 +187,7 @@ for (const width of [320, 390]) {
     await withinViewport(await controlPopup(month));
     if (width === 390) await capture(page, 'mobile-months');
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: '가계부', exact: true }).click();
+    await openRoom(page);
     await page.getByRole('button', { name: '내역 추가', exact: true }).click();
     const form = page.getByRole('dialog', { name: '새 내역', exact: true });
     const date = form.getByLabel('날짜', { exact: true });
@@ -213,7 +215,7 @@ test('custom tooltips support hover and keyboard focus without reopening after E
 }) => {
   await login(page);
   const before: Bootstrap = await (await page.request.get('/api/bootstrap')).json();
-  await page.getByRole('button', { name: '태그 설정', exact: true }).click();
+  await openGlobalView(page, '태그 설정');
   await page.setViewportSize({ width: 320, height: 844 });
   const moveBack = page.getByRole('button', { name: '급여 맨 뒤로 이동', exact: true });
   const tooltip = page.getByRole('tooltip');

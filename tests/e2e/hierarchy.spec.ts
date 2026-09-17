@@ -1,3 +1,4 @@
+import { openRoom } from './helpers/navigation';
 import { expect, test, type Page } from '@playwright/test';
 import type { Bootstrap, Ledger } from '../../src/shared/types';
 import { chooseMonth, selectChoice } from './helpers/controls';
@@ -5,6 +6,7 @@ import { chooseMonth, selectChoice } from './helpers/controls';
 async function login(page: Page, user = '나') {
   await page.goto('/');
   await page.getByRole('button', { name: `${user}로 시작하기` }).click();
+  await openRoom(page);
   await expect(page.getByTestId('connection')).toHaveText('실시간 연결됨');
   await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2026-09');
 }

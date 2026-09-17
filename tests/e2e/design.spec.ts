@@ -1,3 +1,4 @@
+import { openGlobalView, openRoom, openRoomTab } from './helpers/navigation';
 import { chooseDate, chooseMonth, selectChoice } from './helpers/controls';
 import { expect, test, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
@@ -6,8 +7,8 @@ const screens = [
   { key: 'ledger', label: '가계부', title: '우리의 일상' },
   { key: 'assets', label: '자산', title: '우리의 자산' },
   { key: 'payments', label: '카드 · 통장', title: '카드와 통장' },
-  { key: 'analytics', label: '통계', title: '기록으로 보는 우리' },
-  { key: 'planning', label: '계획 · 일정', title: '계획과 일정' },
+  { key: 'analytics', label: '통계', title: '우리의 일상' },
+  { key: 'planning', label: '계획 · 일정', title: '우리의 일상' },
   { key: 'tags', label: '태그 설정', title: '우리만의 태그' },
   { key: 'data', label: '데이터 관리', title: '데이터 관리' },
 ] as const;
@@ -31,7 +32,10 @@ async function login(page: Page) {
   const width = page.viewportSize()?.width ?? 1440;
   await capture(page, width > 760 ? 'desktop-login' : `mobile-${width}-login`);
   await page.getByRole('button', { name: '나로 시작하기' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: '우리의 일상', exact: true })).toBeVisible();
+  await openRoom(page);
+  await expect(
+    page.getByRole('heading', { level: 1, name: '우리의 일상', exact: true }),
+  ).toBeVisible();
   await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2026-09');
   await expect(page.getByTestId('connection')).toHaveText('실시간 연결됨');
 }
@@ -67,22 +71,15 @@ async function capture(page: Page, suffix: string) {
   await page.screenshot({ path: `output/playwright/design-${suffix}.png`, animations: 'disabled' });
 }
 
-async function openScreen(page: Page, screen: Screen, mobile: boolean) {
-  if (!mobile) {
-    await page
-      .getByRole('navigation', { name: '주 메뉴', exact: true })
-      .getByRole('button', { name: screen.label, exact: true })
-      .click();
-  } else if (screens.indexOf(screen) < 4) {
-    await page
-      .getByRole('navigation', { name: '모바일 주 메뉴', exact: true })
-      .getByRole('button', { name: screen.label, exact: true })
-      .click();
+async function openScreen(page: Page, screen: Screen, _mobile: boolean) {
+  if (screen.key === 'ledger' || screen.key === 'analytics' || screen.key === 'planning') {
+    await openRoom(page);
+    await openRoomTab(
+      page,
+      screen.key === 'analytics' ? '통계' : screen.key === 'planning' ? '계획 · 일정' : '목록',
+    );
   } else {
-    await page.getByRole('button', { name: '더보기', exact: true }).click();
-    const menu = page.getByRole('dialog', { name: '전체 메뉴', exact: true });
-    await menu.getByRole('button', { name: screen.label, exact: true }).click();
-    await expect(menu).not.toBeVisible();
+    await openGlobalView(page, screen.label);
   }
   await expect(
     page.getByRole('heading', { level: 1, name: new RegExp(screen.title) }),

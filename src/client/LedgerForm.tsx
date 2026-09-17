@@ -17,14 +17,14 @@ export default function LedgerForm({
   onChanged,
 }: {
   onClose(): void;
-  onSaved(id: string): void;
+  onSaved(ledger: Ledger): void;
   original?: Ledger;
   data: Bootstrap;
   initialParentId?: string | null;
   onChanged(): Promise<void>;
 }) {
   const [name, setName] = useState(original?.name ?? '');
-  const [budget, setBudget] = useState(String(original?.budget ?? ''));
+  const [budget, setBudget] = useState(String(original?.budget ?? 0));
   const [icon, setIcon] = useState(original?.icon ?? '✈️');
   const [start, setStart] = useState(original?.startDate ?? '');
   const [end, setEnd] = useState(original?.endDate ?? '');
@@ -44,13 +44,20 @@ export default function LedgerForm({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [uncertain, setUncertain] = useState(false);
-  useUnsavedGuard(
-    busy ||
-      uncertain ||
-      Boolean(name || budget || start || end) ||
-      icon !== '✈️' ||
-      Boolean(parentId),
-  );
+  const formValues = JSON.stringify({
+    name,
+    budget,
+    icon,
+    start,
+    end,
+    parentId,
+    archived,
+    day,
+    fixed,
+    mapping,
+  });
+  const initialValues = useRef(formValues);
+  useUnsavedGuard(busy || uncertain || formValues !== initialValues.current);
   const pending = useRef<unknown>(null);
   const availableTags =
     data?.tags.filter((t) =>
@@ -99,7 +106,7 @@ export default function LedgerForm({
         original ? 'PATCH' : 'POST',
         pending.current,
       );
-      onSaved(result.ledger!.id);
+      onSaved(result.ledger!);
     } catch (e) {
       setError((e as Error).message);
       if (e instanceof RequestError && e.status === 409) setConflict(true);
@@ -115,7 +122,11 @@ export default function LedgerForm({
   return (
     <Dialog
       title={original ? '가계부 설정' : '가계부 만들기'}
-      subtitle="가계부의 기간·예산·집계 기준을 관리해요."
+      subtitle={
+        original
+          ? '가계부의 기간·예산·집계 기준을 관리해요.'
+          : '이름만 정하면 시작할 수 있어요. 예산과 기간은 나중에 바꿔도 돼요.'
+      }
       onClose={onClose}
       locked={busy || uncertain}
     >
