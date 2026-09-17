@@ -2,6 +2,27 @@
   min-width: 0;
   color: var(--text);
 }
+.asset-view-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-bottom: 18px;
+}
+.asset-view-controls .segmented button {
+  min-height: 44px;
+  min-width: 100px;
+  white-space: nowrap;
+}
+.asset-summary-note {
+  margin: 14px 2px 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.asset-summary-note p {
+  margin: 3px 0;
+}
 .assets-workspace .asset-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);

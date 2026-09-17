@@ -10,6 +10,7 @@ import type { Asset, AssetOperation, Bootstrap } from '../shared/types';
 import { savingsSummary } from '../shared/selectors';
 import {
   assetBalanceAt,
+  assetLatestSummary,
   assetSummaryAt,
   assetTagSubtotals,
   assetYearHistory,
@@ -41,16 +42,31 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
   const [assetFilter, setAssetFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
   const [tagGroupId, setTagGroupId] = useState('');
+  const [balanceView, setBalanceView] = useState<'latest' | 'month'>('latest');
   const asOf = monthEndDate(month);
-  const summary = assetSummaryAt(data, asOf);
+  const latest = assetLatestSummary(data);
+  const isLatest = balanceView === 'latest';
+  const summary = isLatest ? latest : assetSummaryAt(data, asOf);
+  const knownCount = summary.rows.filter((row) => row.balance !== null).length;
+  const partial = summary.unknown.length > 0;
+  const net = partial && knownCount ? summary.knownAssets - summary.knownDebt : summary.net;
+  const scopeLabel = isLatest ? '최신 기록 기준' : `${asOf} 기준`;
+  const latestDates = latest.rows.flatMap((row) => (row.latestDate ? [row.latestDate] : [])).sort();
   const assets = data.assets.filter((a) => a.kind === 'asset' && !a.archived);
   const yearHistory = assetYearHistory(data, month.slice(0, 4));
   const chartMax = Math.max(1, ...yearHistory.map((row) => Math.abs(row.net ?? 0)));
   const assetGroups = data.tagGroups.filter((group) => group.appliesTo === 'asset');
   const selectedGroup = assetGroups.find((group) => group.id === tagGroupId) ?? assetGroups[0];
-  const tagTotals = selectedGroup ? assetTagSubtotals(data, selectedGroup.id, asOf) : [];
+  const tagTotals = selectedGroup
+    ? assetTagSubtotals(data, selectedGroup.id, isLatest ? 'latest' : asOf)
+    : [];
   const displayMoney = (amount: number | null) =>
     amount === null ? '과거 잔액 미확인' : `${won(amount)}원`;
+  const totalMoney = (row: typeof summary, kind: 'asset' | 'liability') => {
+    const relevant = row.rows.filter((item) => item.asset.kind === kind);
+    if (relevant.length && relevant.every((item) => item.balance === null)) return '잔액 자료 없음';
+    return `${won(kind === 'asset' ? row.knownAssets : row.knownDebt)}원`;
+  };
   const savings = savingsSummary(data, month);
   const operations = data.assetOperations.filter(
     (op) =>
@@ -85,22 +101,51 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
   ].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   return (
     <div className="assets-workspace">
+      <div className="asset-view-controls">
+        <div className="segmented" role="group" aria-label="자산 조회 기준">
+          <button
+            className={isLatest ? 'selected' : ''}
+            aria-pressed={isLatest}
+            onClick={() => setBalanceView('latest')}
+          >
+            최신 기록
+          </button>
+          <button
+            className={!isLatest ? 'selected' : ''}
+            aria-pressed={!isLatest}
+            onClick={() => setBalanceView('month')}
+          >
+            선택 월말
+          </button>
+        </div>
+        <span className="small muted">
+          {isLatest
+            ? '각 자산에 마지막으로 등록한 잔액을 모았어요.'
+            : `${month} 월말까지의 기록을 살펴봐요.`}
+        </span>
+      </div>
       <div className="asset-hero">
         <div>
-          <span className="asset-as-of">{asOf} 기준</span>
-          <h2>우리의 순자산</h2>
-          <strong>
-            {summary.net === null ? '—' : won(summary.net)}
-            {summary.net !== null && <small>원</small>}
+          <span className="asset-as-of">{scopeLabel}</span>
+          <h2>{partial ? '확인된 순자산' : '우리의 순자산'}</h2>
+          <strong data-testid="asset-summary-net">
+            {net === null ? '—' : won(net)}
+            {net !== null && <small>원</small>}
           </strong>
-          <p>전체 자산에서 부채를 뺀 금액이에요.</p>
+          <p>
+            {partial
+              ? `잔액이 확인된 ${knownCount}개 항목의 자산에서 부채를 뺀 금액이에요.`
+              : '전체 자산에서 부채를 뺀 금액이에요.'}
+          </p>
         </div>
         <div className="asset-hero-detail">
           <span>
-            전체 자산 <strong>{displayMoney(summary.assets)}</strong>
+            {summary.assets === null ? '확인된 자산' : '전체 자산'}{' '}
+            <strong data-testid="asset-summary-assets">{totalMoney(summary, 'asset')}</strong>
           </span>
           <span>
-            전체 부채 <strong>{displayMoney(summary.debt)}</strong>
+            {summary.debt === null ? '확인된 부채' : '전체 부채'}{' '}
+            <strong data-testid="asset-summary-debt">{totalMoney(summary, 'liability')}</strong>
           </span>
           <div className="asset-stack">
             {summary.rows
@@ -117,12 +162,28 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
           </div>
         </div>
       </div>
-      {summary.unknown.length > 0 && (
-        <div className="alert">
-          자산 {summary.unknown.length}개의 과거 잔액이 미확인이에요. 기준일이 없거나 처음 확인한
-          잔액보다 앞선 기간이라 합계를 확정할 수 없어요. 각 자산 설정에서 기준일을 확인해 주세요.
-        </div>
-      )}
+      <div className="asset-summary-note">
+        {isLatest && latestDates.length > 0 && (
+          <p>
+            최종 기록일 {latestDates[0]}
+            {latestDates[0] !== latestDates.at(-1) ? ` ~ ${latestDates.at(-1)}` : ''} · 보관한 자산
+            포함
+          </p>
+        )}
+        {partial && (
+          <p>
+            {isLatest
+              ? `관리 정보만 있는 ${summary.unknown.length}개 항목은 합계에서 제외했어요. 잔액을 등록하면 함께 집계돼요.`
+              : `${summary.unknown.length}개 항목은 이 시점의 잔액 자료가 없어 확인된 금액만 표시해요. 최신 잔액은 ‘최신 기록’에서 볼 수 있어요.`}
+          </p>
+        )}
+        {isLatest && (
+          <p>
+            등록한 마지막 잔액을 기준으로 해요. 이후 월의 빈칸을 0원이나 상환 완료로 처리하지
+            않아요.
+          </p>
+        )}
+      </div>
       <div className="section-heading">
         <div>
           <h2>자산과 부채</h2>
@@ -155,7 +216,10 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
         {data.assets
           .filter((a) => showArchived || !a.archived)
           .map((a) => {
-            const balance = assetBalanceAt(a, data.assetMovements, asOf);
+            const latestRow = latest.rows.find((row) => row.asset.id === a.id);
+            const balance = isLatest
+              ? (latestRow?.balance ?? null)
+              : assetBalanceAt(a, data.assetMovements, asOf);
             return (
               <section className="panel asset-card" key={a.id}>
                 <div className="asset-card-heading">
@@ -187,15 +251,19 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
                   </button>
                 </div>
                 <strong className="asset-balance" data-testid={`asset-${a.id}`}>
-                  {balance === null ? '—' : won(balance)}
+                  {balance === null ? (isLatest ? '잔액 등록 필요' : '—') : won(balance)}
                   {balance !== null && <small>원</small>}
                 </strong>
                 <p className="small muted">
-                  {balance === null
-                    ? a.openingDate
-                      ? `${a.openingDate} 첫 관측 이전 · 과거 잔액 미확인`
-                      : `기준일 미확인 · 현재 기록 잔액 ${won(a.balance)}원`
-                    : `${asOf} 기준`}
+                  {isLatest
+                    ? balance === null
+                      ? '관리 정보가 등록되어 있어요.'
+                      : `최종 기록 ${latestRow?.latestDate ?? '기준일 없음'}`
+                    : balance === null
+                      ? a.openingDate
+                        ? `${a.openingDate} 첫 관측 이전 · 과거 잔액 미확인`
+                        : `기준일 미확인 · 현재 기록 잔액 ${won(a.balance)}원`
+                      : `${asOf} 기준`}
                 </p>
                 <div className="row-tags">
                   {a.trackSavings && <span className="savings-badge">저축 집계</span>}
@@ -220,11 +288,11 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
                     </span>
                   </div>
                   <div className="asset-detail">
-                    <span>선택 월말까지 변동</span>
+                    <span>{isLatest ? '최종 기록까지 변동' : '선택 월말까지 변동'}</span>
                     <span>
                       {balance === null
                         ? '—'
-                        : `${balance - (a.openingDate! <= asOf ? a.openingBalance : 0) > 0 ? '+' : ''}${won(balance - (a.openingDate! <= asOf ? a.openingBalance : 0))}원`}
+                        : `${balance - (isLatest || a.openingDate! <= asOf ? a.openingBalance : 0) > 0 ? '+' : ''}${won(balance - (isLatest || a.openingDate! <= asOf ? a.openingBalance : 0))}원`}
                     </span>
                   </div>
 
@@ -365,17 +433,26 @@ export default function AssetsView({ data, month, onChanged, onNotice }: Props) 
                           )}
                         </th>
                         <td>{row.count}</td>
-                        <td>{displayMoney(row.assets)}</td>
-                        <td>{displayMoney(row.debt)}</td>
-                        <td>{displayMoney(row.net)}</td>
+                        <td>{isLatest ? totalMoney(row, 'asset') : displayMoney(row.assets)}</td>
+                        <td>{isLatest ? totalMoney(row, 'liability') : displayMoney(row.debt)}</td>
+                        <td>
+                          {isLatest &&
+                          row.unknown.length &&
+                          row.rows.some((item) => item.balance !== null)
+                            ? `${won(row.knownAssets - row.knownDebt)}원 · 확인분`
+                            : isLatest && row.net === null
+                              ? '잔액 자료 없음'
+                              : displayMoney(row.net)}
+                        </td>
                       </tr>
                     ))}
                 </tbody>
               </table>
             </div>
             <p className="small muted">
-              {asOf} 기준. 복수 선택한 항목은 각 옵션 소계에 포함돼요. 전체 순자산에서는 각 자산을
-              한 번만 합산해요.
+              {scopeLabel}
+              {isLatest && partial ? ' · 잔액이 확인된 항목만 합산' : ''}. 복수 선택한 항목은 각
+              옵션 소계에 포함돼요. 전체 순자산에서는 각 자산을 한 번만 합산해요.
             </p>
           </>
         ) : (

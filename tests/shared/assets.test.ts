@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assetBalanceAt,
+  assetLatestSummary,
   assetSummaryAt,
   assetTagSubtotals,
   assetYearHistory,
@@ -48,9 +49,10 @@ describe('dated asset accounting', () => {
     };
     expect(assetSummaryAt(data, '2026-09-30')).toMatchObject({
       assets: null,
-      debt: null,
+      debt: 0,
       net: null,
       knownAssets: 200,
+      knownCount: 1,
       unknown: ['cash'],
     });
   });
@@ -84,6 +86,21 @@ describe('dated asset accounting', () => {
       ],
     };
     expect(assetSummaryAt(data, '2026-02-28')).toMatchObject({ assets: 1100, debt: 350, net: 750 });
+  });
+  it('does not hide a confirmed asset total when only a liability lacks a baseline', () => {
+    const data = {
+      assets: [asset(), asset({ id: 'contract', kind: 'liability', openingDate: null })],
+      assetMovements: [],
+    };
+    expect(assetSummaryAt(data, '2026-02-28')).toMatchObject({
+      assets: 1000,
+      debt: null,
+      net: null,
+      knownAssets: 1000,
+      knownDebt: 0,
+      knownCount: 1,
+      unknown: ['contract'],
+    });
   });
   it('deduplicates repeated movement IDs but counts distinct same-day same-value records', () => {
     const entry = movement('one', '2026-02-02', 100);
@@ -148,5 +165,127 @@ describe('dated asset accounting', () => {
       ['미분류', -400],
     ]);
     expect(assetSummaryAt(data, '2026-02-28').net).toBe(600);
+  });
+});
+
+describe('latest registered asset balances', () => {
+  it('uses the final registered balance once and keeps future effects out of selected-month history', () => {
+    const future = movement('future', '2027-01-01', 700);
+    const data = {
+      assets: [asset({ balance: 1600 }), asset({ id: 'debt', kind: 'liability', balance: 400 })],
+      assetMovements: [
+        future,
+        movement('feb', '2026-02-15', -100),
+        future,
+        movement('other', '2028-01-01', 50, 'unrelated'),
+      ],
+    };
+    const summary = assetLatestSummary(data);
+    expect(summary).toMatchObject({ assets: 1600, debt: 400, net: 1200, knownCount: 2 });
+    expect(summary.rows.map((row) => [row.asset.id, row.latestDate])).toEqual([
+      ['cash', '2027-01-01'],
+      ['debt', '2026-02-01'],
+    ]);
+    expect(assetSummaryAt(data, '2026-02-28').knownAssets).toBe(900);
+  });
+
+  it('distinguishes confirmed zero balances from management-only placeholders and excludes unknown principal', () => {
+    const data = {
+      assets: [
+        asset({ id: 'known-zero', balance: 0 }),
+        asset({ id: 'management', openingDate: null, openingBalance: 0, balance: 0 }),
+        asset({
+          id: 'contract',
+          kind: 'liability',
+          openingDate: null,
+          openingBalance: 0,
+          balance: 0,
+          details: { principal: 5000 },
+        }),
+      ],
+      assetMovements: [],
+    };
+    expect(assetLatestSummary(data)).toMatchObject({
+      assets: null,
+      debt: null,
+      net: null,
+      knownAssets: 0,
+      knownDebt: 0,
+      knownCount: 1,
+      unknown: ['management', 'contract'],
+      rows: [
+        { balance: 0, latestDate: '2026-02-01' },
+        { balance: null, latestDate: null },
+        { balance: null, latestDate: null },
+      ],
+    });
+  });
+
+  it('reports no confirmed balances separately from a confirmed zero total', () => {
+    const summary = assetLatestSummary({
+      assets: [asset({ openingDate: null, balance: 0, openingBalance: 0 })],
+      assetMovements: [],
+    });
+    expect(summary).toMatchObject({
+      knownCount: 0,
+      knownAssets: 0,
+      knownDebt: 0,
+      assets: null,
+      debt: 0,
+      net: null,
+    });
+    expect(assetLatestSummary({ assets: [], assetMovements: [] })).toMatchObject({
+      knownCount: 0,
+      unknown: [],
+    });
+  });
+
+  it('shows the latest observed balance without inventing earlier history or omitting archived assets', () => {
+    const data = {
+      assets: [
+        asset({
+          openingDate: '2026-06-30',
+          details: { openingKind: 'observation' },
+          balance: 0,
+          archived: true,
+        }),
+        asset({ id: 'debt', kind: 'liability', balance: 400 }),
+      ],
+      assetMovements: [movement('close', '2026-07-31', -1000)],
+    };
+    expect(assetLatestSummary(data)).toMatchObject({ assets: 0, debt: 400, net: -400 });
+    expect(assetSummaryAt(data, '2026-05-31')).toMatchObject({
+      assets: null,
+      unknown: ['cash'],
+    });
+    expect(assetLatestSummary(data).rows[0].latestDate).toBe('2026-07-31');
+  });
+
+  it('uses latest balances for tag subtotals without adding overlapping options to overall totals', () => {
+    const data = {
+      assets: [
+        asset({ tagIds: ['a', 'b'], balance: 1800 }),
+        asset({ id: 'debt', kind: 'liability', balance: 400 }),
+        asset({ id: 'missing', openingDate: null, balance: 0, tagIds: ['a'] }),
+      ],
+      assetMovements: [],
+      tags: ['a', 'b'].map((id) => ({
+        id,
+        groupId: 'purpose',
+        name: id,
+        color: '#111111',
+        sortOrder: 0,
+        archived: false,
+        version: 1,
+      })),
+    } as unknown as Bootstrap;
+    const rows = assetTagSubtotals(data, 'purpose', 'latest');
+    expect(rows.map((row) => [row.id, row.knownAssets, row.knownDebt, row.net])).toEqual([
+      ['a', 1800, 0, null],
+      ['b', 1800, 0, 1800],
+      ['', 0, 400, -400],
+    ]);
+    expect(assetLatestSummary(data)).toMatchObject({ knownAssets: 1800, knownDebt: 400 });
+    expect(assetTagSubtotals(data, 'purpose', '2026-02-28')[0].knownAssets).toBe(1000);
   });
 });

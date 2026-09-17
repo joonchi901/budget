@@ -325,6 +325,10 @@ test('loan terms and date-based asset adjustments preserve historical month-end 
   const before = await snapshot(page);
   await save(page);
   await expect(page.getByTestId(`asset-${created.id}`)).toHaveText('450,000원');
+  await page
+    .getByRole('group', { name: '자산 조회 기준', exact: true })
+    .getByRole('button', { name: '선택 월말', exact: true })
+    .click();
   await chooseMonth(page.getByLabel('조회 월'), '2026-08');
   await expect(page.getByTestId(`asset-${created.id}`)).toHaveText('500,000원');
   await chooseMonth(page.getByLabel('조회 월'), '2026-09');

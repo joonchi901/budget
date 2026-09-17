@@ -61,11 +61,7 @@ export function monthEndDate(month: string): string {
   return `${month}-${last}`;
 }
 
-export function assetSummaryAt(data: Pick<Bootstrap, 'assets' | 'assetMovements'>, asOf: string) {
-  const rows = data.assets.map((asset) => ({
-    asset,
-    balance: assetBalanceAt(asset, data.assetMovements, asOf),
-  }));
+function summarizeAssetRows<Row extends { asset: Asset; balance: number | null }>(rows: Row[]) {
   const unknown = rows.filter((row) => row.balance === null).map((row) => row.asset.id);
   const sum = (kind: Asset['kind']) =>
     rows
@@ -76,12 +72,44 @@ export function assetSummaryAt(data: Pick<Bootstrap, 'assets' | 'assetMovements'
   return {
     rows,
     unknown,
+    knownCount: rows.length - unknown.length,
     knownAssets,
     knownDebt,
-    assets: unknown.length ? null : knownAssets,
-    debt: unknown.length ? null : knownDebt,
+    assets: rows.some((row) => row.asset.kind === 'asset' && row.balance === null)
+      ? null
+      : knownAssets,
+    debt: rows.some((row) => row.asset.kind === 'liability' && row.balance === null)
+      ? null
+      : knownDebt,
     net: unknown.length ? null : knownAssets - knownDebt,
   };
+}
+
+export function assetSummaryAt(data: Pick<Bootstrap, 'assets' | 'assetMovements'>, asOf: string) {
+  return summarizeAssetRows(
+    data.assets.map((asset) => ({
+      asset,
+      balance: assetBalanceAt(asset, data.assetMovements, asOf),
+    })),
+  );
+}
+
+/** Latest registered balances include all effects, independently of the selected month. */
+export function assetLatestSummary(data: Pick<Bootstrap, 'assets' | 'assetMovements'>) {
+  return summarizeAssetRows(
+    data.assets.map((asset) => ({
+      asset,
+      // Imported management-only entries have a zero placeholder, not a confirmed balance.
+      balance: asset.openingDate ? asset.balance : null,
+      latestDate: data.assetMovements.reduce<string | null>(
+        (latest, movement) =>
+          movement.assetId === asset.id && (!latest || movement.date > latest)
+            ? movement.date
+            : latest,
+        asset.openingDate ?? null,
+      ),
+    })),
+  );
 }
 
 export function assetYearHistory(data: Pick<Bootstrap, 'assets' | 'assetMovements'>, year: string) {
@@ -110,7 +138,9 @@ export function assetTagSubtotals(data: Bootstrap, groupId: string, asOf: string
     },
   ].map((row) => ({
     ...row,
-    ...assetSummaryAt({ assets: row.assets, assetMovements: data.assetMovements }, asOf),
+    ...(asOf === 'latest'
+      ? assetLatestSummary({ assets: row.assets, assetMovements: data.assetMovements })
+      : assetSummaryAt({ assets: row.assets, assetMovements: data.assetMovements }, asOf)),
     count: row.assets.length,
   }));
 }
