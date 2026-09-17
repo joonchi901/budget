@@ -1,6 +1,13 @@
-import { cellValue, originalTransactions, type ExcelTransactionRow, type Workbook } from './xlsx';
+import {
+  cellValue,
+  excelDate,
+  originalTransactions,
+  type ExcelTransactionRow,
+  type Workbook,
+} from './xlsx';
 import { extractWorkbookManagement } from './xlsx-management';
 import { extractWorkbookPlans } from './xlsx-plans';
+import { accountingPeriod } from './planning';
 import type { BudgetBackup, DataRow, BackupTable } from './data';
 
 export interface WorkbookImportOptions {
@@ -39,6 +46,93 @@ const validDate = (v: string) =>
   /^\d{4}-\d{2}-\d{2}$/.test(v) &&
   Number.isFinite(Date.parse(`${v}T00:00:00Z`)) &&
   new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
+
+type LedgerPeriod = { startDate: string; endDate: string };
+
+/** Read explicit sheet periods, then month headers, then the workbook's configured accounting year. */
+export function workbookLedgerPeriods(book: Workbook) {
+  const value = (sheet: string, address: string) => {
+    const cell = book.sheets.find((item) => item.name === sheet)?.cells[address];
+    return cell?.error ? null : (cell?.value ?? null);
+  };
+  const integer = (raw: unknown, minimum: number, maximum: number) => {
+    if (typeof raw !== 'number' && typeof raw !== 'string') return null;
+    if (typeof raw === 'string' && !/^\d+(?:년)?$/.test(raw.trim())) return null;
+    const number = Number(typeof raw === 'string' ? raw.trim().replace(/년$/, '') : raw);
+    return Number.isInteger(number) && number >= minimum && number <= maximum ? number : null;
+  };
+  const date = (raw: unknown) => {
+    const text = typeof raw === 'number' ? excelDate(raw, book.date1904) : raw;
+    return typeof text === 'string' &&
+      validDate(text) &&
+      text >= '1900-01-01' &&
+      text <= '9998-12-31'
+      ? text
+      : null;
+  };
+  const year = integer(value('설정', 'C3'), 1900, 9998);
+  const startMonth = integer(value('설정', 'E3'), 1, 12);
+  const startDay = integer(value('설정', 'G3'), 1, 31);
+  const monthly: Record<string, LedgerPeriod | null> = {};
+  for (let index = 0; index < 12; index++) {
+    const sheet = String(index + 1);
+    const startDate = date(value(sheet, 'H6'));
+    const endDate = date(value(sheet, 'H7'));
+    if (startDate && endDate && startDate <= endDate) {
+      monthly[sheet] = { startDate, endDate };
+      continue;
+    }
+    const present = (address: string) => {
+      if (book.sheets.find((item) => item.name === sheet)?.cells[address]?.error) return true;
+      const raw = value(sheet, address);
+      return raw !== null && raw !== '';
+    };
+    if (present('H6') || present('H7')) {
+      monthly[sheet] = null;
+      continue;
+    }
+    const headerYear = integer(value(sheet, 'F5'), 1900, 9998);
+    const headerMonth = integer(value(sheet, 'G5'), 1, 12);
+    const headerDay = present('H5') ? integer(value(sheet, 'H5'), 1, 31) : startDay;
+    if ((present('F5') || present('G5')) && (!headerYear || !headerMonth || !headerDay)) {
+      monthly[sheet] = null;
+      continue;
+    }
+    const offset = startMonth === null ? null : startMonth + index - 1;
+    const selectedYear =
+      headerYear && headerMonth
+        ? headerYear
+        : year && offset !== null
+          ? year + Math.floor(offset / 12)
+          : null;
+    const selectedMonth =
+      headerYear && headerMonth ? headerMonth : offset !== null ? (offset % 12) + 1 : null;
+    const selectedDay = headerYear && headerMonth ? headerDay : startDay;
+    if (!selectedYear || selectedYear > 9998 || !selectedMonth || !selectedDay) {
+      monthly[sheet] = null;
+      continue;
+    }
+    const period = accountingPeriod(
+      `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`,
+      selectedDay,
+    );
+    monthly[sheet] = period.endDate <= '9998-12-31' ? period : null;
+  }
+  const complete = Object.values(monthly).filter(
+    (period): period is LedgerPeriod => period !== null,
+  );
+  const root =
+    complete.length === 12
+      ? {
+          startDate: complete.map((period) => period.startDate).sort()[0],
+          endDate: complete
+            .map((period) => period.endDate)
+            .sort()
+            .at(-1)!,
+        }
+      : null;
+  return { root, monthly };
+}
 async function digest(value: unknown) {
   const bytes = await crypto.subtle.digest(
     'SHA-256',
@@ -173,6 +267,7 @@ export async function buildWorkbookImport(
   if (tables.ledgers.some((l) => l.id === ledgerId && l.archived))
     throw new Error('처음 가져온 가계부가 보관되어 있어요. 보관을 해제한 뒤 다시 가져와 주세요.');
   const startDay = Number(cellValue(book, '설정', 'G3'));
+  const ledgerPeriods = workbookLedgerPeriods(book);
   if (options.newLedgerName)
     add('ledgers', {
       id: ledgerId,
@@ -188,8 +283,8 @@ export async function buildWorkbookImport(
             .map((item) => Number(item.sort_order ?? 0)),
         ) + 1,
       budget: 0,
-      start_date: null,
-      end_date: null,
+      start_date: ledgerPeriods.root?.startDate ?? null,
+      end_date: ledgerPeriods.root?.endDate ?? null,
       archived: 0,
       version: 1,
       period_start_day:
@@ -211,8 +306,8 @@ export async function buildWorkbookImport(
         parent_id: ledgerId,
         sort_order: Number(month) - 1,
         budget: 0,
-        start_date: null,
-        end_date: null,
+        start_date: ledgerPeriods.monthly[month]?.startDate ?? null,
+        end_date: ledgerPeriods.monthly[month]?.endDate ?? null,
         archived: 0,
         version: 1,
         period_start_day:
@@ -221,6 +316,15 @@ export async function buildWorkbookImport(
         tag_mappings: '{}',
       });
     }
+  if (options.newLedgerName && !ledgerPeriods.root)
+    await source(
+      'ledger-periods',
+      '설정!C3:G3',
+      'reference',
+      ledgerPeriods,
+      '가계부의 전체 기간을 확정할 수 없어 기간을 지정하지 않았어요. 원본 연월과 월 시작일을 확인해 주세요. 거래 날짜는 원문대로 보존했어요.',
+      'pending',
+    );
   const ledgerScope = [ledgerId, ...Object.values(monthlyLedgerIds ?? {})];
   const group = async (key: string, name: string, appliesTo = 'transaction', role = 'regular') => {
     const value = await id('group', key);

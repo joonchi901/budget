@@ -1,4 +1,4 @@
-import { selectChoice } from './helpers/controls';
+import { chooseMonth, selectChoice } from './helpers/controls';
 import { expect, test } from '@playwright/test';
 import { strToU8, zipSync } from 'fflate';
 import type { Bootstrap } from '../../src/shared/types';
@@ -6,7 +6,7 @@ import type { Bootstrap } from '../../src/shared/types';
 // A small, entirely synthetic OOXML file. No personal workbook content is committed.
 function workbook() {
   const sheets: Record<string, Record<string, string | number>> = {
-    설정: { C3: 2026, E3: 9, G3: 1, B6: '식비', C6: '장보기' },
+    설정: { C3: 2026, E3: 1, G3: 1, B6: '식비', C6: '장보기' },
     '1': {
       T30: '2026-01-16',
       U30: '엑셀 합성 장보기',
@@ -60,6 +60,7 @@ test('XLSX preview, review evidence and repeat import are usable from the data s
   await page.goto('/');
   await page.getByRole('button', { name: '나로 시작하기' }).click();
   await expect(page.getByRole('heading', { name: '우리의 일상' })).toBeVisible();
+  await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2027-09');
   const before: Bootstrap = await (await page.request.get('/api/bootstrap')).json();
   await page.getByRole('button', { name: '데이터 관리', exact: true }).click();
   await page.getByLabel('원본 가계부 XLSX').setInputFiles({
@@ -67,6 +68,9 @@ test('XLSX preview, review evidence and repeat import are usable from the data s
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     buffer: workbook(),
   });
+  await selectChoice(page.getByRole('combobox', { name: '가져올 가계부', exact: true }), '@new');
+  await page.getByLabel('새 가계부 이름', { exact: true }).fill('과거 가져오기 검증');
+  await selectChoice(page.getByRole('combobox', { name: /^가계부 구성/ }), 'monthly');
   await selectChoice(page.getByLabel('엑셀 결제수단 합성 현금'), '@new:cash');
   await page.getByRole('button', { name: '엑셀 반영 미리보기', exact: true }).click();
   await expect(page.getByRole('heading', { name: '반영할 내용', exact: true })).toBeVisible();
@@ -76,6 +80,10 @@ test('XLSX preview, review evidence and repeat import are usable from the data s
   await page.getByRole('button', { name: '엑셀 자료 반영', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('엑셀 자료를 반영했어요.');
   const after: Bootstrap = await (await page.request.get('/api/bootstrap')).json();
+  expect(after.ledgers.find((ledger) => ledger.name === '과거 가져오기 검증')).toMatchObject({
+    startDate: '2026-01-01',
+    endDate: '2026-12-31',
+  });
   expect(after.transactions.length - before.transactions.length).toBe(1);
   expect(after.transactions.find((t) => t.description === '엑셀 합성 장보기')?.amount).toBe(12000);
   expect(after.assets.find((a) => a.name === '이관 합성 자산')?.balance).toBe(60000);
@@ -119,6 +127,10 @@ test('XLSX preview, review evidence and repeat import are usable from the data s
     after.assets.find((a) => a.id === 'investment')!.balance + 5000,
   );
   await page.getByRole('button', { name: '가져온 가계부 보기', exact: true }).click();
+  await expect(page.getByLabel('조회 월', { exact: true })).toHaveAttribute(
+    'data-value',
+    '2026-01',
+  );
   await expect(page.getByRole('combobox', { name: '조회 기간', exact: true })).toHaveAttribute(
     'data-value',
     'period',

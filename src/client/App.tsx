@@ -175,9 +175,14 @@ export default function App() {
   }
   function navigate(id: string) {
     state.presence(null, null);
+    const target = data?.ledgers.find((item) => item.id === id);
+    const start = target?.kind === 'purpose' ? target.startDate : null;
+    const end = target?.kind === 'purpose' ? target.endDate : null;
     setLedgerId(id);
     setIncludeDescendants(true);
-    setPeriod('month');
+    setPeriod(start && end ? 'period' : 'month');
+    if (start && end && (month < start.slice(0, 7) || month > end.slice(0, 7)))
+      setMonth(start.slice(0, 7));
     setPage('ledger');
     setActionError('');
     setMobileMenu(false);

@@ -21,6 +21,7 @@ async function fixtureLedger(
   name: string,
   parentId: string | null = null,
   periodStartDay = 1,
+  bounds: { startDate: string; endDate: string } | undefined = undefined,
 ): Promise<Ledger> {
   const state = await snapshot(page);
   const response = await page.request.post('/api/ledgers', {
@@ -31,6 +32,7 @@ async function fixtureLedger(
       parentId,
       periodStartDay,
       budget: 0,
+      ...bounds,
     },
   });
   expect(response.status(), await response.text()).toBe(200);
@@ -86,6 +88,43 @@ async function calendar(page: Page) {
 function newForm(page: Page) {
   return page.getByRole('dialog', { name: '새 내역', exact: true });
 }
+
+test('opening a historical bounded ledger selects its period and calendar month while unbounded navigation keeps the selected month', async ({
+  page,
+}) => {
+  await login(page);
+  const ledger = await fixtureLedger(page, '이전 1월 기록 검증', null, 1, {
+    startDate: '2026-01-01',
+    endDate: '2026-01-31',
+  });
+  await fixtureEntry(page, ledger.id, '지난 1월 지출', '2026-01-16', 1100);
+  await page.reload();
+  await chooseMonth(page.getByLabel('조회 월', { exact: true }), '2026-09');
+  await openLedger(page, ledger.name);
+  await expect(page.getByLabel('조회 월', { exact: true })).toHaveAttribute(
+    'data-value',
+    '2026-01',
+  );
+  await expect(page.getByRole('combobox', { name: '조회 기간', exact: true })).toHaveAttribute(
+    'data-value',
+    'period',
+  );
+  await expect(page.getByRole('row').filter({ hasText: '지난 1월 지출' })).toBeVisible();
+  const view = await calendar(page);
+  await expect(
+    page.getByRole('button', { name: '지난 1월 지출 내역 열기', exact: true }),
+  ).toBeVisible();
+  await view.getByRole('button', { name: '목록', exact: true }).click();
+  await openLedger(page, '우리의 일상');
+  await expect(page.getByLabel('조회 월', { exact: true })).toHaveAttribute(
+    'data-value',
+    '2026-01',
+  );
+  await expect(page.getByRole('combobox', { name: '조회 기간', exact: true })).toHaveAttribute(
+    'data-value',
+    'month',
+  );
+});
 
 test('a user creates on a calendar date and day totals/list agree while date drafts preserve the generic draft', async ({
   page,

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { backupTables, type BudgetBackup, type DataRow } from '../../src/shared/data';
-import { buildWorkbookImport, type WorkbookImportOptions } from '../../src/shared/xlsx-import';
+import {
+  buildWorkbookImport,
+  workbookLedgerPeriods,
+  type WorkbookImportOptions,
+} from '../../src/shared/xlsx-import';
 import type { Workbook, WorkbookCell, WorkbookSheet } from '../../src/shared/xlsx';
 
 // Entirely synthetic layouts and amounts. Do not copy a personal workbook into this fixture.
@@ -108,6 +112,50 @@ function balanceAt(backup: BudgetBackup, asset: DataRow, date = '9999-12-31') {
 }
 
 describe('synthetic XLSX import reconciliation', () => {
+  it('derives accounting periods from source settings and prefers explicit sheet dates and headers', () => {
+    const periods = workbookLedgerPeriods(workbook({}, [], { C3: '2026년', E3: 1, G3: 31 }));
+    expect(periods.root).toEqual({ startDate: '2026-01-31', endDate: '2027-01-30' });
+    expect(periods.monthly['2']).toEqual({ startDate: '2026-03-01', endDate: '2026-03-30' });
+    const headers = workbookLedgerPeriods(workbook({ F5: 2025, G5: 12, H5: 25 }, [], { E3: 1 }));
+    expect(headers.monthly['1']).toEqual({ startDate: '2025-12-25', endDate: '2026-01-24' });
+    const explicit = workbookLedgerPeriods(
+      workbook({ F5: 2026, G5: 1, H5: 1, H6: '2025-12-28', H7: '2026-01-27' }),
+    );
+    expect(explicit.monthly['1']).toEqual({ startDate: '2025-12-28', endDate: '2026-01-27' });
+  });
+
+  it.each([0, 1899, 9999, 10000, '20260', '2026oops', '', true])(
+    'leaves unsupported workbook year %s unbounded without changing transaction dates',
+    async (year) => {
+      const result = await buildWorkbookImport(workbook(expense, [], { C3: year }), baseline(), {
+        ...options,
+        newLedgerName: '연도 확인',
+        ledgerMode: 'monthly',
+      });
+      expect(
+        result.backup.tables.ledgers
+          .filter((ledger) => ledger.kind === 'purpose' && ledger.id !== 'trip')
+          .every((ledger) => ledger.start_date === null && ledger.end_date === null),
+      ).toBe(true);
+      expect(result.backup.tables.transactions[0].date).toBe('2026-09-16');
+      expect(result.pending.some((record) => record.source === '설정!C3:G3')).toBe(true);
+    },
+  );
+
+  it('does not replace malformed explicit periods or overflowed years with a guessed period', () => {
+    const invalidHeaders: Record<string, WorkbookCell['value']>[] = [
+      { F5: 9999, G5: 1, H5: 1 },
+      { F5: 2026, G5: 1, H5: 32 },
+      { H6: '2026-02-30', H7: '2026-03-01' },
+    ];
+    for (const cells of invalidHeaders)
+      expect(workbookLedgerPeriods(workbook(cells)).monthly['1']).toBeNull();
+    const boundary = workbookLedgerPeriods(workbook({}, [], { C3: 9998, E3: 12, G3: 31 }));
+    expect(boundary.root).toBeNull();
+    expect(boundary.monthly['1']).toBeNull();
+    expect(boundary.monthly['2']).toBeNull();
+  });
+
   it.each(['2026-09-30', '2026-10-15', '2026-10-31'])(
     'holds savings on %s that may already be included in imported closing observations',
     async (date) => {
@@ -665,7 +713,11 @@ describe('synthetic XLSX import reconciliation', () => {
     ).toMatchObject({
       name: '2026 합성 가계부',
       parent_id: null,
+      start_date: '2026-01-01',
+      end_date: '2026-12-31',
     });
+    expect(children[0]).toMatchObject({ start_date: '2026-01-01', end_date: '2026-01-31' });
+    expect(children[11]).toMatchObject({ start_date: '2026-12-01', end_date: '2026-12-31' });
     expect(result.backup.tables.transactions).toEqual([
       expect.objectContaining({
         ledger_id: result.monthlyLedgerIds!['1'],
@@ -705,7 +757,11 @@ describe('synthetic XLSX import reconciliation', () => {
     ).toBe(result.ledgerId);
     expect(result.transactions).toEqual({ count: 2, income: 0, expense: 360 });
 
+    children[0].start_date = '2026-01-02';
     const repeat = await buildWorkbookImport(book, result.backup, monthlyOptions);
+    expect(
+      repeat.backup.tables.ledgers.find((ledger) => ledger.id === children[0].id)?.start_date,
+    ).toBe('2026-01-02');
     expect(repeat.monthlyLedgerIds).toEqual(result.monthlyLedgerIds);
     expect(repeat.counts.ledgers).toBe(0);
     expect(repeat.counts.tags).toBe(0);
