@@ -1,3 +1,21 @@
+import {
+  Button,
+  Checkbox,
+  CloseButton,
+  Field,
+  FormBody,
+  FormFooter,
+  FormGrid,
+  FormSection,
+  Grid,
+  IconButton,
+  Input,
+  Panel,
+  SegmentedControl,
+  Stack,
+  Textarea,
+  Toolbar,
+} from './ui';
 import { ALL_LEDGERS_ID, ledgerPath } from '../shared/hierarchy';
 import { SelectField, SelectOption } from './SelectField';
 import { UgaIcon, UgaLedgerIcon } from './brand/Uga';
@@ -108,10 +126,10 @@ export default function PlanningView({
     return <Empty>이 가계부를 찾을 수 없어요. 가계부 목록에서 다시 열어 주세요.</Empty>;
   if (!ledger)
     return (
-      <section className="panel">
+      <Panel>
         <h2>계획할 가계부를 선택해 주세요</h2>
         <p className="small muted">계획과 예산은 선택한 원본 가계부에 저장돼요.</p>
-        <label>
+        <Field>
           계획 가계부
           <SelectField value="" onValueChange={setSelectedLedger}>
             <SelectOption value="">가계부 선택</SelectOption>
@@ -123,8 +141,8 @@ export default function PlanningView({
                 </SelectOption>
               ))}
           </SelectField>
-        </label>
-      </section>
+        </Field>
+      </Panel>
     );
   const period = accountingPeriod(
     month,
@@ -141,20 +159,20 @@ export default function PlanningView({
     .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.title.localeCompare(b.title));
   const budget = budgetSummary(data, ledger.id, month);
   return (
-    <div className="planning-view">
-      <div className="section-heading">
+    <Stack gap={6} className="planning-view">
+      <Toolbar>
         <div>
           <p className="planning-context-title">{Number(month.slice(5))}월 계획</p>
           <p className="planning-context-description">{descriptions[kind]}</p>
         </div>
-        <button
-          className="primary"
+        <Button
+          variant="primary"
           onClick={() => setEditor(initialPlan(data, ledger.id, month, kind))}
         >
           <Plus size={16} />
           {names[kind]} 추가
-        </button>
-      </div>
+        </Button>
+      </Toolbar>
       <div className="planning-toolbar">
         {scopedToRoom ? (
           <div className="room-scope-label" aria-label="계획 가계부">
@@ -164,7 +182,7 @@ export default function PlanningView({
             </strong>
           </div>
         ) : (
-          <label>
+          <Field>
             계획 가계부
             <SelectField value={ledger.id} onValueChange={(value) => setSelectedLedger(value)}>
               {data.ledgers.map((l) => (
@@ -174,24 +192,16 @@ export default function PlanningView({
                 </SelectOption>
               ))}
             </SelectField>
-          </label>
+          </Field>
         )}
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={allDates}
-            onChange={(e) => setAllDates(e.target.checked)}
-          />
+        <Field className="checkbox">
+          <Checkbox checked={allDates} onChange={(e) => setAllDates(e.target.checked)} />
           전체 기간
-        </label>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => setShowArchived(e.target.checked)}
-          />
+        </Field>
+        <Field className="checkbox">
+          <Checkbox checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
           보관한 계획 포함
-        </label>
+        </Field>
         <span className="small muted">
           {allDates ? '모든 계획' : `${period.startDate} ~ ${period.endDate}`}
         </span>
@@ -230,18 +240,16 @@ export default function PlanningView({
           </p>
         </section>
       )}
-      <div className="planning-tabs" aria-label="계획 종류">
-        {(Object.keys(names) as PlanKind[]).map((value) => (
-          <button
-            key={value}
-            className={kind === value ? 'selected' : ''}
-            aria-pressed={kind === value}
-            onClick={() => setKind(value)}
-          >
-            {names[value]}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl<PlanKind>
+        className="planning-tabs"
+        aria-label="계획 종류"
+        value={kind}
+        onValueChange={setKind}
+        options={(Object.keys(names) as PlanKind[]).map((value) => ({
+          value,
+          label: names[value],
+        }))}
+      />
       <div className="planning-list-heading">
         <h2>
           {names[kind]} <span>{plans.length}개</span>
@@ -257,7 +265,7 @@ export default function PlanningView({
           등록된 {names[kind]}이 없어요. 원하는 기간과 항목으로 첫 계획을 만들어 보세요.
         </Empty>
       )}
-      <div className="planning-grid">
+      <Grid columns={2} tabletColumns={1} gap={5} className="planning-grid">
         {plans.map((plan) => (
           <PlanCard
             key={plan.id}
@@ -267,7 +275,7 @@ export default function PlanningView({
             onEdit={() => setEditor(plan)}
           />
         ))}
-      </div>
+      </Grid>
       <p className="planning-info">
         {scopedToRoom &&
           '이 가계부에 저장한 계획이에요. 하위 가계부의 계획은 해당 방에서 볼 수 있어요. '}
@@ -288,7 +296,7 @@ export default function PlanningView({
           }}
         />
       )}
-    </div>
+    </Stack>
   );
 }
 function PlanCard({
@@ -311,7 +319,7 @@ function PlanCard({
     plan.kind === 'goal' &&
     (plan.direction === 'atLeast' ? actual >= plan.amount : actual <= plan.amount);
   return (
-    <section className={`panel planning-card ${plan.archived ? 'archived' : ''}`}>
+    <Panel className={`planning-card ${plan.archived ? 'archived' : ''}`}>
       <div className="panel-title">
         <div>
           <span className="small muted">
@@ -323,9 +331,9 @@ function PlanCard({
           </span>
           <h3>{plan.title}</h3>
         </div>
-        <button className="icon-button" aria-label={`${plan.title} 수정`} onClick={onEdit}>
+        <IconButton aria-label={`${plan.title} 수정`} onClick={onEdit}>
           <Settings2 size={18} />
-        </button>
+        </IconButton>
       </div>
       <p className="small muted">
         <UgaIcon name="planning" size={18} /> {plan.startDate} ~ {plan.endDate}
@@ -522,7 +530,7 @@ function PlanCard({
             </div>
           </details>
         )}
-    </section>
+    </Panel>
   );
 }
 function PlanEditor({
@@ -554,7 +562,8 @@ function PlanEditor({
     : (dueOptions[0]?.date ?? '');
   const pending = useRef<{ url: string; method: string; body: unknown } | null>(null);
   const initial = useRef(JSON.stringify(plan));
-  useUnsavedGuard(busy || uncertain || JSON.stringify(draft) !== initial.current);
+  const dirty = JSON.stringify(draft) !== initial.current;
+  useUnsavedGuard(busy || uncertain || dirty);
   function update(patch: Partial<Plan>) {
     setDraft((current) => ({ ...current, ...patch }) as Plan);
   }
@@ -636,9 +645,10 @@ function PlanEditor({
       subtitle={ledger?.name}
       onClose={onClose}
       locked={busy || uncertain}
+      dirty={dirty}
     >
       <form onSubmit={(e) => void save(e)}>
-        <div className="form-body planning-form">
+        <FormBody className="planning-form">
           {error && (
             <div className="alert error" role="alert">
               {error}
@@ -653,22 +663,22 @@ function PlanEditor({
             <div className="conflict">
               <strong>다른 변경이 먼저 저장됐어요.</strong>
               <p>최신 계획을 불러오면 현재 입력 대신 저장된 내용이 표시돼요.</p>
-              <button
+              <Button
+                variant="secondary"
                 type="button"
-                className="secondary"
                 disabled={busy}
                 onClick={() => void reload()}
               >
                 최신 계획 불러오기
-              </button>
+              </Button>
             </div>
           )}
           <fieldset disabled={busy || uncertain || conflict}>
-            <section className="planning-form-section">
+            <FormSection className="planning-form-section">
               <h3>기본 정보</h3>
-              <label>
+              <Field>
                 계획 이름
-                <input
+                <Input
                   required
                   autoFocus
                   maxLength={120}
@@ -682,9 +692,9 @@ function PlanEditor({
                         : ''
                   }
                 />
-              </label>
-              <div className="form-grid">
-                <label>
+              </Field>
+              <FormGrid>
+                <Field>
                   시작일
                   <DateField
                     required
@@ -698,8 +708,8 @@ function PlanEditor({
                       })
                     }
                   />
-                </label>
-                <label>
+                </Field>
+                <Field>
                   {draft.kind === 'schedule' ? '마지막 결제일' : '종료일'}
                   <DateField
                     required
@@ -708,14 +718,14 @@ function PlanEditor({
                     disabled={draft.kind === 'schedule' && draft.repeat === 'once'}
                     onValueChange={(value) => update({ endDate: value })}
                   />
-                </label>
-              </div>
-            </section>
-            <section className="planning-form-section">
+                </Field>
+              </FormGrid>
+            </FormSection>
+            <FormSection className="planning-form-section">
               <h3>금액과 기준</h3>
               {draft.kind === 'budget' && (
-                <div className="form-grid">
-                  <label>
+                <FormGrid>
+                  <Field>
                     예산 기간
                     <SelectField
                       value={draft.cadence}
@@ -727,8 +737,8 @@ function PlanEditor({
                       <SelectOption value="week">주간 (최대 7일)</SelectOption>
                       <SelectOption value="period">전체 기간</SelectOption>
                     </SelectField>
-                  </label>
-                  <label>
+                  </Field>
+                  <Field>
                     예산 범위
                     <SelectField
                       value={draft.budgetScope}
@@ -742,8 +752,8 @@ function PlanEditor({
                       <SelectOption value="total">전체 예산</SelectOption>
                       <SelectOption value="category">태그 항목별 예산</SelectOption>
                     </SelectField>
-                  </label>
-                </div>
+                  </Field>
+                </FormGrid>
               )}
               {draft.kind === 'goal' && (
                 <>
@@ -753,8 +763,8 @@ function PlanEditor({
                       가계부별 수입·지출 집계와는 별개예요.
                     </p>
                   )}
-                  <div className="form-grid">
-                    <label>
+                  <FormGrid>
+                    <Field>
                       목표 대상
                       <SelectField
                         value={draft.metric}
@@ -772,8 +782,8 @@ function PlanEditor({
                         <SelectOption value="expense">지출</SelectOption>
                         <SelectOption value="savings">가구 순저축</SelectOption>
                       </SelectField>
-                    </label>
-                    <label>
+                    </Field>
+                    <Field>
                       달성 기준
                       <SelectField
                         value={draft.direction}
@@ -784,10 +794,10 @@ function PlanEditor({
                         <SelectOption value="atLeast">목표 금액 이상 달성</SelectOption>
                         <SelectOption value="atMost">목표 금액 이하 유지</SelectOption>
                       </SelectField>
-                    </label>
-                  </div>
+                    </Field>
+                  </FormGrid>
                   {draft.metric === 'savings' && (
-                    <label>
+                    <Field>
                       저축 자산
                       <SelectField
                         value={draft.assetId ?? ''}
@@ -807,7 +817,7 @@ function PlanEditor({
                           ))}
                       </SelectField>
                       <small className="muted">실제 저축 유입에서 인출을 뺀 금액을 집계해요.</small>
-                    </label>
+                    </Field>
                   )}
                 </>
               )}
@@ -824,9 +834,9 @@ function PlanEditor({
                 value={draft.amount}
                 onChange={(amount) => update({ amount })}
               />
-            </section>
+            </FormSection>
             {draft.kind === 'payroll' && (
-              <section className="planning-form-section">
+              <FormSection className="planning-form-section">
                 <h3>월급 배분</h3>
                 <RoundSelect
                   label="급여 계산 방식"
@@ -839,16 +849,16 @@ function PlanEditor({
                 </p>
                 {draft.lines.map((line, index) => (
                   <div className="planning-editor-row" key={line.id}>
-                    <label>
+                    <Field>
                       {index + 1}. 배분 항목
-                      <input
+                      <Input
                         required
                         maxLength={120}
                         value={line.title}
                         onChange={(e) => lineChange(line.id, { title: e.target.value })}
                       />
-                    </label>
-                    <div className="form-grid">
+                    </Field>
+                    <FormGrid>
                       <Amount
                         label="배분 금액"
                         value={line.amount}
@@ -859,9 +869,9 @@ function PlanEditor({
                         value={line.rounding}
                         onChange={(rounding) => lineChange(line.id, { rounding })}
                       />
-                    </div>
-                    <div className="form-grid">
-                      <label>
+                    </FormGrid>
+                    <FormGrid>
+                      <Field>
                         배분 목적
                         <SelectField
                           value={line.purpose}
@@ -875,8 +885,8 @@ function PlanEditor({
                           <SelectOption value="savings">저축</SelectOption>
                           <SelectOption value="other">기타</SelectOption>
                         </SelectField>
-                      </label>
-                      <label>
+                      </Field>
+                      <Field>
                         예정 배분 자산
                         <SelectField
                           value={line.assetId ?? ''}
@@ -893,20 +903,20 @@ function PlanEditor({
                               </SelectOption>
                             ))}
                         </SelectField>
-                      </label>
-                    </div>
-                    <button
+                      </Field>
+                    </FormGrid>
+                    <Button
+                      variant="text"
                       type="button"
-                      className="text-button"
                       onClick={() => update({ lines: draft.lines.filter((l) => l.id !== line.id) })}
                     >
                       배분 항목 삭제
-                    </button>
+                    </Button>
                   </div>
                 ))}
-                <button
+                <Button
+                  variant="secondary"
                   type="button"
-                  className="secondary"
                   disabled={draft.lines.length >= 100}
                   onClick={() =>
                     update({
@@ -926,7 +936,7 @@ function PlanEditor({
                 >
                   <Plus size={15} />
                   배분 항목 추가
-                </button>
+                </Button>
                 <div className="effect-preview">
                   <span>
                     배분 가능한 금액 {won(payrollSummary(draft).available)}원<br />
@@ -934,12 +944,12 @@ function PlanEditor({
                     <strong>잔여금 {won(payrollSummary(draft).remaining)}원</strong>
                   </span>
                 </div>
-              </section>
+              </FormSection>
             )}
             {draft.kind === 'event' && (
-              <section className="planning-form-section">
+              <FormSection className="planning-form-section">
                 <h3>행사 결산</h3>
-                <label>
+                <Field>
                   실적 기록 방식
                   <SelectField
                     value={draft.actualMode}
@@ -953,7 +963,7 @@ function PlanEditor({
                     <SelectOption value="transactions">조건에 맞는 지출 자동 집계</SelectOption>
                     <SelectOption value="manual">행사 실적 금액 직접 기록</SelectOption>
                   </SelectField>
-                </label>
+                </Field>
                 {draft.actualMode === 'manual' && (
                   <>
                     <Amount
@@ -966,21 +976,21 @@ function PlanEditor({
                     </p>
                   </>
                 )}
-                <label>
+                <Field>
                   결산·평가
-                  <textarea
+                  <Textarea
                     maxLength={2000}
                     rows={3}
                     value={draft.evaluation}
                     onChange={(e) => update({ evaluation: e.target.value })}
                   />
-                </label>
-              </section>
+                </Field>
+              </FormSection>
             )}
             {draft.kind === 'schedule' && (
-              <section className="planning-form-section">
+              <FormSection className="planning-form-section">
                 <h3>결제와 납부</h3>
-                <label>
+                <Field>
                   결제 반복
                   <SelectField
                     value={draft.repeat}
@@ -994,14 +1004,14 @@ function PlanEditor({
                     <SelectOption value="once">한 번</SelectOption>
                     <SelectOption value="monthly">매월 시작일과 같은 날짜</SelectOption>
                   </SelectField>
-                </label>
+                </Field>
                 <p className="small muted">
                   매월 같은 날짜가 없으면 해당 월 말일로 표시해요. 납부 확인은 정보 기록이며
                   지출·잔액에는 영향을 주지 않아요.
                 </p>
                 <h3>납부 확인</h3>
-                <div className="form-grid">
-                  <label>
+                <FormGrid>
+                  <Field>
                     예정 결제일
                     <SelectField
                       value={selectedDueDate}
@@ -1014,10 +1024,11 @@ function PlanEditor({
                         </SelectOption>
                       ))}
                     </SelectField>
-                  </label>
-                  <button
+                  </Field>
+                  <Button
+                    variant="secondary"
                     type="button"
-                    className="secondary planning-add-payment"
+                    className="planning-add-payment"
                     disabled={!dueOptions.some((o) => o.date === selectedDueDate && !o.payment)}
                     onClick={() =>
                       update({
@@ -1034,13 +1045,13 @@ function PlanEditor({
                     }
                   >
                     납부 확인 추가
-                  </button>
-                </div>
+                  </Button>
+                </FormGrid>
                 {draft.payments.map((payment) => (
                   <div className="planning-editor-row" key={payment.date}>
                     <strong>{payment.date} 예정 건</strong>
-                    <div className="form-grid">
-                      <label>
+                    <FormGrid>
+                      <Field>
                         실제 납부일
                         <DateField
                           required
@@ -1053,7 +1064,7 @@ function PlanEditor({
                             })
                           }
                         />
-                      </label>
+                      </Field>
                       <Amount
                         label="실제 납부액"
                         value={payment.amount}
@@ -1065,10 +1076,10 @@ function PlanEditor({
                           })
                         }
                       />
-                    </div>
-                    <label>
+                    </FormGrid>
+                    <Field>
                       납부 메모
-                      <input
+                      <Input
                         maxLength={500}
                         value={payment.note}
                         onChange={(e) =>
@@ -1079,25 +1090,25 @@ function PlanEditor({
                           })
                         }
                       />
-                    </label>
-                    <button
+                    </Field>
+                    <Button
+                      variant="text"
                       type="button"
-                      className="text-button"
                       onClick={() =>
                         update({ payments: draft.payments.filter((p) => p.date !== payment.date) })
                       }
                     >
                       납부 확인 취소
-                    </button>
+                    </Button>
                   </div>
                 ))}
-              </section>
+              </FormSection>
             )}
             {!noFilters && (
-              <section className="planning-form-section">
+              <FormSection className="planning-form-section">
                 <h3>{draft.kind === 'schedule' ? '일정 정보' : '실제 기록 집계 조건'}</h3>
-                <div className="form-grid">
-                  <label>
+                <FormGrid>
+                  <Field>
                     귀속
                     <SelectField
                       value={draft.ownerId ?? ''}
@@ -1113,8 +1124,8 @@ function PlanEditor({
                       ))}
                       <SelectOption value="shared">공동</SelectOption>
                     </SelectField>
-                  </label>
-                  <label>
+                  </Field>
+                  <Field>
                     결제수단
                     <SelectField
                       value={draft.paymentMethodId ?? ''}
@@ -1129,17 +1140,16 @@ function PlanEditor({
                           </SelectOption>
                         ))}
                     </SelectField>
-                  </label>
-                </div>
+                  </Field>
+                </FormGrid>
                 {draft.kind !== 'schedule' && !noFilters && (
-                  <label className="checkbox">
-                    <input
-                      type="checkbox"
+                  <Field className="checkbox">
+                    <Checkbox
                       checked={draft.includeLinked}
                       onChange={(e) => update({ includeLinked: e.target.checked })}
                     />
                     모든 단계의 하위 가계부 원본 거래 포함
-                  </label>
+                  </Field>
                 )}
                 {!(draft.kind === 'budget' && draft.budgetScope === 'total') &&
                   draft.kind !== 'schedule' && (
@@ -1159,9 +1169,8 @@ function PlanEditor({
                                   (!tag.archived || draft.tagIds.includes(tag.id)),
                               )
                               .map((tag) => (
-                                <label className="checkbox" key={tag.id}>
-                                  <input
-                                    type="checkbox"
+                                <Field className="checkbox" key={tag.id}>
+                                  <Checkbox
                                     checked={draft.tagIds.includes(tag.id)}
                                     onChange={(e) =>
                                       update({
@@ -1176,54 +1185,48 @@ function PlanEditor({
                                     color={tag.color}
                                     archived={tag.archived}
                                   />
-                                </label>
+                                </Field>
                               ))}
                           </div>
                         </div>
                       ))}
                     </>
                   )}
-              </section>
+              </FormSection>
             )}
-            <section className="planning-form-section">
+            <FormSection className="planning-form-section">
               <h3>추가 정보</h3>
-              <label>
+              <Field>
                 메모
-                <textarea
+                <Textarea
                   rows={3}
                   maxLength={2000}
                   value={draft.notes}
                   onChange={(e) => update({ notes: e.target.value })}
                 />
-              </label>
+              </Field>
               {plan.id && (
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
+                <Field className="checkbox">
+                  <Checkbox
                     checked={draft.archived}
                     onChange={(e) => update({ archived: e.target.checked })}
                   />
                   이 계획 보관하기 <small className="muted">해제하면 다시 표시돼요.</small>
-                </label>
+                </Field>
               )}
-            </section>
+            </FormSection>
           </fieldset>
-        </div>
-        <div className="form-footer">
+        </FormBody>
+        <FormFooter>
           <div className="footer-actions">
-            <button
-              type="button"
-              className="secondary"
-              onClick={onClose}
-              disabled={busy || uncertain}
-            >
+            <CloseButton variant="secondary" onClick={onClose} disabled={busy || uncertain}>
               닫기
-            </button>
-            <button className="primary" type="submit" disabled={busy || conflict}>
+            </CloseButton>
+            <Button variant="primary" type="submit" disabled={busy || conflict}>
               {busy ? '저장 중…' : uncertain ? '저장 결과 다시 확인' : '계획 저장'}
-            </button>
+            </Button>
           </div>
-        </div>
+        </FormFooter>
       </form>
     </Dialog>
   );
@@ -1238,9 +1241,9 @@ function Amount({
   onChange(value: number): void;
 }) {
   return (
-    <label>
+    <Field>
       {label}
-      <input
+      <Input
         required
         type="number"
         inputMode="numeric"
@@ -1250,7 +1253,7 @@ function Amount({
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
       />
-    </label>
+    </Field>
   );
 }
 function RoundSelect({
@@ -1263,7 +1266,7 @@ function RoundSelect({
   onChange(value: Rounding): void;
 }) {
   return (
-    <label>
+    <Field>
       {label}
       <SelectField value={value} onValueChange={(value) => onChange(value as Rounding)}>
         {(Object.keys(roundingNames) as Rounding[]).map((rounding) => (
@@ -1272,6 +1275,6 @@ function RoundSelect({
           </SelectOption>
         ))}
       </SelectField>
-    </label>
+    </Field>
   );
 }

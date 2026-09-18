@@ -1,15 +1,16 @@
 import { useState, type ComponentProps } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
+import { Button, Field, Input, FormBody } from '../../client/ui';
 import { Dialog } from '../../client/components';
 
 function DialogExample(args: ComponentProps<typeof Dialog>) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className="primary" onClick={() => setOpen(true)}>
+      <Button variant="primary" onClick={() => setOpen(true)}>
         대화상자 열기
-      </button>
+      </Button>
       {open && (
         <Dialog
           {...args}
@@ -43,12 +44,12 @@ const meta = {
     locked: false,
     onClose: fn(),
     children: (
-      <div className="form-body">
-        <label>
+      <FormBody>
+        <Field>
           가계부 이름
-          <input aria-label="가계부 이름" defaultValue="우리의 일상" />
-        </label>
-      </div>
+          <Input aria-label="가계부 이름" defaultValue="우리의 일상" />
+        </Field>
+      </FormBody>
     ),
   },
   argTypes: {
@@ -94,5 +95,26 @@ export const Locked: Story = {
     await expect(cancel.defaultPrevented).toBe(true);
     await expect(dialog).toHaveAttribute('open');
     await expect(args.onClose).not.toHaveBeenCalled();
+  },
+};
+
+export const UnsavedChanges: Story = {
+  args: { dirty: true },
+  play: async ({ canvasElement, args }) => {
+    const c = within(canvasElement),
+      opener = c.getByRole('button', { name: '대화상자 열기' });
+    await userEvent.click(opener);
+    await userEvent.click(
+      within(c.getByRole('dialog', { name: '가계부 설정' })).getByRole('button', { name: '닫기' }),
+    );
+    await userEvent.click(c.getByRole('button', { name: '계속 작성' }));
+    await expect(c.getByRole('dialog', { name: '가계부 설정' })).toBeVisible();
+    await expect(args.onClose).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(c.getByRole('dialog', { name: '가계부 설정' })).getByRole('button', { name: '닫기' }),
+    );
+    await userEvent.click(c.getByRole('button', { name: '변경 내용 버리기' }));
+    await expect(opener).toHaveFocus();
+    await expect(args.onClose).toHaveBeenCalledOnce();
   },
 };

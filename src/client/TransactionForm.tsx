@@ -1,3 +1,14 @@
+import {
+  Button,
+  Checkbox,
+  Field,
+  FormBody,
+  FormFooter,
+  FormGrid,
+  Input,
+  SegmentedControl,
+  CloseButton,
+} from './ui';
 import { SelectField, SelectOption } from './SelectField';
 import { DateField } from './DateFields';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -448,6 +459,7 @@ export default function TransactionForm({
       subtitle={`${data.ledgers.find((l) => l.id === ledgerId)?.name}에 기록해요`}
       onClose={close}
       locked={locked}
+      dirty={dirty && !localAvailable}
     >
       <form
         className="transaction-form"
@@ -477,7 +489,7 @@ export default function TransactionForm({
           )
         }
       >
-        <div className="form-body">
+        <FormBody>
           {!localAvailable && (
             <div className="alert">
               이 브라우저에서 기기 초안을 보관하지 못했어요. 창을 닫기 전에 저장해 주세요.
@@ -492,14 +504,15 @@ export default function TransactionForm({
                   : '입력 내용을 확인한 뒤 계속 작성할 수 있어요.'}
               </p>
               {!uncertain && (
-                <button
+                <Button
+                  variant="text"
                   type="button"
-                  className="text-button"
+
                   disabled={busy}
                   onClick={discardDraft}
                 >
                   복원한 초안 버리기
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -521,9 +534,10 @@ export default function TransactionForm({
                 내 입력: {draft.description} · {won(draft.amount)}원<br />
                 최신 내용: {conflict.description} · {won(conflict.amount)}원
               </p>
-              <button
+              <Button
+                variant="secondary"
                 type="button"
-                className="secondary"
+
                 onClick={() => {
                   cancelAutoSave();
                   const latest = inputOf(conflict);
@@ -540,7 +554,7 @@ export default function TransactionForm({
                 }}
               >
                 최신 내용 불러오기
-              </button>
+              </Button>
               <p className="small muted">
                 불러오면 현재 입력을 최신 내용으로 바꿔요. 확인 후 다시 수정할 수 있어요.
               </p>
@@ -554,23 +568,19 @@ export default function TransactionForm({
           )}
           <fieldset disabled={busy || uncertain || deleted}>
             <section className="transaction-form-section" aria-label="기본 정보">
-              <div className="segmented" aria-label="거래 종류">
-                {(Object.keys(labels) as TransactionType[]).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    aria-pressed={draft.type === type}
-                    className={draft.type === type ? 'selected' : ''}
-                    onClick={() => switchType(type)}
-                  >
-                    {labels[type]}
-                  </button>
-                ))}
-              </div>
-              <label className="amount-field">
+              <SegmentedControl<TransactionType>
+                aria-label="거래 종류"
+                value={draft.type}
+                onValueChange={switchType}
+                options={(Object.keys(labels) as TransactionType[]).map((value) => ({
+                  value,
+                  label: labels[value],
+                }))}
+              />
+              <Field className="amount-field">
                 금액
                 <div>
-                  <input
+                  <Input
                     ref={amountRef}
                     name="amount"
                     aria-label="금액"
@@ -587,10 +597,10 @@ export default function TransactionForm({
                   />
                   <span>원</span>
                 </div>
-              </label>
-              <label>
+              </Field>
+              <Field>
                 내용
-                <input
+                <Input
                   name="description"
                   required
                   maxLength={240}
@@ -598,9 +608,9 @@ export default function TransactionForm({
                   onChange={(e) => patch({ description: e.target.value })}
                   placeholder="어디에 사용했나요?"
                 />
-              </label>
-              <div className="form-grid">
-                <label>
+              </Field>
+              <FormGrid>
+                <Field>
                   날짜
                   <DateField
                     name="date"
@@ -608,8 +618,8 @@ export default function TransactionForm({
                     value={draft.date}
                     onValueChange={(value) => patch({ date: value })}
                   />
-                </label>
-                <label>
+                </Field>
+                <Field>
                   결제수단
                   <SelectField
                     name="paymentMethodId"
@@ -627,15 +637,15 @@ export default function TransactionForm({
                         </SelectOption>
                       ))}
                   </SelectField>
-                </label>
-              </div>
+                </Field>
+              </FormGrid>
             </section>
             <section
               className="transaction-form-section transaction-classification"
               aria-label="분류와 귀속"
             >
               <h3>분류와 귀속</h3>
-              <label>
+              <Field>
                 누구의 내역인가요?
                 <SelectField
                   name="ownerId"
@@ -650,7 +660,7 @@ export default function TransactionForm({
                     </SelectOption>
                   ))}
                 </SelectField>
-              </label>
+              </Field>
               <TagFields
                 data={data}
                 value={draft.tagIds}
@@ -664,7 +674,8 @@ export default function TransactionForm({
             </section>
             <section className="transaction-allocation" aria-label="자산 잔액 반영">
               <div className="transaction-allocation-heading">
-                <button
+                <Button
+                  variant="plain"
                   type="button"
                   className="transaction-allocation-toggle"
                   aria-expanded={allocationOpen}
@@ -680,10 +691,11 @@ export default function TransactionForm({
                     </small>
                   </span>
                   <ChevronDown size={18} aria-hidden="true" />
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="text"
                   type="button"
-                  className="text-button"
+
                   disabled={draft.allocations.length >= assets.length}
                   onClick={() => {
                     setAllocationOpen(true);
@@ -696,7 +708,7 @@ export default function TransactionForm({
                   }}
                 >
                   <Plus size={14} /> 자산 배분 추가
-                </button>
+                </Button>
               </div>
               <div
                 id="transaction-allocation-content"
@@ -708,7 +720,7 @@ export default function TransactionForm({
                 </p>
                 {draft.allocations.map((allocation, index) => (
                   <div className="allocation-row" key={index}>
-                    <label>
+                    <Field>
                       {draft.type === 'income' ? '입금 자산' : '출금 자산'} {index + 1}
                       <SelectField
                         name="allocationAsset"
@@ -736,10 +748,10 @@ export default function TransactionForm({
                             </SelectOption>
                           ))}
                       </SelectField>
-                    </label>
-                    <label>
+                    </Field>
+                    <Field>
                       배분 금액 {index + 1}
-                      <input
+                      <Input
                         name="allocationAmount"
                         type="number"
                         inputMode="numeric"
@@ -756,8 +768,9 @@ export default function TransactionForm({
                           })
                         }
                       />
-                    </label>
-                    <button
+                    </Field>
+                    <Button
+                      variant="plain"
                       type="button"
                       className="icon-button"
                       aria-label={`자산 배분 ${index + 1} 삭제`}
@@ -766,7 +779,7 @@ export default function TransactionForm({
                       }
                     >
                       <Trash2 size={17} />
-                    </button>
+                    </Button>
                   </div>
                 ))}
                 <div className="effect-preview">
@@ -794,9 +807,8 @@ export default function TransactionForm({
           </fieldset>
           <div className="transaction-save-options">
             <div>
-              <label className="checkbox">
-                <input
-                  type="checkbox"
+              <Field className="checkbox">
+                <Checkbox
                   checked={autoSave}
                   disabled={locked || Boolean(conflict) || deleted}
                   onChange={(e) => {
@@ -805,7 +817,7 @@ export default function TransactionForm({
                   }}
                 />
                 {original ? '수정 내용 자동 저장' : '입력 완료 후 자동 저장'}
-              </label>
+              </Field>
               {!original && (
                 <p className="small">
                   {autoSave
@@ -850,18 +862,24 @@ export default function TransactionForm({
                 })()}
             </details>
           )}
-        </div>
+        </FormBody>
         {confirmDelete && !uncertain && (
           <div className="delete-confirm">
             <span>이 내역과 연결된 자산 반영을 삭제할까요?</span>
-            <button type="button" disabled={locked} onClick={() => void submit(true)}>
+            <Button
+              variant="plain"
+              type="button"
+              disabled={locked}
+              onClick={() => void submit(true)}
+            >
               삭제 확인
-            </button>
+            </Button>
           </div>
         )}
-        <div className="form-footer">
+        <FormFooter>
           {original && !uncertain && (
-            <button
+            <Button
+              variant="plain"
               type="button"
               className="danger-link"
               disabled={locked || deleted || Boolean(conflict)}
@@ -872,42 +890,45 @@ export default function TransactionForm({
             >
               <Trash2 size={16} />
               삭제
-            </button>
+            </Button>
           )}
           <div className="footer-actions">
-            <button type="button" className="secondary" onClick={close} disabled={locked}>
+            <CloseButton variant="secondary" disabled={locked}>
               닫기
-            </button>
+            </CloseButton>
             {!original && !autoSave && !uncertain && (
-              <button
+              <Button
+                variant="secondary"
                 type="button"
-                className="secondary transaction-continue"
+                className="transaction-continue"
                 disabled={locked || Boolean(conflict) || deleted}
                 onClick={() => void submit(false, false, true)}
               >
                 저장하고 계속 입력
-              </button>
+              </Button>
             )}
             {uncertain ? (
-              <button
+              <Button
+                variant="primary"
                 type="button"
-                className="primary"
+
                 disabled={busy}
                 onClick={() => void submit()}
               >
                 저장 결과 다시 확인
-              </button>
+              </Button>
             ) : (
-              <button
-                className="primary"
+              <Button
+                variant="primary"
+
                 type="submit"
                 disabled={locked || Boolean(conflict) || deleted}
               >
                 {busy ? '저장 중…' : '저장'}
-              </button>
+              </Button>
             )}
           </div>
-        </div>
+        </FormFooter>
       </form>
     </Dialog>
   );

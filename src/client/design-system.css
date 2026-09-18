@@ -648,11 +648,11 @@ textarea {
   color: var(--muted);
   border-radius: 10px;
 }
-.transaction-tabs > button.active {
+.transaction-tabs > button[aria-pressed='true'] {
   color: var(--blue-strong);
   background: var(--blue-soft);
 }
-.transaction-tabs > button:hover:not(.active) {
+.transaction-tabs > button:hover:not([aria-pressed='true']) {
   background: var(--surface-muted);
   color: var(--text);
 }

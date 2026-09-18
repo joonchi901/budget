@@ -80,7 +80,7 @@ test('ledger list filters explain their scope, sort actual rows, and reset witho
 
   const names = page.locator('.transactions tbody .transaction-name');
   const sort = page.getByRole('combobox', { name: '내역 정렬', exact: true });
-  const search = page.getByRole('textbox', { name: '내역 검색', exact: true });
+  const search = page.getByRole('searchbox', { name: '내역 검색', exact: true });
   const kind = page.getByRole('group', { name: '내역 종류 필터', exact: true });
   const scope = page.getByRole('combobox', { name: '거래 목록의 가계부 범위', exact: true });
   const result = page.getByRole('status', { name: '목록 조회 결과', exact: true });

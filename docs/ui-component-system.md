@@ -1,21 +1,22 @@
 # UI 컴포넌트와 살아있는 명세
 
-기준일: 2026-09-17
+기준일: 2026-09-18
 
 ## 현재 상태
 
-기존 앱은 토큰·달력·선택창·태그 등 일부 공통 요소를 갖추고 있었지만, 버튼·필터·배치가 페이지 JSX와 큰 CSS 파일에 남아 있었다. 모든 화면이 독립적인 컴포넌트로 조립되어 있던 상태는 아니다.
+전체 주요 화면과 편집창을 **공통 버튼·입력·폼·탭·패널·요약·스크롤 영역으로 조립**한다. 실제 앱 소스를 Storybook에서 그대로 실행하고, 화면별 상태와 동작을 함께 검증한다. 달력의 7일 열, 표의 열 구조, 차트는 정보 구조에 맞는 전용 배치를 유지한다.
 
-이번 구성은 **실제 앱 소스를 Storybook에서 그대로 실행**하고, 적용 현황과 남은 전환 대상을 함께 관리한다. [컴포넌트 목록](../src/stories/catalog.json)이 현황의 기준이며 Storybook의 `00 Guide`가 이를 읽어 표시한다. 시각적으로 비슷한 복제품을 별도 구현하지 않는다.
+[컴포넌트 목록](../src/stories/catalog.json)은 33개 항목, [화면 목록](../src/stories/screens.json)은 19개 실제 화면·폼·패턴 소스를 등록한다. `00 Guide`와 `06 Screens`에서 적용 상태와 사용 예시를 볼 수 있다. `App`에서 거래 목록과 로그인 표시를 각각 `LedgerView`, `SessionScreen`으로 분리해 실제 세션 없이 동일한 화면을 검증한다.
 
-| 계층           | 책임                                   | 위치                                           |
-| -------------- | -------------------------------------- | ---------------------------------------------- |
-| 01 Foundations | 의미 색·글자·간격·모션·브랜드 자산     | `src/client/brand/`                            |
-| 02 Components  | 버튼·선택·날짜·태그·툴팁·모달·요약     | `src/client/ui/Button.tsx`, 기존 공통 컴포넌트 |
-| 03 Layout      | 세로 흐름·가로 흐름·격자·내용 경계     | `src/client/ui/Layout.tsx`                     |
-| 04 Patterns    | 현재 방과 계위·보기 전환 등 UI 조합    | `src/client/RoomHeader.tsx`                    |
-| 05 Domain      | 가계부 방 목록·달력·계위·태그 입력     | 기존 도메인 컴포넌트                           |
-| 앱 연결        | 데이터 요청·권한·라우팅·저장·공동 편집 | `App.tsx`, 훅·폼·페이지                        |
+| 계층           | 책임                                          | 위치                                           |
+| -------------- | --------------------------------------------- | ---------------------------------------------- |
+| 01 Foundations | 의미 색·글자·간격·모션·브랜드 자산            | `src/client/brand/`                            |
+| 02 Components  | 버튼·선택·날짜·태그·툴팁·모달·요약            | `src/client/ui/Button.tsx`, 기존 공통 컴포넌트 |
+| 03 Layout      | 세로 흐름·가로 흐름·격자·내용 경계            | `src/client/ui/Layout.tsx`                     |
+| 04 Patterns    | 현재 방과 계위·보기 전환 등 UI 조합           | `src/client/RoomHeader.tsx`                    |
+| 05 Domain      | 가계부 방 목록·달력·계위·태그 입력            | 기존 도메인 컴포넌트                           |
+| 06 Screens     | 로그인·가계부·자산·카드/통장·통계·설정·데이터 | `src/stories/screens/`의 실제 화면 import      |
+| 앱 연결        | 데이터 요청·권한·라우팅·저장·공동 편집        | `App.tsx`, 훅·폼·페이지                        |
 
 의존 방향은 위에서 아래가 아니라 **앱 → 도메인/패턴 → 기본 요소/배치 → 토큰**이다. 기본 요소가 앱·API·라우터를 가져오지 않는다. 업무 규칙을 공통 Button/Grid 안에 넣지 않는다.
 
@@ -26,6 +27,11 @@
 - Grid는 데스크톱 `columns`, 761~1000px `tabletColumns`, 760px 이하 `mobileColumns`를 받는다. 기본 모바일 1열. 달력의 7일 열과 표는 전용 배치를 유지한다.
 - `as`로 HTML 의미를 유지한다. `ul`/`ol`을 쓰면 자식은 `li`로 만든다.
 - Button 기본 `type`은 `button`. 저장은 명시적 `type="submit"`. `busy`는 중복 클릭을 차단한다. IconButton은 `aria-label` 필수.
+- `Input`/`Textarea`/`Checkbox`/`Radio`/`Field`는 native props·ref·라벨·폼 검증을 유지한다. 설명과 오류 연결이 필요한 새 폼은 `TextField`로 조립한다.
+- `FormBody`/`FormFooter`/`FormGrid`/`FormSection`은 모든 편집창의 공통 구조다. `Panel`/`SummaryGrid`/`Toolbar`/`TableScroll`은 화면의 내용 경계·요약·도구·표 영역을 담당한다. 가로로 긴 표는 이름이 있는 키보드 스크롤 영역에 둔다.
+- `SegmentedControl`은 선택 상태를 `aria-pressed`로, `Tabs`는 tablist/tab/tabpanel 계약으로 표현한다. 방향키·Home·End는 비활성 옵션을 건너뛴다. 방 헤더처럼 별도 시각 패턴이 있으면 `appearance="plain"`을 사용한다.
+- `Dialog dirty`와 `CloseButton`은 미저장 내용을 버릴지 확인한다. 계속 작성 시 값과 포커스를 유지하고, 버리면 원래 열기 버튼으로 돌아간다. 저장 성공은 화면의 `onClose`/`onSaved`로 직접 닫는다. `locked` 동안은 닫기와 Escape를 막는다.
+- 거래 폼은 기존 기기 초안 복원을 유지한다. 정상적으로 기기 초안을 보관할 수 있으면 바로 닫고, 기기 저장이 실패한 상태에서만 입력 손실 확인을 요청한다.
 - 날짜·선택·색상은 기존 자체 컨트롤을 사용한다. 태그는 사용자 색상과 배지 표현을 유지한다.
 - 앱과 Storybook은 같은 [app-styles.css](../src/client/app-styles.css)를 같은 순서로 읽는다. Storybook 전용 CSS는 캔버스 여백만 정한다.
 
@@ -73,8 +79,8 @@ Storybook 10.6의 Vitest addon은 현재 Vitest 5와 peer 범위가 맞지 않�
 
 - [fixtures.ts](../src/stories/fixtures.ts)는 손으로 만든 가상 자료다. 실제 XLSX·DB·계정·쿠키를 가져오지 않는다.
 - Storybook은 `App`과 `useBudget`을 마운트하지 않으며 Vite의 Worker 프록시를 상속하지 않는다.
-- `/api` 요청은 preview에서 저장하지 않고 오류 응답을 돌려준다. 테스트 브라우저도 `/api/**`를 차단한다.
-- TagFields의 기존 옵션 선택은 검증하지만 서버 옵션 생성은 앱 E2E 범위다. callback 확인을 실제 DB 저장 성공으로 표현하지 않는다.
+- `/api` 요청은 preview에서 `parameters.apiRoutes`의 합성 응답으로 처리한다. 등록하지 않은 요청은 503 오류로 막는다. 시나리오별 iframe과 독립 자료로 저장 성공·검증 오류·충돌·응답 유실을 재현하며 실제 DB 성공으로 표현하지 않는다. 테스트 브라우저도 실제 `/api/**` 네트워크 요청을 차단한다.
+- 로그인 표시는 세션 없는 `SessionScreen`을 사용한다. 거래 폼의 기기 초안은 합성 household 키로 격리한다. 서버 저장·권한·계산·공동 편집은 별도의 임시 로컬 D1 E2E로 검증한다.
 - CI는 비밀값 없이 실행하고 정적 결과를 GitHub Actions artifact로 보관한다. 인터넷에 공개 호스팅하지 않는다. 로컬 Storybook이 필요하면 `npm run storybook`으로 시작한다.
 
 ## 변경 작업의 완료 기준
@@ -87,16 +93,17 @@ Storybook 10.6의 Vitest addon은 현재 Vitest 5와 peer 범위가 맞지 않�
 6. 의미·동작·props가 바뀌면 소비 위치와 story를 함께 수정한다. 이전 예시를 남겨 다른 규칙을 가르치지 않는다.
 7. CI 실패는 수정 후 반영한다. 저장소 branch protection의 필수 검사 설정은 별도 저장소 관리 범위이며 이 문서만으로 강제되지 않는다.
 
-## 남은 전환
+## 공통화 유지와 검증 범위
 
-- Stack/Inline/Surface는 새 UI 조립에 쓸 수 있지만 모든 기존 페이지에 적용한 것은 아니다.
-- 텍스트/숫자 입력, Checkbox, 세그먼트 선택 일부는 페이지 JSX와 공통 CSS에 남아 있다.
-- 자산·카드/통장·통계·계획·데이터 관리 전체 화면과 폼은 API 결합을 분리한 뒤 별도 화면 명세로 확장해야 한다.
-- `styles.css`/`design-system.css`의 기존 오버라이드는 일괄 삭제하지 않았다. 화면을 전환할 때 해당 규칙을 소유 컴포넌트로 이동하고 중복을 정리한다.
-- 과거 브랜드 보드는 시각 참고 자료다. 현재 컴포넌트의 동작·상태 기준은 Storybook과 실제 앱 소스다.
+`check:ui-spec`은 다음을 검사한다.
 
-## 이번 변경의 로컬 검증
+- 컴포넌트와 화면 목록의 소스·스토리가 실제로 존재하는지
+- 새 화면이 화면 목록과 살아있는 명세에 등록되었는지
+- 화면에서 raw button/input/textarea/select/label이나 중복 panel/form/grid 컨테이너를 다시 만들지 않는지
+- Storybook에서 실제 App/세션 훅을 마운트하지 않는지
 
-2026-09-17 macOS·Chromium 기준으로 타입 검사와 제품/Storybook 빌드, 95개 상태 × 320·390·1440px(총 285회)의 조작·접근성·가로 넘침 검사를 통과했다. 기존 단위 검사는 235개 통과·선택적 원본 XLSX 검사 1개 제외, 방 이동·컨트롤·모바일 화면 E2E 17개 통과다. 개발 서버의 시작 화면·버튼 API 문서와 모바일 가계부·헤더도 직접 확인했다.
+native HTML은 공통 기본 요소 내부에서 사용한다. 업무별 표·달력·차트·내비게이션 구조는 전용 패턴으로 유지한다. `styles.css`/`design-system.css`의 모든 기존 선언을 지웠다는 의미는 아니다. 공통 구조 규칙은 `ui/`에, 업무별 배치 규칙은 각 화면 CSS에 둔다.
 
-검사 중 발견한 빈 선택 목록의 ARIA 역할, 날짜/월 필수 입력 안내, 색상 입력의 첫 편집 초기화 문제를 실제 공통 컴포넌트에서 수정했다. CI 설정 추가는 원격 실행 성공을 의미하지 않으므로 실제 실행 결과는 해당 커밋의 GitHub Actions 기록으로 확인한다.
+CI는 타입·235개 단위 테스트, 제품과 Storybook 빌드, 모든 story의 320/390/1440px 검사, 전체 앱 E2E를 실행한다. 결과는 비밀값 없는 정적 artifact로 남기며 운영 배포는 별도다. 이 구성 자체가 GitHub branch protection을 설정하지는 않는다.
+
+이번 점검에서 발견한 문제, 검증 결과와 범위는 [전체 UI/UX 점검 기록](./ui-ux-review.md)을 참고한다.

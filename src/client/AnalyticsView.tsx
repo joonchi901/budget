@@ -1,3 +1,14 @@
+import {
+  Button,
+  Field,
+  FormBody,
+  Grid,
+  Panel,
+  SegmentedControl,
+  Stack,
+  TableScroll,
+  Toolbar,
+} from './ui';
 import { ALL_LEDGERS_ID, ledgerDescendantIds, ledgerPath } from '../shared/hierarchy';
 import { Tooltip } from './Tooltip';
 import { SelectField, SelectOption } from './SelectField';
@@ -212,14 +223,15 @@ export default function AnalyticsView({
   const filtersChanged = mode !== 'month' || !includeDescendants || activeFilters.length > 0;
   function amountButton(value: number, title: string, transactions: Transaction[]) {
     return (
-      <button
+      <Button
+        variant="text"
         type="button"
-        className="text-button analysis-amount"
+        className="analysis-amount"
         aria-label={`${title} ${won(value)}원 거래 보기`}
         onClick={() => setDetail({ title, rows: transactions })}
       >
         {won(value)}
-      </button>
+      </Button>
     );
   }
   function annualCells(optionId: string | null, name: string, result: typeof matrix.overall) {
@@ -268,7 +280,7 @@ export default function AnalyticsView({
         </Empty>
       );
     return (
-      <div
+      <TableScroll
         className="management-table analysis-transaction-table"
         tabIndex={0}
         role="region"
@@ -317,26 +329,26 @@ export default function AnalyticsView({
                 </td>
                 <td>
                   {onEdit && (
-                    <button
-                      className="text-button"
+                    <Button
+                      variant="text"
                       onClick={() => {
                         setDetail(null);
                         onEdit(data.transactions.find((t) => t.id === tx.id)!);
                       }}
                     >
                       열기
-                    </button>
+                    </Button>
                   )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
     );
   }
   return (
-    <div className="management-stack analysis-page">
+    <Stack gap={6} className="management-stack analysis-page">
       <section className="analysis-overview" aria-label="선택 기간 요약">
         <div className="analysis-overview-heading">
           <div>
@@ -349,7 +361,8 @@ export default function AnalyticsView({
               {period.startDate} ~ {period.endDate}
             </p>
           </div>
-          <button
+          <Button
+            variant="plain"
             type="button"
             className="analysis-export"
             aria-label="CSV 내보내기"
@@ -363,9 +376,14 @@ export default function AnalyticsView({
           >
             <Download size={17} aria-hidden="true" />
             CSV 내보내기
-          </button>
+          </Button>
         </div>
-        <div className={`analysis-summary-cards${asset ? ' has-asset' : ''}`}>
+        <Grid
+          columns={asset ? 4 : 3}
+          mobileColumns={1}
+          gap={4}
+          className={`analysis-summary-cards${asset ? ' has-asset' : ''}`}
+        >
           <Stat
             label="선택한 기록의 지출"
             amount={sum.expense}
@@ -396,7 +414,7 @@ export default function AnalyticsView({
               hint={asset ? '해당 자산 배분액만 합산' : '자산을 선택하면 표시'}
             />
           )}
-        </div>
+        </Grid>
         <div className="analysis-overview-foot">
           <span>
             가구 저축률{' '}
@@ -406,12 +424,12 @@ export default function AnalyticsView({
             <span className="analysis-foot-separator">·</span>
             순저축과 저축률은 가계부·거래 필터와 별도로 가구 전체를 집계해요
           </span>
-          <button type="button" onClick={() => setSection('transactions')}>
+          <Button variant="plain" type="button" onClick={() => setSection('transactions')}>
             선택한 거래 {rows.length}건<ArrowRight size={16} aria-hidden="true" />
-          </button>
+          </Button>
         </div>
       </section>
-      <section className="panel management-panel analysis-controls" aria-label="분석 조회 조건">
+      <Panel className="management-panel analysis-controls" aria-label="분석 조회 조건">
         <div className="analysis-controls-heading">
           <div>
             <h2>조회 조건</h2>
@@ -422,14 +440,15 @@ export default function AnalyticsView({
             </p>
           </div>
           <Tooltip content="현재 가계부의 선택 월로 돌아가고, 모든 추가 조건을 해제해요.">
-            <button
+            <Button
+              variant="text"
               type="button"
-              className="text-button analysis-reset"
+              className="analysis-reset"
               disabled={!filtersChanged}
               onClick={resetFilters}
             >
               모두 초기화
-            </button>
+            </Button>
           </Tooltip>
         </div>
         <div className="management-filters analysis-basic-filters">
@@ -439,7 +458,7 @@ export default function AnalyticsView({
               <strong>{ledgerId === ALL_LEDGERS_ID ? '전체 가계부' : ledger?.name}</strong>
             </div>
           ) : (
-            <label>
+            <Field>
               가계부
               <SelectField
                 aria-label="분석할 가계부"
@@ -457,9 +476,9 @@ export default function AnalyticsView({
                   </SelectOption>
                 ))}
               </SelectField>
-            </label>
+            </Field>
           )}
-          <label>
+          <Field>
             조회 범위
             <SelectField value={mode} onValueChange={(value) => setMode(value)}>
               <SelectOption value="month">선택 월</SelectOption>
@@ -467,9 +486,9 @@ export default function AnalyticsView({
               <SelectOption value="period">가계부 설정 기간</SelectOption>
               <SelectOption value="range">직접 기간</SelectOption>
             </SelectField>
-          </label>
+          </Field>
           {ledgerId !== ALL_LEDGERS_ID && (
-            <label>
+            <Field>
               조회 대상
               <SelectField
                 value={includeDescendants ? 'descendants' : 'self'}
@@ -481,18 +500,18 @@ export default function AnalyticsView({
                 <SelectOption value="descendants">하위 가계부 포함</SelectOption>
                 <SelectOption value="self">이 가계부만</SelectOption>
               </SelectField>
-            </label>
+            </Field>
           )}
           {mode === 'range' && (
             <>
-              <label>
+              <Field>
                 통계 시작일
                 <DateField value={start} onValueChange={(value) => setStart(value)} />
-              </label>
-              <label>
+              </Field>
+              <Field>
                 통계 종료일
                 <DateField value={end} onValueChange={(value) => setEnd(value)} />
-              </label>
+              </Field>
             </>
           )}
         </div>
@@ -529,7 +548,7 @@ export default function AnalyticsView({
           <p className="analysis-detail-hint">필터를 접어도 선택한 조건은 계속 적용돼요.</p>
           <div className="management-filters analysis-detail-fields">
             {(ledgerId === ALL_LEDGERS_ID || includeDescendants) && (
-              <label>
+              <Field>
                 거래 출처
                 <SelectField value={sourceId} onValueChange={(value) => setSourceLedgerId(value)}>
                   <SelectOption value="">조회 대상 전체</SelectOption>
@@ -541,9 +560,9 @@ export default function AnalyticsView({
                     </SelectOption>
                   ))}
                 </SelectField>
-              </label>
+              </Field>
             )}
-            <label>
+            <Field>
               귀속
               <SelectField value={owner} onValueChange={(value) => setOwner(value)}>
                 <SelectOption value="">전체</SelectOption>
@@ -553,8 +572,8 @@ export default function AnalyticsView({
                   </SelectOption>
                 ))}
               </SelectField>
-            </label>
-            <label>
+            </Field>
+            <Field>
               결제수단
               <SelectField value={payment} onValueChange={(value) => setPayment(value)}>
                 <SelectOption value="">전체</SelectOption>
@@ -565,8 +584,8 @@ export default function AnalyticsView({
                   </SelectOption>
                 ))}
               </SelectField>
-            </label>
-            <label>
+            </Field>
+            <Field>
               연결 자산
               <SelectField value={asset} onValueChange={(value) => setAsset(value)}>
                 <SelectOption value="">전체</SelectOption>
@@ -576,15 +595,15 @@ export default function AnalyticsView({
                   </SelectOption>
                 ))}
               </SelectField>
-            </label>
-            <label>
+            </Field>
+            <Field>
               거래 종류
               <SelectField value={type} onValueChange={(value) => setType(value)}>
                 <SelectOption value="">수입과 지출</SelectOption>
                 <SelectOption value="income">수입</SelectOption>
                 <SelectOption value="expense">지출</SelectOption>
               </SelectField>
-            </label>
+            </Field>
           </div>
           <div className="management-tags">
             {groups.map((g) => (
@@ -594,7 +613,8 @@ export default function AnalyticsView({
                   {data.tags
                     .filter((t) => t.groupId === g.id)
                     .map((t) => (
-                      <button
+                      <Button
+                        variant="plain"
                         type="button"
                         key={t.id}
                         className={`tag-filter ${selected.includes(t.id) ? 'active' : ''}`}
@@ -618,7 +638,7 @@ export default function AnalyticsView({
                           aria-hidden="true"
                           className={`tag-filter-check ${selected.includes(t.id) ? 'selected' : ''}`}
                         />
-                      </button>
+                      </Button>
                     ))}
                 </div>
               </fieldset>
@@ -626,15 +646,16 @@ export default function AnalyticsView({
           </div>
           <div className="analysis-filter-footer">
             <span>같은 유형은 하나라도, 다른 유형은 모두 일치하는 기록을 찾아요.</span>
-            <button type="button" className="text-button" onClick={() => setSelected([])}>
+            <Button variant="text" type="button" onClick={() => setSelected([])}>
               태그 선택 초기화
-            </button>
+            </Button>
           </div>
         </details>
         {activeFilters.length > 0 && (
           <div className="analysis-active-filters" aria-label="적용 중인 필터">
             {activeFilters.map((item) => (
-              <button
+              <Button
+                variant="plain"
                 type="button"
                 key={item.id}
                 onClick={item.remove}
@@ -642,11 +663,11 @@ export default function AnalyticsView({
               >
                 <span>{item.tagId ? tagLabel(item.tagId, item.label) : item.label}</span>
                 <X size={13} aria-hidden="true" />
-              </button>
+              </Button>
             ))}
           </div>
         )}
-      </section>
+      </Panel>
       {valid && rows.length === 0 && (
         <section className="analysis-empty-result" aria-label="빈 조회 결과">
           <div>
@@ -656,34 +677,27 @@ export default function AnalyticsView({
             </p>
           </div>
           {filtersChanged && (
-            <button type="button" className="secondary" onClick={resetFilters}>
+            <Button variant="secondary" type="button" onClick={resetFilters}>
               조회 조건 초기화
-            </button>
+            </Button>
           )}
         </section>
       )}
-      <div className="analysis-section-nav" role="group" aria-label="분석 보기">
-        {(
-          [
-            { id: 'flow', label: '소비 흐름' },
-            { id: 'category', label: '분류별' },
-            { id: 'sources', label: '가계부·결제수단' },
-            { id: 'transactions', label: '거래 내역' },
-          ] as const
-        ).map((item) => (
-          <button
-            type="button"
-            key={item.id}
-            aria-pressed={section === item.id}
-            onClick={() => setSection(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl<typeof section>
+        className="analysis-section-nav"
+        aria-label="분석 보기"
+        value={section}
+        onValueChange={setSection}
+        options={[
+          { value: 'flow', label: '소비 흐름' },
+          { value: 'category', label: '분류별' },
+          { value: 'sources', label: '가계부·결제수단' },
+          { value: 'transactions', label: '거래 내역' },
+        ]}
+      />
       {section === 'flow' && (
         <>
-          <section className="panel management-panel">
+          <Panel className="management-panel">
             <h2>{year}년 월별 흐름</h2>
             <p className="analysis-range-note">
               연간 비교 · 위에서 선택한 기간과 별도로 {year}년의 12개월을 보여줘요. 수입·지출에는
@@ -719,7 +733,8 @@ export default function AnalyticsView({
                     const summary = `${row.month} 수입 ${won(row.income)}원, 지출 ${won(row.expense)}원, 가구 순저축 ${won(row.savings)}원`;
                     return (
                       <Tooltip content={summary} key={row.month}>
-                        <button
+                        <Button
+                          variant="plain"
                           type="button"
                           className="analysis-flow-month"
                           aria-label={`${summary}. 이 기간 거래 보기`}
@@ -759,7 +774,7 @@ export default function AnalyticsView({
                             })}
                           </span>
                           <small>{Number(row.month.slice(5))}월</small>
-                        </button>
+                        </Button>
                       </Tooltip>
                     );
                   })}
@@ -774,7 +789,7 @@ export default function AnalyticsView({
                 월별 금액 자세히 보기
                 <ChevronDown size={18} aria-hidden="true" />
               </summary>
-              <div
+              <TableScroll
                 className="management-table"
                 tabIndex={0}
                 role="region"
@@ -811,10 +826,10 @@ export default function AnalyticsView({
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </TableScroll>
             </details>
-          </section>
-          <section className="panel management-panel">
+          </Panel>
+          <Panel className="management-panel">
             <h2>하루하루 소비 기록</h2>
             <p className="analysis-range-note">
               선택 기간 · {period.startDate} ~ {period.endDate}
@@ -827,7 +842,8 @@ export default function AnalyticsView({
             {daily.length <= 62 ? (
               <div className="management-calendar">
                 {daily.map((d) => (
-                  <button
+                  <Button
+                    variant="plain"
                     className={d.variableExpense === 0 && d.date <= today ? 'no-spend' : ''}
                     key={d.date}
                     onClick={() =>
@@ -839,24 +855,24 @@ export default function AnalyticsView({
                       {d.expense ? `${won(d.expense)}원` : d.date > today ? '예정' : '무지출'}
                     </span>
                     <small>누적 {won(d.cumulative)}</small>
-                  </button>
+                  </Button>
                 ))}
               </div>
             ) : (
               <p>월별로 조회하면 일별 달력이 보여요.</p>
             )}
-          </section>
+          </Panel>
         </>
       )}
       {section === 'category' && (
         <>
-          <section className="panel management-panel">
-            <div className="section-heading">
+          <Panel className="management-panel">
+            <Toolbar>
               <div>
                 <span className="analysis-eyebrow">선택한 기간</span>
                 <h2>어디에 얼마나 썼을까요?</h2>
               </div>
-              <label>
+              <Field>
                 집계할 태그 유형
                 <SelectField value={groupId} onValueChange={(value) => setGroup(value)}>
                   {groups.map((g) => (
@@ -865,12 +881,12 @@ export default function AnalyticsView({
                     </SelectOption>
                   ))}
                 </SelectField>
-              </label>
-            </div>
+              </Field>
+            </Toolbar>
             <p className="small muted">
               금액을 누르면 해당 거래를 볼 수 있어요. 여러 옵션이 붙은 거래는 각 항목에 표시해요.
             </p>
-            <div
+            <TableScroll
               className="management-table analysis-category-table"
               tabIndex={0}
               role="region"
@@ -891,8 +907,8 @@ export default function AnalyticsView({
                       <td>{tagLabel(r.id, r.name)}</td>
                       <td>{r.count}</td>
                       <td>
-                        <button
-                          className="text-button"
+                        <Button
+                          variant="text"
                           onClick={() =>
                             setDetail({
                               title: `${r.name} 수입`,
@@ -910,11 +926,11 @@ export default function AnalyticsView({
                           }
                         >
                           {won(r.income)}
-                        </button>
+                        </Button>
                       </td>
                       <td>
-                        <button
-                          className="text-button"
+                        <Button
+                          variant="text"
                           onClick={() =>
                             setDetail({
                               title: `${r.name} 지출`,
@@ -932,15 +948,15 @@ export default function AnalyticsView({
                           }
                         >
                           {won(r.expense)}
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          </section>
-          <details className="panel management-panel analysis-expander">
+            </TableScroll>
+          </Panel>
+          <Panel as="details" className="management-panel analysis-expander">
             <summary>
               <span>
                 <strong>{year}년 월별 상세표</strong>
@@ -949,9 +965,9 @@ export default function AnalyticsView({
               <ChevronDown size={20} aria-hidden="true" />
             </summary>
             <div className="analysis-expander-content">
-              <div className="section-heading">
+              <Toolbar>
                 <h3>{year}년 분류별 월간 상세</h3>
-                <label>
+                <Field>
                   연간 상세 금액
                   <SelectField
                     value={metric}
@@ -961,8 +977,8 @@ export default function AnalyticsView({
                     <SelectOption value="expense">지출</SelectOption>
                     <SelectOption value="income">수입</SelectOption>
                   </SelectField>
-                </label>
-              </div>
+                </Field>
+              </Toolbar>
               <p className="small muted">
                 {groups.find((item) => item.id === groupId)?.name || '미분류'} ·{' '}
                 {matrix.periods[0].startDate} ~ {matrix.periods[11].endDate}. 위의 조회 범위와
@@ -973,7 +989,7 @@ export default function AnalyticsView({
                 계산해요. 경과월 평균은 {today}까지의 금액을 시작한 {matrix.elapsedPeriods}개
                 회계기간으로 나누며 진행 중인 기간도 포함해요.
               </p>
-              <div
+              <TableScroll
                 className="management-table analysis-matrix"
                 tabIndex={0}
                 role="region"
@@ -1009,23 +1025,23 @@ export default function AnalyticsView({
                     </tr>
                   </tfoot>
                 </table>
-              </div>
+              </TableScroll>
               <p className="small muted">
                 표를 가로로 움직이면 12개월 전체와 연간 합계·경과월 평균을 볼 수 있어요.
               </p>
             </div>
-          </details>
+          </Panel>
         </>
       )}
       {section === 'sources' && (
         <>
-          <section className="panel management-panel">
+          <Panel className="management-panel">
             <h2>가계부별 사용액과 비중</h2>
             <p className="small muted">
               {period.startDate} ~ {period.endDate} · 선택한 기록의 원본 가계부별 지출 비중이에요.
               연결된 보관 가계부도 포함해요.
             </p>
-            <div
+            <TableScroll
               className="management-table analysis-ledgers"
               tabIndex={0}
               role="region"
@@ -1088,15 +1104,15 @@ export default function AnalyticsView({
                   </tr>
                 </tfoot>
               </table>
-            </div>
-          </section>
-          <section className="panel management-panel">
+            </TableScroll>
+          </Panel>
+          <Panel className="management-panel">
             <h2>결제수단별 내역</h2>
             <p className="small muted">
               {period.startDate} ~ {period.endDate} · 선택한 조회 조건을 적용해요. 금액과 건수를
               누르면 거래를 확인할 수 있어요.
             </p>
-            <div
+            <TableScroll
               className="management-table analysis-payments"
               tabIndex={0}
               role="region"
@@ -1118,16 +1134,17 @@ export default function AnalyticsView({
                       <tr key={paymentRow.id ?? UNASSIGNED_PAYMENT}>
                         <th scope="row">{paymentRow.name}</th>
                         <td>
-                          <button
+                          <Button
+                            variant="text"
                             type="button"
-                            className="text-button analysis-amount"
+                            className="analysis-amount"
                             aria-label={`${paymentRow.name} ${paymentRow.count}건 거래 보기`}
                             onClick={() =>
                               setDetail({ title: `${paymentRow.name} 전체 거래`, rows: matching })
                             }
                           >
                             {paymentRow.count}건
-                          </button>
+                          </Button>
                         </td>
                         <td>
                           {amountButton(
@@ -1156,31 +1173,31 @@ export default function AnalyticsView({
                   </tr>
                 </tfoot>
               </table>
-            </div>
-          </section>
+            </TableScroll>
+          </Panel>
         </>
       )}
       {section === 'transactions' && (
-        <section className="panel management-panel">
-          <div className="section-heading">
+        <Panel className="management-panel">
+          <Toolbar>
             <h2>선택한 거래 {rows.length}건</h2>
             <span className="analysis-eyebrow">
               {period.startDate} ~ {period.endDate}
             </span>
-          </div>
+          </Toolbar>
           {table(rows)}
-        </section>
+        </Panel>
       )}
       {detail && (
         <Dialog title={detail.title} onClose={() => setDetail(null)}>
-          <div className="form-body analysis-detail-body">
+          <FormBody className="analysis-detail-body">
             <p className="analysis-detail-caption">
               {detail.rows.length}건 · 좁은 화면에서는 표를 가로로 움직여 원본을 열 수 있어요.
             </p>
             {table(detail.rows)}
-          </div>
+          </FormBody>
         </Dialog>
       )}
-    </div>
+    </Stack>
   );
 }

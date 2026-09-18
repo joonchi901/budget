@@ -1,6 +1,8 @@
+import { TableScroll, Panel, Button, Field, FormGrid, Input, Checkbox } from './ui';
 import { SelectField, SelectOption, SelectGroup } from './SelectField';
 import { FileField } from './FileField';
-import { useRef, useState } from 'react';
+import { DateField } from './DateFields';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { UgaIcon } from './brand/Uga';
 import type { Bootstrap } from '../shared/types';
 import type { BudgetBackup, RestorePreview } from '../shared/data';
@@ -20,8 +22,15 @@ interface Props {
   onChanged(): Promise<void>;
   onNotice(message: string): void;
   onOpenLedger?(id: string): void;
+  onPendingChange?(pending: boolean): void;
 }
-export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedger }: Props) {
+export default function ExcelImportView({
+  data,
+  onChanged,
+  onNotice,
+  onOpenLedger,
+  onPendingChange,
+}: Props) {
   const isAdmin = data.user.role === 'admin';
   const [book, setBook] = useState<Workbook | null>(null),
     [fileName, setFileName] = useState('');
@@ -48,6 +57,10 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
     [uncertain, setUncertain] = useState(false);
   const pending = useRef<Record<string, unknown> | null>(null);
   useUnsavedGuard(busy || uncertain);
+  useLayoutEffect(() => {
+    onPendingChange?.(busy || uncertain);
+  }, [busy, uncertain, onPendingChange]);
+  useLayoutEffect(() => () => onPendingChange?.(false), [onPendingChange]);
   const rows = book ? originalTransactions(book) : [];
   const effectiveRows = rows.map((row) => ({ ...row, ...corrections[row.rowId] }));
   const management = book ? extractWorkbookManagement(book) : null;
@@ -73,9 +86,12 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
     if (!file) return;
     clearPreview();
     setBook(null);
+    setFileName('');
+    setImportedLedgerId(null);
     sourceBytes.current = null;
     setBusy(true);
     try {
+      if (file.size > 20_000_000) throw new Error('엑셀 파일은 20MB 이하로 선택해 주세요.');
       const bytes = new Uint8Array(await file.arrayBuffer());
       const value = readXlsx(bytes);
       if (!value.sheets.some((s) => s.name === '설정'))
@@ -89,7 +105,12 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
       setSavings({});
       setReserve({});
     } catch (e) {
-      setError((e as Error).message);
+      const message = (e as Error).message;
+      setError(
+        /[가-힣]/.test(message)
+          ? message
+          : '엑셀 파일을 읽지 못했어요. 파일 형식과 손상 여부를 확인해 주세요.',
+      );
     } finally {
       setBusy(false);
     }
@@ -134,7 +155,7 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
     }
   }
   async function apply() {
-    if (busy || !isAdmin) return;
+    if (busy || (!isAdmin && !pending.current)) return;
     if (!pending.current && preview && confirmed && !preview.server.issues.length) {
       pendingLedgerId.current = preview.local.ledgerId;
       pending.current = {
@@ -174,7 +195,7 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
     }
   }
   return (
-    <section className="panel data-panel" aria-label="엑셀 가져오기">
+    <Panel className="data-panel" aria-label="엑셀 가져오기">
       <h2>
         <UgaIcon name="data" size={24} /> 기존 엑셀 가져오기
       </h2>
@@ -184,9 +205,9 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
       </p>
       {importedLedgerId && onOpenLedger && (
         <div className="data-actions">
-          <button className="primary" onClick={() => onOpenLedger(importedLedgerId)}>
+          <Button variant="primary" onClick={() => onOpenLedger(importedLedgerId)}>
             가져온 가계부 보기
-          </button>
+          </Button>
           <span className="small muted">하위 가계부를 포함해 전체 기간의 기록을 보여줘요.</span>
         </div>
       )}
@@ -198,9 +219,9 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
       {uncertain && (
         <div className="alert">
           반영 결과를 아직 확인하지 못했어요.{' '}
-          <button disabled={busy} onClick={() => void apply()}>
+          <Button variant="plain" disabled={busy} onClick={() => void apply()}>
             같은 요청으로 결과 확인
-          </button>
+          </Button>
         </div>
       )}
       {!isAdmin && (
@@ -210,20 +231,20 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
         </p>
       )}
       <fieldset disabled={busy || uncertain || !isAdmin}>
-        <label>
+        <Field>
           원본 가계부 XLSX
           <FileField accept=".xlsx" onChange={(e) => void load(e.target.files?.[0])} />
-        </label>
+        </Field>
         {book && (
           <>
             <p>
               <strong>{fileName}</strong> · {book.sheets.length}개 시트 · 월별 금액 기록{' '}
               {rows.length}행
             </p>
-            <div className="data-column-mapping">
-              <label>
+            <FormGrid className="data-column-mapping">
+              <Field>
                 원본 식별자
-                <input
+                <Input
                   value={sourceId}
                   maxLength={160}
                   onChange={(e) => {
@@ -234,8 +255,8 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                 <small>
                   같은 원본을 다시 가져올 때 이 값을 유지하면 원본 위치로 중복을 확인해요.
                 </small>
-              </label>
-              <label>
+              </Field>
+              <Field>
                 가져올 가계부
                 <SelectField
                   value={ledgerId}
@@ -253,12 +274,12 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                       </SelectOption>
                     ))}
                 </SelectField>
-              </label>
+              </Field>
               {ledgerId === '@new' && (
                 <>
-                  <label>
+                  <Field>
                     새 가계부 이름
-                    <input
+                    <Input
                       value={newLedgerName}
                       maxLength={80}
                       onChange={(e) => {
@@ -266,8 +287,8 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                         clearPreview();
                       }}
                     />
-                  </label>
-                  <label>
+                  </Field>
+                  <Field>
                     가계부 구성
                     <SelectField
                       value={ledgerMode}
@@ -282,19 +303,19 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                     <small>
                       월별 구성은 1월부터 12월까지 만들고 원본 시트별로 기록을 배치해요.
                     </small>
-                  </label>
+                  </Field>
                 </>
               )}
-            </div>
+            </FormGrid>
             <details open>
               <summary>결제수단 연결 ({names.length})</summary>
               <p className="small muted">
                 원본 카드 관리와 이름이 정확히 일치하면 연결해요. 다른 이름은 기존 항목 또는 새
                 항목의 종류를 선택할 수 있어요. 연결하지 않아도 결제수단 미지정으로 거래를 가져와요.
               </p>
-              <div className="data-column-mapping">
+              <FormGrid className="data-column-mapping">
                 {names.map((name) => (
-                  <label key={name}>
+                  <Field key={name}>
                     원본: {name || '(미기록)'}
                     <SelectField
                       aria-label={`엑셀 결제수단 ${name || '미기록'}`}
@@ -331,9 +352,9 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                         <SelectOption value="@new:cash">현금</SelectOption>
                       </SelectGroup>
                     </SelectField>
-                  </label>
+                  </Field>
                 ))}
-              </div>
+              </FormGrid>
             </details>
             {invalidRows.length > 0 && (
               <details>
@@ -343,7 +364,7 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                   거래를 가져올 수 있어요. 날짜·금액·수입/지출 구분이 불명확한 행은 검토함에서
                   확인해 주세요.
                 </p>
-                <div className="data-table-wrap">
+                <TableScroll aria-label="불완전한 월별 기록 보완" className="data-table-wrap">
                   <table>
                     <thead>
                       <tr>
@@ -364,18 +385,32 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                             <td>{won(row.amount)}원</td>
                             {(['date', 'description', 'major', 'minor'] as const).map((key) => (
                               <td key={key}>
-                                <input
-                                  aria-label={`${raw.rowId} ${key}`}
-                                  type={key === 'date' ? 'date' : 'text'}
-                                  value={row[key]}
-                                  onChange={(e) => {
-                                    setCorrections((old) => ({
-                                      ...old,
-                                      [raw.rowId]: { ...old[raw.rowId], [key]: e.target.value },
-                                    }));
-                                    clearPreview();
-                                  }}
-                                />
+                                {key === 'date' ? (
+                                  <DateField
+                                    aria-label={`${raw.rowId} 날짜`}
+                                    value={row.date}
+                                    onValueChange={(value) => {
+                                      setCorrections((old) => ({
+                                        ...old,
+                                        [raw.rowId]: { ...old[raw.rowId], date: value },
+                                      }));
+                                      clearPreview();
+                                    }}
+                                  />
+                                ) : (
+                                  <Input
+                                    aria-label={`${raw.rowId} ${{ description: '내역', major: '분류', minor: '내역 분류' }[key]}`}
+                                    type="text"
+                                    value={row[key]}
+                                    onChange={(e) => {
+                                      setCorrections((old) => ({
+                                        ...old,
+                                        [raw.rowId]: { ...old[raw.rowId], [key]: e.target.value },
+                                      }));
+                                      clearPreview();
+                                    }}
+                                  />
+                                )}
                               </td>
                             ))}
                           </tr>
@@ -383,7 +418,7 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                       })}
                     </tbody>
                   </table>
-                </div>
+                </TableScroll>
               </details>
             )}
             {savingNames.length > 0 && (
@@ -397,10 +432,10 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                   수입·지출을 만들지 않아요. 원본 관측일 이전 잔액은 임의로 추정하지 않아요.
                 </p>
                 {savingNames.map((name) => (
-                  <div className="data-column-mapping" key={name}>
+                  <FormGrid className="data-column-mapping" key={name}>
                     <strong>{name}</strong>
                     {(['fromAssetId', 'toAssetId'] as const).map((key) => (
-                      <label key={key}>
+                      <Field key={key}>
                         {key === 'fromAssetId' ? '출금 자산' : '입금 자산'}
                         <SelectField
                           aria-label={`저축 ${name} ${key}`}
@@ -423,9 +458,9 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                             </SelectOption>
                           ))}
                         </SelectField>
-                      </label>
+                      </Field>
                     ))}
-                  </div>
+                  </FormGrid>
                 ))}
               </details>
             )}
@@ -437,7 +472,7 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                   배분을 지정해 주세요. 별도 지출이 확실한 행만 자산과 결제수단을 선택해요. 입금의
                   성격은 검토함에서 확인할 수 있어요.
                 </p>
-                <div className="data-table-wrap">
+                <TableScroll aria-label="예비금 지출 중복 확인" className="data-table-wrap">
                   <table>
                     <thead>
                       <tr>
@@ -516,17 +551,17 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </TableScroll>
               </details>
             )}
             <div className="data-actions">
-              <button
-                className="secondary"
+              <Button
+                variant="secondary"
                 disabled={!sourceId.trim() || (ledgerId === '@new' && !newLedgerName.trim())}
                 onClick={() => void inspect()}
               >
                 {busy ? '대조 중…' : '엑셀 반영 미리보기'}
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -561,7 +596,7 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
           {preview.local.assetBalances.length > 0 && (
             <details>
               <summary>새 자산의 기준 잔액과 관측 결과</summary>
-              <div className="data-table-wrap">
+              <TableScroll aria-label="자산 기준 잔액과 관측 결과" className="data-table-wrap">
                 <table>
                   <thead>
                     <tr>
@@ -582,13 +617,13 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </TableScroll>
             </details>
           )}
           {preview.local.assetOperations.length > 0 && (
             <details>
               <summary>자산 변동 상세 확인</summary>
-              <div className="data-table-wrap">
+              <TableScroll aria-label="자산 변동 상세" className="data-table-wrap">
                 <table>
                   <thead>
                     <tr>
@@ -622,10 +657,10 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                     })}
                   </tbody>
                 </table>
-              </div>
+              </TableScroll>
             </details>
           )}
-          <div className="data-table-wrap">
+          <TableScroll aria-label="월별 거래 합계" className="data-table-wrap">
             <table>
               <thead>
                 <tr>
@@ -646,7 +681,7 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
           {preview.server.issues.length > 0 && (
             <ul className="data-errors">
               {preview.server.issues.map((v, i) => (
@@ -664,24 +699,34 @@ export default function ExcelImportView({ data, onChanged, onNotice, onOpenLedge
               ))}
             </ul>
           </details>
-          <label className="checkbox">
-            <input
-              type="checkbox"
+          <Field className="checkbox">
+            <Checkbox
               checked={confirmed}
               disabled={busy || uncertain}
               onChange={(e) => setConfirmed(e.target.checked)}
             />
             금액·연결과 미확정 자료의 검토함 보존을 확인했어요.
-          </label>
-          <button
-            className="primary"
-            disabled={busy || uncertain || !confirmed || preview.server.issues.length > 0}
+          </Field>
+          <Button
+            variant="primary"
+            disabled={
+              busy ||
+              uncertain ||
+              !confirmed ||
+              preview.server.issues.length > 0 ||
+              preview.server.revision !== data.revision
+            }
             onClick={() => void apply()}
           >
             엑셀 자료 반영
-          </button>
+          </Button>
+          {preview.server.revision !== data.revision && (
+            <p className="alert" role="status">
+              다른 변경이 반영되었어요. 엑셀 반영 미리보기를 다시 확인해 주세요.
+            </p>
+          )}
         </div>
       )}
-    </section>
+    </Panel>
   );
 }

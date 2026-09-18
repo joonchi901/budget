@@ -33,7 +33,7 @@ const config: TestRunnerConfig = {
       throw new Error(`가로 넘침: 화면 ${overflow.viewport}px / 내용 ${overflow.content}px`);
     }
     if (
-      /roomheader--(root-room|mobile320)|ledgerrooms--(populated|long-names)|guide-.*--overview/.test(
+      /roomheader--(root-room|mobile320)|ledgerrooms--(populated|long-names)|guide-.*--overview|06-screens-(ledger--populated|transaction--new|session--production|assets--populated|payments--populated|analytics--monthly-flow|planning--budget|tags--configured|data--backup|settings--create-ledger)/.test(
         context.id,
       )
     ) {

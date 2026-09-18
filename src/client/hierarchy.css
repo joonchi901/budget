@@ -213,3 +213,20 @@
 .tree-action-menu button:hover {
   background: var(--canvas);
 }
+
+.member-role-row .member-role-help {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.member-role-row > div,
+.member-role-row > label {
+  min-width: 0;
+}
+.member-role-row strong {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 420px) {
+  .member-role-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

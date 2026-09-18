@@ -177,22 +177,36 @@ html {
 
 @media (max-width: 380px) {
   .transactions tbody tr {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .transactions .description-cell,
-  .transactions .money-cell,
-  .transactions .tags-cell,
-  .transactions .payment-cell,
-  .transactions .owner-cell,
-  .transactions .action-cell {
-    grid-column: 1;
-    grid-row: auto;
+  .transactions .description-cell {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
-
   .transactions .money-cell {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
     text-align: left;
-    margin-block: 4px;
+  }
+  .transactions .tags-cell {
+    grid-column: 1 / -1;
+    grid-row: 4;
+  }
+  .transactions .payment-cell {
+    grid-column: 1;
+    grid-row: 5;
+  }
+  .transactions .owner-cell {
+    grid-column: 1;
+    grid-row: 6;
+  }
+  .transactions .action-cell {
+    grid-column: 2;
+    grid-row: 5 / 7;
   }
 
   .dialog .form-footer > .footer-actions {

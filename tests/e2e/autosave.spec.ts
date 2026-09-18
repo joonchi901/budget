@@ -86,7 +86,10 @@ test('new entry auto-save requires explicit opt-in and valid field exit, then sa
   page,
 }) => {
   await login(page);
-  await page.clock.install();
+  const clockTime = new Date('2026-09-18T09:00:00Z');
+  await page.clock.install({ time: clockTime });
+  // Freeze before input so browser action time cannot cross the 800 ms debounce boundary.
+  await page.clock.pauseAt(new Date(clockTime.getTime() + 60_000));
   const mutations: string[] = [];
   let dropped = false;
   await page.route('**/api/transactions', async (route) => {

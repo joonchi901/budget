@@ -1,3 +1,4 @@
+import { Button, IconButton, Input } from './ui';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { Check, ChevronDown, Plus, Search, X } from 'lucide-react';
 import type { Bootstrap, MutationResult, Tag, TagGroup } from '../shared/types';
@@ -224,7 +225,8 @@ function TagField({
         <div className="tag-field-label-actions">
           <small>{group.selectionMode === 'single' ? '하나 선택' : '여러 개 선택'}</small>
           {selectedTags.length > 0 && (
-            <button
+            <Button
+              variant="plain"
               type="button"
               className="tag-field-clear"
               disabled={disabled || locked}
@@ -232,7 +234,7 @@ function TagField({
               onClick={() => onChange(selected.filter((id) => !tags.some((tag) => tag.id === id)))}
             >
               비우기
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -249,7 +251,8 @@ function TagField({
         }}
         className="tag-popover-shell"
         trigger={(props) => (
-          <button
+          <Button
+            variant="plain"
             {...props}
             ref={(node) => {
               trigger.current = node;
@@ -275,14 +278,14 @@ function TagField({
               )}
             </span>
             {!readonly && <ChevronDown size={15} />}
-          </button>
+          </Button>
         )}
       >
         {() => (
           <div className="tag-popover">
             <div className="tag-search">
               <Search size={16} />
-              <input
+              <Input
                 ref={input}
                 data-autofocus="true"
                 type="search"
@@ -306,15 +309,14 @@ function TagField({
                   }
                 }}
               />
-              <button
+              <IconButton
                 type="button"
-                className="icon-button"
                 aria-label="옵션 선택 닫기"
                 onClick={close}
                 disabled={locked}
               >
                 <X size={16} />
-              </button>
+              </IconButton>
             </div>
             {selectedTags.length > 0 && (
               <div className="tag-selected-options" aria-label={`${group.name} 선택한 옵션`}>
@@ -339,7 +341,8 @@ function TagField({
               className="tag-choice-list"
             >
               {options.map((tag) => (
-                <button
+                <Button
+                  variant="plain"
                   type="button"
                   role="option"
                   aria-selected={selected.includes(tag.id)}
@@ -362,7 +365,7 @@ function TagField({
                   <span className="tag-choice-check" aria-hidden="true">
                     {selected.includes(tag.id) && <Check size={16} />}
                   </span>
-                </button>
+                </Button>
               ))}
               {options.length === 0 && (
                 <p className="tag-no-options">
@@ -371,7 +374,8 @@ function TagField({
               )}
             </div>
             {query.trim() && !exactMatch && (
-              <button
+              <Button
+                variant="plain"
                 type="button"
                 className="tag-create-option"
                 aria-label={`“${query.trim()}” 만들기`}
@@ -381,7 +385,7 @@ function TagField({
                 <Plus size={16} />
                 <span>만들기</span>
                 <TagBadge name={query.trim()} color="#64866f" />
-              </button>
+              </Button>
             )}
             {error && (
               <div className="tag-picker-error" role="alert">
@@ -391,14 +395,14 @@ function TagField({
             {uncertain && (
               <div className="tag-picker-retry">
                 <p>생성 결과를 확인할 때까지 입력을 유지해요.</p>
-                <button
+                <Button
+                  variant="secondary"
                   type="button"
-                  className="secondary"
                   disabled={busy}
                   onClick={() => void create()}
                 >
                   {busy ? '확인 중…' : '생성 결과 다시 확인'}
-                </button>
+                </Button>
               </div>
             )}
             {busy && !uncertain && (

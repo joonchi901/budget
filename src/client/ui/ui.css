@@ -69,3 +69,103 @@
     grid-template-columns: repeat(var(--ui-grid-mobile-columns), minmax(0, 1fr));
   }
 }
+
+/* Form primitives retain native labels, validation and fieldset disabling. */
+:where(.ui-input, .ui-textarea) {
+  max-width: 100%;
+  min-width: 0;
+  font: inherit;
+  color: var(--brand-text);
+}
+:where(.ui-input:not([type='hidden']), .ui-textarea) {
+  border: 1px solid var(--brand-line);
+  border-radius: var(--brand-radius-control);
+  background: var(--brand-surface-subtle);
+  padding: 12px 14px;
+}
+.ui-textarea {
+  resize: vertical;
+  min-height: 100px;
+  line-height: 1.6;
+}
+:where(.ui-checkbox, .ui-radio) {
+  accent-color: var(--brand-primary);
+  flex-shrink: 0;
+}
+.ui-text-field {
+  min-width: 0;
+  display: grid;
+  gap: var(--brand-space-2);
+}
+.ui-text-field > .ui-input {
+  width: 100%;
+  min-height: var(--brand-field-size);
+}
+.ui-field-label {
+  min-width: 0;
+}
+.ui-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--brand-space-4);
+}
+.ui-form-grid > *,
+.ui-form-body,
+.ui-panel {
+  min-width: 0;
+}
+.ui-toolbar {
+  flex-wrap: wrap;
+  gap: var(--brand-space-4);
+}
+.ui-form-footer {
+  flex-wrap: wrap;
+  gap: var(--brand-space-3);
+}
+.form-section {
+  display: grid;
+  gap: var(--brand-space-4);
+  min-width: 0;
+}
+.form-section + .form-section {
+  margin-top: var(--brand-space-2);
+  padding-top: var(--brand-space-6);
+  border-top: 1px solid var(--brand-line);
+}
+.form-section h3 {
+  margin: 0;
+  font-size: var(--brand-font-size-body);
+  color: var(--brand-text);
+}
+.ui-segmented,
+.ui-tabs {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+}
+.ui-segmented > button {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ui-tabs {
+  gap: var(--brand-space-2);
+}
+.ui-tabs > button {
+  min-height: var(--brand-control-size);
+}
+.ui-tabs > button[aria-selected='true'] {
+  color: var(--brand-text);
+  background: var(--brand-accent-soft);
+}
+@media (max-width: 480px) {
+  .ui-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.ui-scroll-region {
+  min-width: 0;
+  max-width: 100%;
+}
+.ui-scroll-region:focus-visible {
+  outline: var(--brand-focus-width) solid var(--brand-focus-ring);
+  outline-offset: calc(-1 * var(--brand-focus-width));
+}

@@ -2120,7 +2120,7 @@ b {
   color: #7e6a9f;
 }
 .owner-badge.u2 {
-  color: #a06477;
+  color: #895264;
 }
 .transactions td {
   font-size: 12px;
@@ -2640,6 +2640,7 @@ b {
   }
   .login-page {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
   }
   .login-art {
     min-height: 270px;
@@ -2693,6 +2694,7 @@ b {
     display: none;
   }
   .login-content {
+    justify-content: flex-start;
     width: 100%;
     max-width: 480px;
     padding: 36px 27px 44px;

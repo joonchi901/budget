@@ -1,3 +1,4 @@
+import { FormBody, Button, Field, Input, FormGrid, Checkbox, FormFooter } from './ui';
 import { ledgerDescendantIds, ledgerPath } from '../shared/hierarchy';
 import { SelectField, SelectOption } from './SelectField';
 import { UgaLedgerIcon, UGA_LEDGER_ICONS } from './brand/Uga';
@@ -65,6 +66,7 @@ export default function LedgerForm({
     ) ?? [];
   async function save(e: FormEvent) {
     e.preventDefault();
+    if (busy || conflict) return;
     if (
       !pending.current &&
       ((!original && !admin) ||
@@ -74,10 +76,18 @@ export default function LedgerForm({
     )
       return;
     setError('');
+    if (!pending.current && !name.trim()) {
+      setError('가계부 이름을 입력해 주세요.');
+      return;
+    }
+    if (!pending.current && start && end && start > end) {
+      setError('종료일은 시작일과 같거나 이후여야 해요.');
+      return;
+    }
     setBusy(true);
     pending.current ??= {
       mutationId: crypto.randomUUID(),
-      name,
+      name: name.trim(),
       icon,
       budget: Number(budget),
       startDate: start || null,
@@ -129,9 +139,10 @@ export default function LedgerForm({
       }
       onClose={onClose}
       locked={busy || uncertain}
+      dirty={formValues !== initialValues.current}
     >
       <form onSubmit={save}>
-        <div className="form-body">
+        <FormBody>
           {error && (
             <div className="alert error" role="alert">
               {error}
@@ -152,28 +163,36 @@ export default function LedgerForm({
                   <li key={ledger.id}>{ledgerPath(data.ledgers, ledger.id)}</li>
                 ))}
               </ul>
-              <button
+              <Button
                 type="button"
-                className="secondary"
+                variant="secondary"
                 onClick={() => {
                   const latest = data.ledgers.find((ledger) => ledger.id === original?.id);
-                  if (original && (parentId || null) === baseline.ledger?.parentId)
+                  const nextInitialValues = JSON.parse(initialValues.current);
+                  if (original && (parentId || null) === baseline.ledger?.parentId) {
                     setParentId(latest?.parentId ?? '');
-                  if (original && archived === baseline.ledger?.archived)
+                    nextInitialValues.parentId = latest?.parentId ?? '';
+                  }
+                  if (original && archived === baseline.ledger?.archived) {
                     setArchived(latest?.archived ?? false);
+                    nextInitialValues.archived = latest?.archived ?? false;
+                  }
+                  // Only server-adopted fields become clean; keep all other local draft baselines.
+                  initialValues.current = JSON.stringify(nextInitialValues);
                   setBaseline({ ledger: latest, hierarchyVersion: data.hierarchyVersion ?? 0 });
                   setConflict(false);
                   setError('');
                 }}
               >
                 최신 설정을 확인했어요
-              </button>
+              </Button>
             </div>
           )}
           <fieldset disabled={busy || uncertain}>
             <div className="emoji-options">
               {UGA_LEDGER_ICONS.map(({ value, label }) => (
-                <button
+                <Button
+                  variant="plain"
                   type="button"
                   aria-label={`${label} 아이콘`}
                   aria-pressed={icon === value}
@@ -182,12 +201,12 @@ export default function LedgerForm({
                   onClick={() => setIcon(value)}
                 >
                   <UgaLedgerIcon value={value} size={30} />
-                </button>
+                </Button>
               ))}
             </div>
-            <label>
+            <Field>
               가계부 이름
-              <input
+              <Input
                 autoFocus
                 required
                 maxLength={60}
@@ -195,10 +214,10 @@ export default function LedgerForm({
                 onChange={(e) => setName(e.target.value)}
                 placeholder="예: 우리의 여름 여행"
               />
-            </label>
-            <label>
+            </Field>
+            <Field>
               전체 예산 (원)
-              <input
+              <Input
                 type="number"
                 min="0"
                 max="1000000000000"
@@ -208,23 +227,23 @@ export default function LedgerForm({
                 onChange={(e) => setBudget(e.target.value)}
                 placeholder="0"
               />
-            </label>
-            <div className="form-grid">
-              <label>
+            </Field>
+            <FormGrid>
+              <Field>
                 시작일 (선택)
                 <DateField value={start} onValueChange={(value) => setStart(value)} />
-              </label>
-              <label>
+              </Field>
+              <Field>
                 종료일 (선택)
                 <DateField
                   min={start || undefined}
                   value={end}
                   onValueChange={(value) => setEnd(value)}
                 />
-              </label>
-            </div>
+              </Field>
+            </FormGrid>
             {admin && (
-              <label>
+              <Field>
                 상위 가계부
                 <SelectField value={parentId} onValueChange={setParentId}>
                   <SelectOption value="">최상위에 두기</SelectOption>
@@ -234,11 +253,11 @@ export default function LedgerForm({
                     </SelectOption>
                   ))}
                 </SelectField>
-              </label>
+              </Field>
             )}
-            <label>
+            <Field>
               월 집계 시작일
-              <input
+              <Input
                 type="number"
                 min="1"
                 max="31"
@@ -246,7 +265,7 @@ export default function LedgerForm({
                 onChange={(e) => setDay(Number(e.target.value))}
                 required
               />
-            </label>
+            </Field>
             <p className="small muted">
               해당 날짜가 없는 달은 다음 달 1일부터 시작해요. 목적 가계부의 전체 기간 예산과 월별
               조회는 구분돼요.
@@ -257,9 +276,8 @@ export default function LedgerForm({
                 <p className="small muted">선택한 태그가 있는 지출은 무지출 달력에서 제외해요.</p>
                 <div className="tag-filter-options">
                   {availableTags.map((t) => (
-                    <label className="checkbox" key={t.id}>
-                      <input
-                        type="checkbox"
+                    <Field className="checkbox" key={t.id}>
+                      <Checkbox
                         checked={fixed.includes(t.id)}
                         onChange={(e) =>
                           setFixed(
@@ -268,7 +286,7 @@ export default function LedgerForm({
                         }
                       />
                       <TagBadge name={t.name} color={t.color} archived={t.archived} />
-                    </label>
+                    </Field>
                   ))}
                 </div>
                 {(parentId || original?.parentId) && (
@@ -288,7 +306,7 @@ export default function LedgerForm({
                         ),
                       )
                       .map((t) => (
-                        <label key={t.id}>
+                        <Field key={t.id}>
                           <span>
                             <TagBadge name={t.name} color={t.color} archived={t.archived} />의 상위
                             분류
@@ -313,31 +331,27 @@ export default function LedgerForm({
                                 </SelectOption>
                               ))}
                           </SelectField>
-                        </label>
+                        </Field>
                       ))}
                   </>
                 )}
               </details>
             )}
             {original && admin && (
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={archived}
-                  onChange={(e) => setArchived(e.target.checked)}
-                />
+              <Field className="checkbox">
+                <Checkbox checked={archived} onChange={(e) => setArchived(e.target.checked)} />
                 가계부 보관 (과거 기록과 하위 구조 유지)
-              </label>
+              </Field>
             )}
             <p className="small muted">
               예산은 이 가계부의 지출 기준이에요. 만들거나 연결해도 자산 금액은 바뀌지 않아요.
             </p>
           </fieldset>
-        </div>
-        <div className="form-footer">
+        </FormBody>
+        <FormFooter>
           <span />
-          <button
-            className="primary"
+          <Button
+            variant="primary"
             type="submit"
             disabled={busy || conflict || (!original && !admin && !uncertain)}
           >
@@ -348,8 +362,8 @@ export default function LedgerForm({
                 : original
                   ? '설정 저장'
                   : '가계부 만들기'}
-          </button>
-        </div>
+          </Button>
+        </FormFooter>
       </form>
     </Dialog>
   );

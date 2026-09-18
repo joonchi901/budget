@@ -1,3 +1,14 @@
+import {
+  Button,
+  Checkbox,
+  CloseButton,
+  Field,
+  FormBody,
+  FormFooter,
+  FormGrid,
+  IconButton,
+  Input,
+} from './ui';
 import { Tooltip } from './Tooltip';
 import { UgaIcon, UgaLedgerIcon, UgaMascot } from './brand/Uga';
 import { SelectField, SelectOption } from './SelectField';
@@ -114,21 +125,22 @@ export default function TagManager({
             태그 유형을 선택하면 옵션을 추가하거나 수정할 수 있어요.
           </span>
         </div>
-        <button
+        <Button
+          variant="primary"
           type="button"
-          className="primary"
           disabled={locked}
           onClick={() => setEditor({ type: 'group' })}
         >
           <Plus size={17} />
           유형 만들기
-        </button>
+        </Button>
       </div>
       {error && (
         <div className="alert error" role="alert">
           {error}
           {!uncertain && (
-            <button
+            <Button
+              variant="plain"
               type="button"
               disabled={busy}
               onClick={() => {
@@ -137,16 +149,16 @@ export default function TagManager({
               }}
             >
               최신 설정 불러오기
-            </button>
+            </Button>
           )}
         </div>
       )}
       {uncertain && (
         <div className="alert">
           <span>저장 결과가 확인되지 않았어요. 같은 요청으로 다시 확인해 주세요.</span>
-          <button type="button" disabled={busy} onClick={() => void mutate()}>
+          <Button variant="plain" type="button" disabled={busy} onClick={() => void mutate()}>
             {busy ? '확인 중…' : '저장 결과 다시 확인'}
-          </button>
+          </Button>
         </div>
       )}
       {message && (
@@ -160,20 +172,20 @@ export default function TagManager({
           <Layers3 size={16} />
           태그 유형 {data.tagGroups.filter((group) => !group.archived).length}개
         </span>
-        <label className="checkbox">
-          <input
-            type="checkbox"
+        <Field className="checkbox">
+          <Checkbox
             checked={showArchived}
             disabled={locked}
             onChange={(event) => setShowArchived(event.target.checked)}
           />
           보관된 항목 보기
-        </label>
+        </Field>
       </div>
       <div className="tag-manager-layout">
         <nav className="tag-group-list" aria-label="태그 유형 목록">
           {groups.map((group) => (
-            <button
+            <Button
+              variant="plain"
               type="button"
               key={group.id}
               disabled={locked}
@@ -196,7 +208,7 @@ export default function TagManager({
                 </small>
               </span>
               <ChevronRight size={15} />
-            </button>
+            </Button>
           ))}
           {groups.length === 0 && (
             <p className="tag-manager-empty">첫 태그 유형을 만들어 보세요.</p>
@@ -217,37 +229,38 @@ export default function TagManager({
                   </span>
                 </div>
                 <div className="tag-detail-actions">
-                  <button
+                  <Button
+                    variant="secondary"
                     type="button"
-                    className="secondary tag-type-settings"
+                    className="tag-type-settings"
                     aria-label={`${active.name} 유형 수정`}
                     disabled={locked}
                     onClick={() => setEditor({ type: 'group', original: active })}
                   >
                     <Pencil size={16} /> 유형 설정
-                  </button>
-                  <button
+                  </Button>
+                  <IconButton
                     type="button"
-                    className="icon-button"
                     aria-label={`${active.name} 유형 ${active.archived ? '복원' : '보관'}`}
                     disabled={locked}
                     onClick={() => patch('tag-groups', active, { archived: !active.archived })}
                   >
                     {active.archived ? <RotateCcw size={17} /> : <Archive size={17} />}
-                  </button>
+                  </IconButton>
                 </div>
               </div>
               <div className="tag-option-heading">
                 <span>옵션 {options.length}개</span>
                 {!active.archived && (
-                  <button
+                  <Button
+                    variant="secondary"
                     type="button"
-                    className="secondary tag-add-option"
+                    className="tag-add-option"
                     disabled={locked}
                     onClick={() => setEditor({ type: 'tag', group: active })}
                   >
                     <Plus size={17} /> 옵션 추가
-                  </button>
+                  </Button>
                 )}
               </div>
               <div className="tag-managed-options">
@@ -269,9 +282,8 @@ export default function TagManager({
                     </div>
                     <div className="tag-option-actions">
                       <Tooltip content="맨 앞으로 이동">
-                        <button
+                        <IconButton
                           type="button"
-                          className="icon-button"
                           disabled={locked || active.archived || index === 0}
                           aria-label={`${tag.name} 맨 앞으로 이동`}
                           onClick={() =>
@@ -279,12 +291,11 @@ export default function TagManager({
                           }
                         >
                           <ChevronsUp size={14} />
-                        </button>
+                        </IconButton>
                       </Tooltip>
                       <Tooltip content="맨 뒤로 이동">
-                        <button
+                        <IconButton
                           type="button"
-                          className="icon-button"
                           disabled={locked || active.archived || index === options.length - 1}
                           aria-label={`${tag.name} 맨 뒤로 이동`}
                           onClick={() =>
@@ -294,26 +305,24 @@ export default function TagManager({
                           }
                         >
                           <ChevronsDown size={14} />
-                        </button>
+                        </IconButton>
                       </Tooltip>
-                      <button
+                      <IconButton
                         type="button"
-                        className="icon-button"
                         disabled={locked || active.archived}
                         aria-label={`${tag.name} 옵션 수정`}
                         onClick={() => setEditor({ type: 'tag', group: active, original: tag })}
                       >
                         <Pencil size={15} />
-                      </button>
-                      <button
+                      </IconButton>
+                      <IconButton
                         type="button"
-                        className="icon-button"
                         disabled={locked || active.archived}
                         aria-label={`${tag.name} 옵션 ${tag.archived ? '복원' : '보관'}`}
                         onClick={() => patch('tags', tag, { archived: !tag.archived })}
                       >
                         {tag.archived ? <RotateCcw size={16} /> : <Archive size={16} />}
-                      </button>
+                      </IconButton>
                     </div>
                   </div>
                 ))}
@@ -410,12 +419,10 @@ function TagEditor({
   const initial = useRef(
     JSON.stringify({ name, selectionMode, appliesTo, ledgerIds, sortOrder, color, parentId }),
   );
-  useUnsavedGuard(
-    busy ||
-      uncertain ||
-      initial.current !==
-        JSON.stringify({ name, selectionMode, appliesTo, ledgerIds, sortOrder, color, parentId }),
-  );
+  const dirty =
+    initial.current !==
+    JSON.stringify({ name, selectionMode, appliesTo, ledgerIds, sortOrder, color, parentId });
+  useUnsavedGuard(busy || uncertain || dirty);
   const locked = busy || uncertain;
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -490,7 +497,19 @@ function TagEditor({
         setSelectionMode(latest.selectionMode);
         setAppliesTo(latest.appliesTo);
         setLedgerIds(latest.ledgerIds);
-      } else setColor(latest.color);
+      } else {
+        setColor(latest.color);
+        setParentId(latest.parentId ?? '');
+      }
+      initial.current = JSON.stringify({
+        name: latest.name,
+        selectionMode: 'selectionMode' in latest ? latest.selectionMode : selectionMode,
+        appliesTo: 'selectionMode' in latest ? latest.appliesTo : appliesTo,
+        ledgerIds: 'selectionMode' in latest ? latest.ledgerIds : ledgerIds,
+        sortOrder: latest.sortOrder,
+        color: 'color' in latest ? latest.color : color,
+        parentId: 'color' in latest ? (latest.parentId ?? '') : parentId,
+      });
       setConflict(false);
       setError('');
     } catch (error) {
@@ -517,9 +536,10 @@ function TagEditor({
       }
       onClose={onClose}
       locked={locked}
+      dirty={dirty}
     >
       <form onSubmit={save}>
-        <div className="form-body">
+        <FormBody>
           {error && (
             <div className="alert error" role="alert">
               {error}
@@ -528,16 +548,21 @@ function TagEditor({
           {conflict && (
             <div className="alert">
               <p>다른 곳에서 먼저 수정했어요. 최신 설정을 불러온 뒤 다시 수정해 주세요.</p>
-              <button type="button" disabled={busy} onClick={() => void loadLatest()}>
+              <Button
+                variant="plain"
+                type="button"
+                disabled={busy}
+                onClick={() => void loadLatest()}
+              >
                 최신 내용 불러오기
-              </button>
+              </Button>
             </div>
           )}
           {uncertain && <div className="alert">같은 요청으로 저장 결과를 다시 확인해 주세요.</div>}
           <fieldset disabled={locked || conflict}>
-            <label>
+            <Field>
               {editor.type === 'group' ? '유형 이름' : '옵션 이름'}
-              <input
+              <Input
                 autoFocus
                 required
                 maxLength={80}
@@ -547,11 +572,11 @@ function TagEditor({
                   editor.type === 'group' ? '예: 분류, 내역, 자산 용도' : '옵션의 이름을 입력하세요'
                 }
               />
-            </label>
+            </Field>
             {editor.type === 'group' ? (
               <>
-                <div className="form-grid">
-                  <label>
+                <FormGrid>
+                  <Field>
                     선택 방식
                     <SelectField
                       value={selectionMode}
@@ -562,8 +587,8 @@ function TagEditor({
                       <SelectOption value="single">단일 선택</SelectOption>
                       <SelectOption value="multiple">복수 선택</SelectOption>
                     </SelectField>
-                  </label>
-                  <label>
+                  </Field>
+                  <Field>
                     사용 위치
                     <SelectField
                       value={appliesTo}
@@ -573,14 +598,13 @@ function TagEditor({
                       <SelectOption value="transaction">가계부 내역</SelectOption>
                       <SelectOption value="asset">자산</SelectOption>
                     </SelectField>
-                  </label>
-                </div>
+                  </Field>
+                </FormGrid>
                 {appliesTo === 'transaction' && (
                   <div className="tag-scope">
                     <span className="field-label">사용할 가계부</span>
-                    <label className="checkbox">
-                      <input
-                        type="checkbox"
+                    <Field className="checkbox">
+                      <Checkbox
                         checked={ledgerIds === null}
                         onChange={(event) =>
                           setLedgerIds(
@@ -593,15 +617,14 @@ function TagEditor({
                         }
                       />
                       모든 가계부에서 사용
-                    </label>
+                    </Field>
                     {ledgerIds !== null && (
                       <div className="tag-scope-list">
                         {data.ledgers
                           .filter((ledger) => !ledger.archived || ledgerIds.includes(ledger.id))
                           .map((ledger) => (
-                            <label className="checkbox" key={ledger.id}>
-                              <input
-                                type="checkbox"
+                            <Field className="checkbox" key={ledger.id}>
+                              <Checkbox
                                 checked={ledgerIds.includes(ledger.id)}
                                 onChange={(event) =>
                                   setLedgerIds(
@@ -612,7 +635,7 @@ function TagEditor({
                                 }
                               />
                               <UgaLedgerIcon value={ledger.icon} size={20} /> {ledger.name}
-                            </label>
+                            </Field>
                           ))}
                       </div>
                     )}
@@ -625,7 +648,7 @@ function TagEditor({
               </>
             ) : (
               <div>
-                <label>
+                <Field>
                   상위 옵션 (선택)
                   <SelectField value={parentId} onValueChange={(value) => setParentId(value)}>
                     <SelectOption value="">독립 옵션</SelectOption>
@@ -649,14 +672,15 @@ function TagEditor({
                         </SelectOption>
                       ))}
                   </SelectField>
-                </label>
+                </Field>
                 <p className="small muted">
                   상위 옵션을 선택한 기록에서만 이 옵션을 고를 수 있어요. 예: 식비 → 장보기.
                 </p>
                 <span className="field-label">옵션 색상</span>
                 <div className="tag-color-options">
                   {palette.map((item) => (
-                    <button
+                    <Button
+                      variant="plain"
                       type="button"
                       key={item}
                       aria-label={`${item} 색상`}
@@ -665,16 +689,16 @@ function TagEditor({
                       onClick={() => setColor(item)}
                     >
                       {color === item && <Check size={18} />}
-                    </button>
+                    </Button>
                   ))}
-                  <label className="tag-custom-color">
+                  <Field className="tag-custom-color">
                     <ColorField
                       aria-label="직접 색상 선택"
                       value={color}
                       onValueChange={setColor}
                     />
                     <span>직접 선택</span>
-                  </label>
+                  </Field>
                 </div>
                 <div className="tag-color-preview">
                   <span className="small muted">미리보기</span>
@@ -682,9 +706,9 @@ function TagEditor({
                 </div>
               </div>
             )}
-            <label>
+            <Field>
               표시 순서
-              <input
+              <Input
                 type="number"
                 required
                 min="-999999"
@@ -693,20 +717,20 @@ function TagEditor({
                 value={sortOrder}
                 onChange={(event) => setSortOrder(Number(event.target.value))}
               />
-            </label>
+            </Field>
           </fieldset>
-        </div>
-        <div className="form-footer">
+        </FormBody>
+        <FormFooter>
           <span />
           <div className="footer-actions">
-            <button type="button" className="secondary" disabled={locked} onClick={onClose}>
+            <CloseButton variant="secondary" disabled={locked} onClick={onClose}>
               닫기
-            </button>
-            <button type="submit" className="primary" disabled={busy || conflict}>
+            </CloseButton>
+            <Button variant="primary" type="submit" disabled={busy || conflict}>
               {busy ? '저장 중…' : uncertain ? '저장 결과 다시 확인' : '저장'}
-            </button>
+            </Button>
           </div>
-        </div>
+        </FormFooter>
       </form>
     </Dialog>
   );

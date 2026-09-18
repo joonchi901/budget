@@ -1,3 +1,19 @@
+import {
+  Button,
+  CloseButton,
+  FormSection,
+  Checkbox,
+  Field,
+  FormBody,
+  FormFooter,
+  FormGrid,
+  Grid,
+  Inline,
+  Input,
+  Panel,
+  Textarea,
+  Toolbar,
+} from './ui';
 import { SelectField, SelectOption } from './SelectField';
 import { UgaIcon } from './brand/Uga';
 import { MonthField } from './DateFields';
@@ -33,7 +49,7 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
       (showArchived || !p.archived) &&
       `${p.name} ${p.institution ?? ''} ${p.purpose ?? ''}`
         .toLowerCase()
-        .includes(search.toLowerCase()),
+        .includes(search.trim().toLowerCase()),
   );
   const activeCards = data.paymentMethods.filter((p) => p.type === 'card' && !p.archived);
   const billingCards = activeCards.filter((p) => p.cardKind !== 'debit' && !paymentSettingIssue(p));
@@ -52,7 +68,7 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
     id === 'shared' ? '공동' : (data.users.find((user) => user.id === id)?.name ?? id);
   return (
     <div className="payments-workspace">
-      <section className="payment-overview" aria-label="카드 사용 요약">
+      <Panel className="payment-overview" aria-label="카드 사용 요약">
         <div>
           <span className="payment-overview-date">{monthLabel(month)}</span>
           <h2>{incompleteCards.length ? '설정된 카드의 예상 대금' : '이번 달 납부 예정'}</h2>
@@ -76,44 +92,41 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
             {incompleteCards.length ? ` · 납부일 설정 필요 ${incompleteCards.length}개` : ''}
           </span>
         </div>
-      </section>
-      <div className="section-heading payment-toolbar">
+      </Panel>
+      <Toolbar className="payment-toolbar">
         <div>
           <h2>카드 · 통장 관리</h2>
           <p className="muted small">사용 내역부터 결제일, 혜택까지 한곳에서</p>
         </div>
-        <div className="payment-actions">
-          <button className="primary" onClick={() => setEditor({ type: 'card' })}>
+        <Inline gap={2} className="payment-actions">
+          <Button variant="primary" onClick={() => setEditor({ type: 'card' })}>
             <Plus size={16} /> 카드 추가
-          </button>
-          <button className="secondary" onClick={() => setEditor({ type: 'account' })}>
+          </Button>
+          <Button variant="secondary" onClick={() => setEditor({ type: 'account' })}>
             <Plus size={16} /> 통장 추가
-          </button>
-          <button className="secondary" onClick={() => setEditor({ type: 'cash' })}>
+          </Button>
+          <Button variant="secondary" onClick={() => setEditor({ type: 'cash' })}>
             현금 추가
-          </button>
-        </div>
-      </div>
-      <div className="payment-filters">
+          </Button>
+        </Inline>
+      </Toolbar>
+      <Inline gap={2} className="payment-filters">
         <div className="payment-search">
           <Search size={19} aria-hidden="true" />
-          <input
+          <Input
+            type="search"
             aria-label="결제수단 검색"
             placeholder="이름 · 기관 · 용도 검색"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => setShowArchived(e.target.checked)}
-          />{' '}
+        <Field className="checkbox">
+          <Checkbox checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />{' '}
           보관 항목 포함
-        </label>
-      </div>
-      <div className="payment-grid">
+        </Field>
+      </Inline>
+      <Grid columns={2} tabletColumns={1} mobileColumns={1} gap={5} className="payment-grid">
         {methods
           .filter((p) => p.type === 'card')
           .map((card: ManagedPayment) => {
@@ -124,11 +137,11 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
               !debit && !issue ? cardStatement(data.transactions, card, month) : null;
             const account = data.paymentMethods.find((p) => p.id === card.linkedAccountId);
             return (
-              <section
+              <Panel
                 key={card.id}
-                className={`panel payment-card ${card.archived ? 'payment-archived' : ''}`}
+                className={`payment-card ${card.archived ? 'payment-archived' : ''}`}
               >
-                <div className="payment-card-heading">
+                <Inline gap={3} className="payment-card-heading">
                   <span className="payment-method-icon">
                     <UgaIcon name="payments" size={28} />
                   </span>
@@ -143,14 +156,15 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
                       {card.purpose ? ` · ${card.purpose}` : ''}
                     </span>
                   </div>
-                  <button
-                    className="secondary payment-settings"
+                  <Button
+                    variant="secondary"
+                    className="payment-settings"
                     aria-label={`${card.name} 설정`}
                     onClick={() => setEditor({ payment: card, type: 'card' })}
                   >
                     <Settings2 size={15} /> 설정
-                  </button>
-                </div>
+                  </Button>
+                </Inline>
                 <div className="payment-info">
                   <h2>{debit ? '이번 달 사용액' : '예상 카드 대금'}</h2>
                   {issue ? (
@@ -209,10 +223,10 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
                     data={data}
                   />
                 </div>
-              </section>
+              </Panel>
             );
           })}
-      </div>
+      </Grid>
       {!methods.some((p) => p.type === 'card') && (
         <Empty>
           {search
@@ -224,10 +238,16 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
         예상 대금은 직접 기록한 사용 내역과 마감일·납부일을 기준으로 해요. 할부·취소·이월·휴일 및
         카드사의 실적 제외 조건은 반영하지 않아요.
       </p>
-      <div className="section-heading">
+      <Toolbar>
         <h2>통장 · 현금</h2>
-      </div>
-      <div className="payment-account-grid">
+      </Toolbar>
+      <Grid
+        columns={2}
+        tabletColumns={1}
+        mobileColumns={1}
+        gap={5}
+        className="payment-account-grid"
+      >
         {methods
           .filter((p) => p.type !== 'card')
           .map((payment: ManagedPayment) => {
@@ -237,9 +257,9 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
               (p: ManagedPayment) => p.linkedAccountId === payment.id,
             );
             return (
-              <section
+              <Panel
                 key={payment.id}
-                className={`panel payment-account ${payment.archived ? 'payment-archived' : ''}`}
+                className={`payment-account ${payment.archived ? 'payment-archived' : ''}`}
               >
                 <div className="panel-title">
                   <div>
@@ -252,13 +272,13 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
                       {payment.archived ? ' · 보관' : ''}
                     </p>
                   </div>
-                  <button
-                    className="secondary"
+                  <Button
+                    variant="secondary"
                     aria-label={`${payment.name} 설정`}
                     onClick={() => setEditor({ payment, type: payment.type })}
                   >
                     <Settings2 size={15} /> 설정
-                  </button>
+                  </Button>
                 </div>
                 <div className="payment-account-balance">
                   <span>{asset ? '연결 자산의 현재 잔액' : '이번 달 사용액'}</span>
@@ -298,10 +318,10 @@ export default function PaymentsView({ data, month, onChanged, onNotice }: Props
                   transactions={usage.transactions}
                   data={data}
                 />
-              </section>
+              </Panel>
             );
           })}
-      </div>
+      </Grid>
       {!methods.some((p) => p.type !== 'card') && (
         <Empty>
           {search
@@ -475,23 +495,23 @@ function PaymentEditor({
     key: 'institution' | 'accountKind' | 'purpose' | 'accountNumber' | 'usagePeriodNote',
     label: string,
   ) => (
-    <label>
+    <Field>
       {label}
-      <input
+      <Input
         maxLength={key === 'accountNumber' ? 64 : 240}
         value={draft[key] ?? ''}
         onChange={(e) => field(key, e.target.value)}
         autoComplete="off"
       />
-    </label>
+    </Field>
   );
   const moneyInput = (
     key: 'monthlyBudget' | 'annualFee' | 'creditLimit' | 'performanceTarget',
     label: string,
   ) => (
-    <label>
+    <Field>
       {label}
-      <input
+      <Input
         type="number"
         min="0"
         max="1000000000000"
@@ -501,7 +521,7 @@ function PaymentEditor({
         value={draft[key] ?? ''}
         onChange={(e) => field(key, e.target.value === '' ? undefined : Number(e.target.value))}
       />
-    </label>
+    </Field>
   );
   return (
     <Dialog
@@ -509,9 +529,10 @@ function PaymentEditor({
       subtitle={initialPayment?.name}
       onClose={onClose}
       locked={locked}
+      dirty={JSON.stringify(draft) !== baseline.current}
     >
       <form className="payment-editor" onSubmit={(e) => void save(e)}>
-        <div className="form-body">
+        <FormBody>
           {error && (
             <div className="alert error" role="alert">
               {error}
@@ -526,31 +547,32 @@ function PaymentEditor({
             <div className="conflict">
               <strong>다른 변경이 먼저 반영되었어요.</strong>
               <p>최신 설정을 불러오면 현재 입력을 최신 내용으로 바꿔요.</p>
-              <button
+              <Button
+                variant="secondary"
                 type="button"
-                className="secondary"
+
                 disabled={busy}
                 onClick={() => void reload()}
               >
                 최신 설정 불러오기
-              </button>
+              </Button>
             </div>
           )}
           <fieldset disabled={busy || uncertain || conflict}>
-            <section className="payment-form-section">
+            <FormSection>
               <h3>기본 정보</h3>
-              <label>
+              <Field>
                 {title} 이름
-                <input
+                <Input
                   autoFocus
                   required
                   maxLength={80}
                   value={draft.name}
                   onChange={(e) => field('name', e.target.value)}
                 />
-              </label>
-              <div className="form-grid">
-                <label>
+              </Field>
+              <FormGrid>
+                <Field>
                   명의
                   <SelectField
                     value={draft.ownerId}
@@ -563,17 +585,17 @@ function PaymentEditor({
                       </SelectOption>
                     ))}
                   </SelectField>
-                </label>
+                </Field>
                 {textInput('purpose', '용도')}
-              </div>
-            </section>
+              </FormGrid>
+            </FormSection>
             {editor.type === 'card' ? (
               <>
-                <section className="payment-form-section">
+                <FormSection>
                   <h3>결제 설정</h3>
-                  <div className="form-grid">
+                  <FormGrid>
                     {textInput('institution', '카드사')}
-                    <label>
+                    <Field>
                       카드 종류
                       <SelectField
                         value={draft.cardKind ?? 'credit'}
@@ -582,14 +604,14 @@ function PaymentEditor({
                         <SelectOption value="credit">신용카드</SelectOption>
                         <SelectOption value="debit">체크카드</SelectOption>
                       </SelectField>
-                    </label>
-                  </div>
+                    </Field>
+                  </FormGrid>
                   {(draft.cardKind ?? 'credit') === 'credit' && (
-                    <div className="form-grid">
+                    <FormGrid>
                       {(['closingDay', 'paymentDay'] as const).map((key) => (
-                        <label key={key}>
+                        <Field key={key}>
                           {key === 'closingDay' ? '사용 마감일' : '대금 납부일'}
-                          <input
+                          <Input
                             type="number"
                             min="1"
                             max="31"
@@ -600,15 +622,15 @@ function PaymentEditor({
                               field(key, e.target.value === '' ? null : Number(e.target.value))
                             }
                           />
-                        </label>
+                        </Field>
                       ))}
-                    </div>
+                    </FormGrid>
                   )}
                   <p className="small muted">
                     마감일 다음 날부터 다음 마감일까지의 사용액을 모아 납부일에 표시해요. 29~31일이
                     없는 달은 말일로 계산해요.
                   </p>
-                  <label>
+                  <Field>
                     결제 통장
                     <SelectField
                       value={draft.linkedAccountId ?? ''}
@@ -627,48 +649,48 @@ function PaymentEditor({
                           </SelectOption>
                         ))}
                     </SelectField>
-                  </label>
-                </section>
-                <section className="payment-form-section">
+                  </Field>
+                </FormSection>
+                <FormSection>
                   <h3>예산과 혜택</h3>
-                  <div className="form-grid">
+                  <FormGrid>
                     {moneyInput('monthlyBudget', '월 사용 예산 (원)')}
                     {moneyInput('performanceTarget', '실적 기준 (원)')}
                     {moneyInput('creditLimit', '이용 한도 (원)')}
                     {moneyInput('annualFee', '연회비 (원)')}
-                    <label>
+                    <Field>
                       유효기간
                       <MonthField
                         value={draft.expiry ?? ''}
                         onValueChange={(value) => field('expiry', value)}
                       />
-                    </label>
+                    </Field>
                     {textInput('usagePeriodNote', '사용 기간 메모')}
-                  </div>
-                  <label>
+                  </FormGrid>
+                  <Field>
                     혜택 · 실적 제외 조건
-                    <textarea
+                    <Textarea
                       rows={3}
                       maxLength={3000}
                       value={draft.benefits ?? ''}
                       onChange={(e) => field('benefits', e.target.value)}
                     />
-                  </label>
-                </section>
+                  </Field>
+                </FormSection>
               </>
             ) : (
-              <section className="payment-form-section">
+              <FormSection>
                 <h3>계좌와 자산 연결</h3>
                 {editor.type === 'account' && (
                   <>
-                    <div className="form-grid">
+                    <FormGrid>
                       {textInput('institution', '은행')}
                       {textInput('accountKind', '통장 종류')}
-                    </div>
+                    </FormGrid>
                     {textInput('accountNumber', '계좌번호')}
                   </>
                 )}
-                <label>
+                <Field>
                   연결 자산
                   <SelectField
                     value={draft.assetId ?? ''}
@@ -683,47 +705,46 @@ function PaymentEditor({
                         </SelectOption>
                       ))}
                   </SelectField>
-                </label>
+                </Field>
                 <p className="small muted">
                   자산의 현재 잔액을 함께 표시해요. 연결만으로 잔액이나 수입·지출이 추가되지는
                   않아요.
                 </p>
-              </section>
+              </FormSection>
             )}
-            <section className="payment-form-section">
+            <FormSection>
               <h3>메모와 관리</h3>
-              <label>
+              <Field>
                 비고
-                <textarea
+                <Textarea
                   rows={3}
                   maxLength={3000}
                   value={draft.notes ?? ''}
                   onChange={(e) => field('notes', e.target.value)}
                 />
-              </label>
+              </Field>
               {initialPayment && (
-                <label className="checkbox payment-archive-control">
-                  <input
-                    type="checkbox"
+                <Field className="checkbox payment-archive-control">
+                  <Checkbox
                     checked={draft.archived ?? false}
                     onChange={(e) => field('archived', e.target.checked)}
                   />
                   <Archive size={16} /> 보관하기 (기존 거래와 연결은 유지)
-                </label>
+                </Field>
               )}
-            </section>
+            </FormSection>
           </fieldset>
-        </div>
-        <div className="form-footer">
-          <div className="footer-actions">
-            <button type="button" className="secondary" disabled={locked} onClick={onClose}>
+        </FormBody>
+        <FormFooter>
+          <Inline gap={2} justify="end" className="footer-actions">
+            <CloseButton variant="secondary" type="button" disabled={locked} onClick={onClose}>
               닫기
-            </button>
-            <button className="primary" type="submit" disabled={busy || conflict}>
+            </CloseButton>
+            <Button variant="primary" type="submit" disabled={busy || conflict}>
               {busy ? '저장 중…' : uncertain ? '저장 결과 다시 확인' : '저장'}
-            </button>
-          </div>
-        </div>
+            </Button>
+          </Inline>
+        </FormFooter>
       </form>
     </Dialog>
   );

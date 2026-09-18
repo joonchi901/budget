@@ -1,5 +1,5 @@
 import { openGlobalView, openRoom } from './helpers/navigation';
-import { chooseMonth, selectChoice } from './helpers/controls';
+import { chooseDate, chooseMonth, selectChoice } from './helpers/controls';
 import { expect, test } from '@playwright/test';
 import { strToU8, zipSync } from 'fflate';
 import type { Bootstrap } from '../../src/shared/types';
@@ -105,9 +105,9 @@ test('XLSX preview, review evidence and repeat import are usable from the data s
   await page.getByRole('button', { name: '엑셀 반영 미리보기', exact: true }).click();
   await expect(page.locator('.data-preview')).toContainText('거래 0건');
   await page.getByText('불완전한 월별 기록 보완 (1)', { exact: true }).click();
-  await page.getByLabel('1!31 date', { exact: true }).fill('2026-09-17');
-  await page.getByLabel('1!31 major', { exact: true }).fill(' 저축 ');
-  await page.getByLabel('1!31 minor', { exact: true }).fill(' 합성 적립 ');
+  await chooseDate(page.getByLabel('1!31 날짜', { exact: true }), '2026-09-17');
+  await page.getByLabel('1!31 분류', { exact: true }).fill(' 저축 ');
+  await page.getByLabel('1!31 내역 분류', { exact: true }).fill(' 합성 적립 ');
   await page.getByText('저축 기록의 자산 이동 연결 (1행)', { exact: true }).click();
   await expect(page.getByLabel('저축 합성 적립 fromAssetId')).toBeVisible();
   await selectChoice(page.getByLabel('저축 합성 적립 fromAssetId'), 'checking');

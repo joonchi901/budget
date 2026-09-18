@@ -83,14 +83,6 @@
 .analysis-export:hover {
   background: var(--accent-hover);
 }
-.analysis-summary-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-.analysis-summary-cards.has-asset {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
 .analysis-summary-cards .stat {
   min-width: 0;
   border: 0;
@@ -482,6 +474,7 @@
   padding: 6px 2px;
 }
 .analysis-flow-month {
+  flex-direction: column;
   min-width: 44px;
   padding: 0;
   border: 0;

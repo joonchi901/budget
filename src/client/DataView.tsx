@@ -1,3 +1,18 @@
+import {
+  TableScroll,
+  Button,
+  Panel,
+  Toolbar,
+  Field,
+  FormGrid,
+  Checkbox,
+  Input,
+  FormBody,
+  Textarea,
+  FormFooter,
+  CloseButton,
+  Tabs,
+} from './ui';
 import { SelectField, SelectOption } from './SelectField';
 import { FileField } from './FileField';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -28,7 +43,7 @@ interface Props {
   data: Bootstrap;
   onChanged(): Promise<void>;
   onNotice(message: string): void;
-  excelImport?: ReactNode;
+  excelImport?: ReactNode | ((controls: { onPendingChange(pending: boolean): void }) => ReactNode);
 }
 type DataTab = 'excel' | 'archive' | 'review' | 'backup' | 'csv' | 'history';
 const dataTabs = [
@@ -67,6 +82,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
   const isAdmin = data.user.role === 'admin';
   const [activeTab, setActiveTab] = useState<DataTab>(excelImport ? 'excel' : 'backup');
   const tabs = dataTabs.filter((tab) => tab.id !== 'excel' || excelImport);
+  const [excelPending, setExcelPending] = useState(false);
   const [backup, setBackup] = useState<BudgetBackup | null>(null),
     [memberMap, setMemberMap] = useState<Record<string, string>>({}),
     [restore, setRestore] = useState<RestorePreview | null>(null),
@@ -84,13 +100,16 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
     [uncertain, setUncertain] = useState(false);
   const pending = useRef<{ url: string; body: Record<string, unknown> } | null>(null);
   const [history, setHistory] = useState<RecordHistory[]>([]),
-    [historyError, setHistoryError] = useState('');
+    [historyError, setHistoryError] = useState(''),
+    [historyLoading, setHistoryLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
   const [sourceRecords, setSourceRecords] = useState<SourceRecord[]>([]),
     [sourceError, setSourceError] = useState(''),
     [sourceLoading, setSourceLoading] = useState(true);
-  useUnsavedGuard(busy || uncertain);
+  useUnsavedGuard(busy || uncertain || excelPending);
   useEffect(() => {
     let cancelled = false;
+    setHistoryLoading(true);
     void request<typeof history>('/api/data/history')
       .then((rows) => {
         if (!cancelled) {
@@ -100,11 +119,14 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
       })
       .catch(() => {
         if (!cancelled) setHistoryError('변경 이력을 불러오지 못했어요.');
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [data.revision]);
+  }, [data.revision, reloadKey]);
   useEffect(() => {
     let cancelled = false;
     setSourceLoading(true);
@@ -124,7 +146,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
     return () => {
       cancelled = true;
     };
-  }, [data.revision]);
+  }, [data.revision, reloadKey]);
   async function exportJson() {
     setBusy(true);
     setError('');
@@ -144,6 +166,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
   }
   async function loadBackup(file?: File) {
     if (!file) return;
+    setBusy(true);
     setError('');
     setRestore(null);
     setReplaceConfirmed(false);
@@ -151,7 +174,17 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
     try {
       if (file.size > 12_000_000) throw new Error('파일은 12MB 이하로 선택해 주세요.');
       const value = JSON.parse(await file.text()) as BudgetBackup;
-      if (value.format !== 'our-budget' || !Array.isArray(value.members))
+      if (
+        value.format !== 'our-budget' ||
+        !Array.isArray(value.members) ||
+        !value.members.every(
+          (member) =>
+            member &&
+            typeof member.id === 'string' &&
+            member.id.trim() &&
+            typeof member.name === 'string',
+        )
+      )
         throw new Error('가계부 JSON 백업 파일을 선택해 주세요.');
       setBackup(value);
       setMemberMap(
@@ -160,7 +193,13 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
         ),
       );
     } catch (e) {
-      setError((e as Error).message);
+      setError(
+        e instanceof SyntaxError
+          ? 'JSON 파일을 읽지 못했어요. 가계부에서 내보낸 백업 파일을 선택해 주세요.'
+          : (e as Error).message,
+      );
+    } finally {
+      setBusy(false);
     }
   }
   async function previewJson() {
@@ -184,21 +223,35 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
   }
   async function loadCsv(file?: File) {
     if (!file) return;
+    setBusy(true);
     setError('');
+    setCsv([]);
+    setImportRows([]);
+    setSourceId('');
     setImportPreview(null);
     setImportConfirmed(false);
     setCsvErrors([]);
     try {
       if (file.size > 12_000_000) throw new Error('파일은 12MB 이하로 선택해 주세요.');
       const rows = parseCsv(await file.text());
+      if (rows.length < 2) throw new Error('제목 행과 거래 내역이 있는 CSV 파일을 선택해 주세요.');
       setCsv(rows);
       setMapping(defaultCsvMapping(rows[0] ?? []));
       setSourceId(file.name);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
   async function previewCsv() {
+    if (
+      !sourceId.trim() ||
+      !data.ledgers.some((ledger) => ledger.id === ledgerId && !ledger.archived)
+    ) {
+      setError('원본 자료 ID와 가져올 가계부를 선택해 주세요.');
+      return;
+    }
     setBusy(true);
     setError('');
     setImportConfirmed(false);
@@ -222,7 +275,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
   }
   async function apply(kind: 'restore' | 'import') {
     if (busy) return;
-    if (kind === 'restore' && !isAdmin) return;
+    if (kind === 'restore' && !isAdmin && !pending.current) return;
     if (!pending.current) {
       if (kind === 'restore' && restore && backup && replaceConfirmed)
         pending.current = {
@@ -289,64 +342,57 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
       setBusy(false);
     }
   }
-  const locked = busy || uncertain;
+  const locked = busy || uncertain || excelPending;
   return (
     <div className="data-workspace">
       <div className="data-workspace-intro">
         <p>자료 가져오기부터 백업까지, 필요한 작업을 선택해 주세요.</p>
         <span>탭을 바꿔도 작성 중인 내용은 유지돼요.</span>
       </div>
-      <div className="data-tabs" role="tablist" aria-label="데이터 관리 작업">
-        {tabs.map(({ id, label, icon }, index) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            id={`data-tab-${id}`}
-            aria-controls={`data-panel-${id}`}
-            aria-selected={activeTab === id}
-            tabIndex={activeTab === id ? 0 : -1}
-            disabled={locked}
-            onClick={() => setActiveTab(id)}
-            onKeyDown={(event) => {
-              const next =
-                event.key === 'ArrowRight'
-                  ? (index + 1) % tabs.length
-                  : event.key === 'ArrowLeft'
-                    ? (index + tabs.length - 1) % tabs.length
-                    : event.key === 'Home'
-                      ? 0
-                      : event.key === 'End'
-                        ? tabs.length - 1
-                        : null;
-              if (next === null) return;
-              event.preventDefault();
-              setActiveTab(tabs[next].id);
-              document.getElementById(`data-tab-${tabs[next].id}`)?.focus();
-            }}
-          >
-            <UgaIcon name={icon} size={22} />
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs<DataTab>
+        className="data-tabs"
+        aria-label="데이터 관리 작업"
+        value={activeTab}
+        onValueChange={setActiveTab}
+        disabled={locked}
+        options={tabs.map(({ id, label, icon }) => ({
+          value: id,
+          label: (
+            <>
+              <UgaIcon name={icon} size={22} />
+              {label}
+            </>
+          ),
+          id: `data-tab-${id}`,
+          panelId: `data-panel-${id}`,
+        }))}
+      />
       {error && (
         <div className="alert error" role="alert">
           {error}
         </div>
       )}
+      {(sourceError || historyError) && (
+        <Button
+          variant="secondary"
+          onClick={() => setReloadKey((key) => key + 1)}
+          disabled={sourceLoading || historyLoading}
+        >
+          자료 다시 불러오기
+        </Button>
+      )}
       {uncertain && (
         <div className="alert">
           <p>저장 결과를 확인하지 못했어요. 입력을 바꾸지 않고 같은 요청으로 확인해 주세요.</p>
-          <button
-            className="primary"
+          <Button
+            variant="primary"
             disabled={busy}
             onClick={() =>
               void apply(pending.current?.url.endsWith('restore') ? 'restore' : 'import')
             }
           >
             저장 결과 다시 확인
-          </button>
+          </Button>
         </div>
       )}
       <div
@@ -369,15 +415,19 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
         aria-labelledby="data-tab-excel"
         hidden={activeTab !== 'excel'}
       >
-        {excelImport}
-        <button
+        {typeof excelImport === 'function'
+          ? excelImport({ onPendingChange: setExcelPending })
+          : excelImport}
+        <Button
+          variant="plain"
           className="data-review-shortcut"
           type="button"
+          disabled={locked}
           onClick={() => setActiveTab('review')}
         >
           <UgaIcon name="tags" size={22} /> 가져온 원본 검토하기{' '}
           <span>날짜·분류가 미확정인 자료를 확인해요</span>
-        </button>
+        </Button>
       </div>
       <div
         className="data-tab-panel"
@@ -403,8 +453,8 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
         aria-labelledby="data-tab-backup"
         hidden={activeTab !== 'backup'}
       >
-        <section className="panel data-panel">
-          <div className="section-heading">
+        <Panel className="data-panel">
+          <Toolbar>
             <div>
               <h2>백업 · 내보내기</h2>
               <p className="muted small">
@@ -412,28 +462,28 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
               </p>
             </div>
             <Download size={20} />
-          </div>
+          </Toolbar>
           <div className="data-actions">
-            <button className="primary" disabled={locked} onClick={() => void exportJson()}>
+            <Button variant="primary" disabled={locked} onClick={() => void exportJson()}>
               전체 JSON 백업
-            </button>
-            <button
-              className="secondary"
+            </Button>
+            <Button
+              variant="secondary"
               disabled={locked}
               onClick={() =>
                 download('가계부-거래.csv', transactionsCsv(data), 'text/csv;charset=utf-8')
               }
             >
               거래 CSV 내보내기
-            </button>
+            </Button>
           </div>
           <p className="small muted">
             보관·삭제 기록과 자산 반영 이력도 백업해요. 로그인 정보와 세션은 포함하지 않아요.
             계좌번호 등 입력한 정보가 파일에 포함되므로 개인 저장 공간에 보관해 주세요.
           </p>
-        </section>
-        <section className="panel data-panel">
-          <div className="section-heading">
+        </Panel>
+        <Panel className="data-panel">
+          <Toolbar>
             <div>
               <h2>JSON 백업 복원</h2>
               <p className="muted small">
@@ -442,7 +492,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
               </p>
             </div>
             <Upload size={20} />
-          </div>
+          </Toolbar>
           {!isAdmin && (
             <p className="small muted">
               가계부 구조도 교체하는 백업 복원은 관리자만 할 수 있어요. 현재 자료는 백업하거나 CSV로
@@ -450,18 +500,18 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
             </p>
           )}
           <fieldset disabled={locked || !isAdmin}>
-            <label>
+            <Field>
               복원할 JSON 파일
               <FileField
                 accept=".json,application/json"
                 onChange={(e) => void loadBackup(e.target.files?.[0])}
               />
-            </label>
+            </Field>
             {backup && (
               <>
-                <div className="data-member-mapping">
+                <FormGrid className="data-member-mapping">
                   {backup.members.map((member) => (
-                    <label key={member.id}>
+                    <Field key={member.id}>
                       원본 {member.name} → 현재 구성원
                       <SelectField
                         value={memberMap[member.id] ?? ''}
@@ -478,18 +528,18 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
                           </SelectOption>
                         ))}
                       </SelectField>
-                    </label>
+                    </Field>
                   ))}
-                </div>
-                <button type="button" className="secondary" onClick={() => void previewJson()}>
+                </FormGrid>
+                <Button type="button" variant="secondary" onClick={() => void previewJson()}>
                   복원 내용 검사
-                </button>
+                </Button>
               </>
             )}
             {restore && (
               <div className="data-preview">
                 <h3>교체될 자료</h3>
-                <div className="data-table-wrap">
+                <TableScroll aria-label="백업 복원 전후 자료" className="data-table-wrap">
                   <table>
                     <thead>
                       <tr>
@@ -508,7 +558,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </TableScroll>
                 {restore.issues.length > 0 ? (
                   <ul className="data-errors">
                     {restore.issues.map((issue, index) => (
@@ -517,22 +567,21 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
                   </ul>
                 ) : (
                   <>
-                    <label className="checkbox">
-                      <input
-                        type="checkbox"
+                    <Field className="checkbox">
+                      <Checkbox
                         checked={replaceConfirmed}
                         onChange={(e) => setReplaceConfirmed(e.target.checked)}
                       />{' '}
                       구성원 연결과 교체 내용을 확인했으며 현재 가구의 자료 전체를 교체합니다.
-                    </label>
-                    <button
+                    </Field>
+                    <Button
                       type="button"
-                      className="primary"
+                      variant="primary"
                       disabled={!replaceConfirmed || restore.revision !== data.revision}
                       onClick={() => void apply('restore')}
                     >
                       확인한 백업으로 전체 복원
-                    </button>
+                    </Button>
                   </>
                 )}
                 {restore.revision !== data.revision && (
@@ -541,7 +590,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
               </div>
             )}
           </fieldset>
-        </section>
+        </Panel>
       </div>
       <div
         className="data-tab-panel"
@@ -550,8 +599,8 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
         aria-labelledby="data-tab-csv"
         hidden={activeTab !== 'csv'}
       >
-        <section className="panel data-panel">
-          <div className="section-heading">
+        <Panel className="data-panel">
+          <Toolbar>
             <div>
               <h2>CSV 거래 가져오기</h2>
               <p className="muted small">
@@ -559,21 +608,21 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
               </p>
             </div>
             <Upload size={20} />
-          </div>
+          </Toolbar>
           <fieldset disabled={locked}>
-            <label>
+            <Field>
               CSV 파일
               <FileField
                 accept=".csv,text/csv"
                 onChange={(e) => void loadCsv(e.target.files?.[0])}
               />
-            </label>
+            </Field>
             {csv.length > 0 && (
               <>
-                <div className="form-grid">
-                  <label>
+                <FormGrid>
+                  <Field>
                     원본 자료 ID
-                    <input
+                    <Input
                       required
                       maxLength={240}
                       value={sourceId}
@@ -585,8 +634,8 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
                     <span className="small muted">
                       같은 자료는 같은 ID를 사용해요. 원본 행 ID와 함께 중복을 구분해요.
                     </span>
-                  </label>
-                  <label>
+                  </Field>
+                  <Field>
                     가져올 가계부
                     <SelectField
                       value={ledgerId}
@@ -604,11 +653,11 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
                           </SelectOption>
                         ))}
                     </SelectField>
-                  </label>
-                </div>
-                <div className="data-column-mapping">
+                  </Field>
+                </FormGrid>
+                <FormGrid className="data-column-mapping">
                   {(Object.keys(csvMappingLabels) as (keyof CsvMapping)[]).map((key) => (
-                    <label key={key}>
+                    <Field key={key}>
                       {csvMappingLabels[key]}
                       {key === 'tags' || key === 'owner' ? ' (선택)' : ''}
                       <SelectField
@@ -625,17 +674,22 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
                           </SelectOption>
                         ))}
                       </SelectField>
-                    </label>
+                    </Field>
                   ))}
-                </div>
+                </FormGrid>
                 <p className="small muted">
                   원본 행 ID는 재수출해도 바뀌지 않는 고유 번호를 사용해요. 태그는 |로 구분하며,
                   이름이 겹치면 유형:옵션으로 입력해요. 이 화면은 수입·지출 거래를 가져오며 자산
                   배분은 거래 수정에서 지정할 수 있어요.
                 </p>
-                <button type="button" className="secondary" onClick={() => void previewCsv()}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!sourceId.trim() || !ledgerId}
+                  onClick={() => void previewCsv()}
+                >
                   가져올 내역 검사
-                </button>
+                </Button>
               </>
             )}
             {csvErrors.length > 0 && (
@@ -655,7 +709,7 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
                 <p>
                   새 수입 {won(importPreview.income)}원 · 새 지출 {won(importPreview.expense)}원
                 </p>
-                <div className="data-table-wrap">
+                <TableScroll aria-label="CSV 가져오기 검사 결과" className="data-table-wrap">
                   <table>
                     <thead>
                       <tr>
@@ -684,18 +738,17 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
                       ))}
                     </tbody>
                   </table>
-                </div>
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
+                </TableScroll>
+                <Field className="checkbox">
+                  <Checkbox
                     checked={importConfirmed}
                     onChange={(e) => setImportConfirmed(e.target.checked)}
                   />{' '}
                   원본 행, 거래 내용과 합계를 확인했습니다.
-                </label>
-                <button
+                </Field>
+                <Button
                   type="button"
-                  className="primary"
+                  variant="primary"
                   disabled={
                     !importConfirmed ||
                     importPreview.errors > 0 ||
@@ -704,14 +757,14 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
                   onClick={() => void apply('import')}
                 >
                   확인한 거래 가져오기
-                </button>
+                </Button>
                 {importPreview.revision !== data.revision && (
                   <p className="alert">다른 변경이 반영되었어요. 내역을 다시 검사해 주세요.</p>
                 )}
               </div>
             )}
           </fieldset>
-        </section>
+        </Panel>
       </div>
       <div
         className="data-tab-panel"
@@ -720,14 +773,19 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
         aria-labelledby="data-tab-history"
         hidden={activeTab !== 'history'}
       >
-        <section className="panel data-panel">
-          <div className="section-heading">
+        <Panel className="data-panel">
+          <Toolbar>
             <h2>
               <UgaIcon name="planning" size={22} /> 최근 변경 이력
             </h2>
             <span className="small muted">최근 100건</span>
-          </div>
+          </Toolbar>
           {historyError && <p role="alert">{historyError}</p>}
+          {historyLoading && (
+            <p className="muted" role="status">
+              변경 이력을 불러오고 있어요…
+            </p>
+          )}
           <div className="data-history">
             {history.map((row) => (
               <details key={row.id} className="history-entry">
@@ -748,13 +806,15 @@ export default function DataView({ data, onChanged, onNotice, excelImport }: Pro
                 )}
               </details>
             ))}
-            {!history.length && !historyError && <p className="muted">아직 변경 이력이 없어요.</p>}
+            {!history.length && !historyError && !historyLoading && (
+              <p className="muted">아직 변경 이력이 없어요.</p>
+            )}
           </div>
           <p className="small muted">
             항목을 펼치면 저장 당시의 수정 전후 값을 비교할 수 있어요. 기존 자료의 최초 작성자와
             과거 수정 값은 확인된 기록이 없으면 미확인으로 표시해요.
           </p>
-        </section>
+        </Panel>
       </div>
     </div>
   );
@@ -796,8 +856,8 @@ function SourceInbox({
     currentPage = Math.min(page, pages - 1),
     visible = filtered.slice(currentPage * 50, (currentPage + 1) * 50);
   return (
-    <section className="panel data-panel">
-      <div className="section-heading">
+    <Panel className="data-panel">
+      <Toolbar>
         <div>
           <h2>원본 자료 검토함</h2>
           <p className="muted small">
@@ -808,14 +868,14 @@ function SourceInbox({
         <span className="badge">
           검토 필요 {records.filter((r) => r.status === 'pending').length}건
         </span>
-      </div>
+      </Toolbar>
       {error && (
         <p className="alert error" role="alert">
           {error}
         </p>
       )}
       <div className="data-source-filters">
-        <label>
+        <Field>
           검토 상태
           <SelectField
             value={status}
@@ -831,10 +891,11 @@ function SourceInbox({
               </SelectOption>
             ))}
           </SelectField>
-        </label>
-        <label>
+        </Field>
+        <Field>
           원본 내역·출처·메모 검색
-          <input
+          <Input
+            type="search"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -842,7 +903,7 @@ function SourceInbox({
             }}
             placeholder="내역, 금액, 분류, 시트 이름, 메모"
           />
-        </label>
+        </Field>
       </div>
       <div className="data-source-list">
         {visible.map((record) => (
@@ -855,9 +916,9 @@ function SourceInbox({
                   {sourceStatusLabels[record.status]}
                 </p>
               </div>
-              <button className="secondary" disabled={disabled} onClick={() => setEditor(record)}>
+              <Button variant="secondary" disabled={disabled} onClick={() => setEditor(record)}>
                 검토 메모·상태
-              </button>
+              </Button>
             </div>
             <SourcePayloadSummary record={record} />
             {record.note && <p className="data-source-note">{record.note}</p>}
@@ -877,25 +938,25 @@ function SourceInbox({
         )}
       </div>
       {pages > 1 && (
-        <div className="data-actions">
-          <button
-            className="secondary"
+        <nav className="data-actions" aria-label="원본 검토 자료 페이지">
+          <Button
+            variant="secondary"
             disabled={currentPage === 0}
             onClick={() => setPage(currentPage - 1)}
           >
             이전
-          </button>
-          <span>
+          </Button>
+          <span role="status">
             {currentPage + 1} / {pages}
           </span>
-          <button
-            className="secondary"
+          <Button
+            variant="secondary"
             disabled={currentPage === pages - 1}
             onClick={() => setPage(currentPage + 1)}
           >
             다음
-          </button>
-        </div>
+          </Button>
+        </nav>
       )}
       {editor && (
         <SourceEditor
@@ -911,7 +972,7 @@ function SourceInbox({
           }}
         />
       )}
-    </section>
+    </Panel>
   );
 }
 function SourcePayloadSummary({ record }: { record: SourceRecord }) {
@@ -980,7 +1041,8 @@ function SourceEditor({
     [baseRevision, setBaseRevision] = useState(revision);
   const pending = useRef<Record<string, unknown> | null>(null),
     baseline = useRef(JSON.stringify({ note: record.note, status: record.status }));
-  useUnsavedGuard(busy || uncertain || JSON.stringify({ note, status }) !== baseline.current);
+  const dirty = JSON.stringify({ note, status }) !== baseline.current;
+  useUnsavedGuard(busy || uncertain || dirty);
   async function save() {
     if (busy || conflict) return;
     if (!pending.current)
@@ -1048,6 +1110,7 @@ function SourceEditor({
       subtitle={record.sourceLocation}
       onClose={onClose}
       locked={busy || uncertain}
+      dirty={dirty}
     >
       <form
         onSubmit={(e) => {
@@ -1055,7 +1118,7 @@ function SourceEditor({
           void save();
         }}
       >
-        <div className="form-body">
+        <FormBody>
           {error && (
             <div className="alert error" role="alert">
               {error}
@@ -1069,18 +1132,18 @@ function SourceEditor({
           {conflict && (
             <div className="conflict">
               <p>최신 검토 내용을 불러오면 입력을 최신 내용으로 바꿔요.</p>
-              <button
+              <Button
                 type="button"
-                className="secondary"
+                variant="secondary"
                 disabled={busy}
                 onClick={() => void reload()}
               >
                 최신 검토 내용 불러오기
-              </button>
+              </Button>
             </div>
           )}
           <fieldset disabled={busy || uncertain || conflict}>
-            <label>
+            <Field>
               검토 상태
               <SelectField
                 value={status}
@@ -1092,36 +1155,31 @@ function SourceEditor({
                   </SelectOption>
                 ))}
               </SelectField>
-            </label>
-            <label>
+            </Field>
+            <Field>
               검토 메모
-              <textarea
+              <Textarea
                 rows={6}
                 maxLength={5000}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
               />
-            </label>
+            </Field>
             <p className="small muted">
               거래로 옮겼다면 원본 위치와 입력한 내역을 메모해 두세요. 원본 내용은 그대로 보존돼요.
             </p>
           </fieldset>
-        </div>
-        <div className="form-footer">
+        </FormBody>
+        <FormFooter>
           <div className="footer-actions">
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy || uncertain}
-              onClick={onClose}
-            >
+            <CloseButton type="button" variant="secondary" disabled={busy || uncertain}>
               닫기
-            </button>
-            <button className="primary" type="submit" disabled={busy || conflict}>
+            </CloseButton>
+            <Button variant="primary" type="submit" disabled={busy || conflict}>
               {busy ? '저장 중…' : uncertain ? '저장 결과 다시 확인' : '저장'}
-            </button>
+            </Button>
           </div>
-        </div>
+        </FormFooter>
       </form>
     </Dialog>
   );
@@ -1260,7 +1318,7 @@ function HistoryComparison({ row, data }: { row: RecordHistory; data: Bootstrap 
           이 작업으로 기록이 제거되었어요. 삭제 전 값은 이력에 보존돼요.
         </p>
       )}
-      <div className="data-table-wrap">
+      <TableScroll aria-label="변경 전후 비교" className="data-table-wrap">
         <table>
           <thead>
             <tr>
@@ -1285,7 +1343,7 @@ function HistoryComparison({ row, data }: { row: RecordHistory; data: Bootstrap 
             ))}
           </tbody>
         </table>
-      </div>
+      </TableScroll>
       {!changed.length && <p className="muted small">변경된 필드 값이 없어요.</p>}
     </div>
   );

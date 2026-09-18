@@ -1,3 +1,4 @@
+import { Button, FormBody, FormFooter, Panel } from './ui';
 import { useId, useMemo, useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, Plus } from 'lucide-react';
 import type { Bootstrap, Ledger, Transaction } from '../shared/types';
@@ -123,7 +124,7 @@ export default function LedgerCalendar({
     onOpen(entry);
   };
   return (
-    <section className="ledger-calendar panel" aria-labelledby={headingId}>
+    <Panel className="ledger-calendar" aria-labelledby={headingId}>
       <header className="ledger-calendar-heading">
         <div>
           <h2 id={headingId}>
@@ -167,7 +168,8 @@ export default function LedgerCalendar({
               data-date={date}
               key={date}
             >
-              <button
+              <Button
+                variant="plain"
                 type="button"
                 className="ledger-calendar-add"
                 disabled={ledger.archived}
@@ -183,13 +185,14 @@ export default function LedgerCalendar({
                   </span>
                   <Plus className="calendar-add-icon" size={14} aria-hidden="true" />
                 </span>
-              </button>
+              </Button>
               {items.length > 0 && (
                 <div className="ledger-calendar-day-content">
                   <DayTotals entries={items} compact />
                   <div className="ledger-calendar-previews">
                     {items.slice(0, 2).map((entry) => (
-                      <button
+                      <Button
+                        variant="plain"
                         type="button"
                         className="ledger-calendar-preview"
                         aria-label={`${entry.description} 내역 열기`}
@@ -203,10 +206,11 @@ export default function LedgerCalendar({
                             <small>{ledgerPath(data.ledgers, entry.ledgerId)}</small>
                           )}
                         </span>
-                      </button>
+                      </Button>
                     ))}
                   </div>
-                  <button
+                  <Button
+                    variant="plain"
                     type="button"
                     className="ledger-calendar-day-count"
                     aria-label={`${date} 내역 ${items.length}건 보기`}
@@ -221,7 +225,7 @@ export default function LedgerCalendar({
                         : `${items.length}건 모아 보기`}
                     </span>
                     <span className="calendar-count-mobile">{items.length}건</span>
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -239,7 +243,7 @@ export default function LedgerCalendar({
           subtitle={`${ledger.name} · ${selectedEntries.length}건`}
           onClose={() => setSelectedDate(null)}
         >
-          <div className="form-body calendar-detail-body">
+          <FormBody className="calendar-detail-body">
             <DayTotals entries={selectedEntries} />
             <div className="calendar-detail-list">
               {selectedEntries.map((entry) => {
@@ -250,7 +254,8 @@ export default function LedgerCalendar({
                   (method) => method.id === entry.paymentMethodId,
                 );
                 return (
-                  <button
+                  <Button
+                    variant="plain"
                     type="button"
                     className="calendar-detail-entry"
                     aria-label={`${entry.description} 내역 열기`}
@@ -294,16 +299,17 @@ export default function LedgerCalendar({
                       {won(entry.amount)}
                       <small>원</small>
                     </span>
-                  </button>
+                  </Button>
                 );
               })}
             </div>
-          </div>
-          <div className="form-footer">
+          </FormBody>
+          <FormFooter>
             <span />
-            <button
+            <Button
+              variant="primary"
               type="button"
-              className="primary"
+
               disabled={ledger.archived}
               onClick={() => {
                 setSelectedDate(null);
@@ -311,10 +317,10 @@ export default function LedgerCalendar({
               }}
             >
               <Plus size={17} aria-hidden="true" />이 날짜에 내역 추가
-            </button>
-          </div>
+            </Button>
+          </FormFooter>
         </Dialog>
       )}
-    </section>
+    </Panel>
   );
 }

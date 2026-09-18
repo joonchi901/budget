@@ -1,3 +1,4 @@
+import { Button, Checkbox, Field, Input } from './ui';
 import { useMemo, useState } from 'react';
 import { ChevronRight, Layers3, Plus, Search, UsersRound, X } from 'lucide-react';
 import { ALL_LEDGERS_ID } from '../shared/hierarchy';
@@ -33,7 +34,7 @@ export default function LedgerRooms({
     <section className="ledger-rooms" aria-label="가계부 방 목록">
       <div className="ledger-rooms-search">
         <Search size={20} aria-hidden="true" />
-        <input
+        <Input
           type="search"
           aria-label="가계부 검색"
           placeholder="가계부 이름으로 찾아보세요"
@@ -41,13 +42,14 @@ export default function LedgerRooms({
           onChange={(event) => setQuery(event.target.value)}
         />
         {query && (
-          <button
+          <Button
+            variant="plain"
             className="icon-button"
             aria-label="가계부 검색 지우기"
             onClick={() => setQuery('')}
           >
             <X size={18} />
-          </button>
+          </Button>
         )}
       </div>
       <div className="ledger-rooms-list-heading">
@@ -68,7 +70,8 @@ export default function LedgerRooms({
               descendantCount,
             }) => (
               <li key={ledger.id}>
-                <button
+                <Button
+                  variant="plain"
                   className="ledger-room"
                   aria-label={`${names.get(ledger.name)! > 1 ? path : ledger.name} 가계부 열기`}
                   onClick={() => onOpen(ledger.id)}
@@ -108,7 +111,7 @@ export default function LedgerRooms({
                     )}
                     <ChevronRight size={17} aria-hidden="true" />
                   </span>
-                </button>
+                </Button>
               </li>
             ),
           )}
@@ -131,30 +134,33 @@ export default function LedgerRooms({
                 : '관리자가 가계부를 만들면 여기에서 함께 기록할 수 있어요.'}
           </p>
           {searching ? (
-            <button className="button secondary" onClick={() => setQuery('')}>
+            <Button variant="secondary" className="button" onClick={() => setQuery('')}>
               검색 지우기
-            </button>
+            </Button>
           ) : (
             admin && (
-              <button className="button primary" onClick={onCreate}>
+              <Button variant="primary" className="button" onClick={onCreate}>
                 <Plus size={18} />
                 가계부 만들기
-              </button>
+              </Button>
             )
           )}
         </div>
       )}
       {data.ledgers.some((ledger) => ledger.archived) && (
-        <label className="checkbox ledger-rooms-archive-toggle">
-          <input
-            type="checkbox"
+        <Field className="checkbox ledger-rooms-archive-toggle">
+          <Checkbox
             checked={includeArchived}
             onChange={(event) => setIncludeArchived(event.target.checked)}
           />
           보관한 가계부 포함
-        </label>
+        </Field>
       )}
-      <button className="ledger-rooms-collection" onClick={() => onOpen(ALL_LEDGERS_ID)}>
+      <Button
+        variant="plain"
+        className="ledger-rooms-collection"
+        onClick={() => onOpen(ALL_LEDGERS_ID)}
+      >
         <span className="ledger-rooms-collection-icon">
           <Layers3 size={20} aria-hidden="true" />
         </span>
@@ -163,7 +169,7 @@ export default function LedgerRooms({
           <small>모든 가계부의 기록을 한곳에서</small>
         </span>
         <ChevronRight size={17} aria-hidden="true" />
-      </button>
+      </Button>
       <p className="ledger-rooms-sharing">
         <UsersRound size={15} aria-hidden="true" />
         가족 구성원이 함께 보는 가계부예요.

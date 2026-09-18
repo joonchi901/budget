@@ -1,7 +1,7 @@
 import { CalendarDays, ChevronLeft, List, Menu, Settings2 } from 'lucide-react';
 import { UgaIcon, UgaLedgerIcon } from './brand/Uga';
 import { Tooltip } from './Tooltip';
-import { Button, IconButton } from './ui';
+import { IconButton, SegmentedControl } from './ui';
 import './room-header.css';
 
 export type RoomView = 'list' | 'calendar' | 'analytics' | 'planning';
@@ -75,20 +75,22 @@ export default function RoomHeader({
           <Menu size={21} aria-hidden="true" />
         </IconButton>
       </div>
-      <div className="room-tabs" role="group" aria-label="가계부 보기">
-        {views.map((item) => (
-          <Button
-            key={item.value}
-            variant="plain"
-            className={view === item.value ? 'selected' : ''}
-            aria-pressed={view === item.value}
-            onClick={() => onViewChange(item.value)}
-          >
-            {item.icon}
-            {item.label}
-          </Button>
-        ))}
-      </div>
+      <SegmentedControl<RoomView>
+        appearance="plain"
+        className="room-tabs"
+        aria-label="가계부 보기"
+        value={view}
+        onValueChange={onViewChange}
+        options={views.map((item) => ({
+          value: item.value,
+          label: (
+            <>
+              {item.icon}
+              {item.label}
+            </>
+          ),
+        }))}
+      />
     </section>
   );
 }

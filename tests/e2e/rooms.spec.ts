@@ -287,6 +287,16 @@ test('a dirty plan blocks browser history without discarding its fields or chang
   await expect(form.getByLabel('예산 금액', { exact: true })).toHaveValue('32100');
   expect((await snapshot(page)).plans).toEqual(before);
   await form.getByRole('button', { name: '닫기', exact: true }).last().click();
+  const discard = page.getByRole('dialog', { name: '입력 내용을 버릴까요?', exact: true });
+  await expect(discard).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(discard).not.toBeVisible();
+  await expect(form.getByLabel('계획 이름', { exact: true })).toHaveValue(
+    '뒤로가기 중 보호할 계획 초안',
+  );
+  await form.getByRole('button', { name: '닫기', exact: true }).last().click();
+  await discard.getByRole('button', { name: '변경 내용 버리기', exact: true }).click();
+  await expect(form).not.toBeVisible();
   await page.goBack();
   await expect(
     page

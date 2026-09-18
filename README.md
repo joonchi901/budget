@@ -81,7 +81,7 @@ Gmail이 아닌 주소의 Google 계정도 사용할 수 있습니다. 별칭·�
 
 ## UI 컴포넌트 명세
 
-`npm run storybook`으로 [로컬 Storybook](http://127.0.0.1:6006)을 엽니다. 실제 앱의 공통 컴포넌트·반응형 배치·가계부 패턴을 가상 데이터로 확인하고 상태·props·조작 검증을 관리합니다. 전체 화면의 공통화 현황과 작업 규칙은 [UI 컴포넌트 체계](./docs/ui-component-system.md)를 따릅니다. `npm run check:ui`는 정적 빌드와 Chromium 320/390/1440px 검사를 실행합니다.
+`npm run storybook`으로 [로컬 Storybook](http://127.0.0.1:6006)을 엽니다. 실제 앱의 공통 컴포넌트·반응형 배치와 로그인부터 데이터 관리까지 전체 주요 화면을 가상 데이터로 확인하고 상태·props·조작 검증을 관리합니다. 전체 화면의 공통화 현황과 작업 규칙은 [UI 컴포넌트 체계](./docs/ui-component-system.md)를 따릅니다. `npm run check:ui`는 정적 빌드와 Chromium 320/390/1440px 검사를 실행합니다.
 
 ## 개발 명령
 
@@ -133,3 +133,5 @@ NODE_USE_SYSTEM_CA=1 npm ci
 - [UI/UX 개선 기준](./docs/ui-ux-design.md): Toss 공식 자료 조사, 화면 구조·디자인 규칙과 검증
 - [우가 디자인시스템](./docs/uga-design-system.md): 캐릭터 기반 SVG 38종, 브랜드·UI 보드, 공통 토큰과 앱 적용
 - [구현 현황](./docs/implementation-status.md): 현재 소스·검증 근거와 후속 필수 기능
+
+전체 화면별 검증 범위와 수정한 문제는 [UI/UX 점검 기록](./docs/ui-ux-review.md)에 정리했습니다.

@@ -1,3 +1,4 @@
+import { TableScroll, Panel, Toolbar, Button, Field, Input, Checkbox } from './ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, FileSpreadsheet, Search } from 'lucide-react';
 import type { SourceRecord } from '../shared/data';
@@ -108,8 +109,8 @@ export default function WorkbookArchiveView({
   }
 
   return (
-    <section className="panel data-panel workbook-archive" aria-label="보관된 엑셀 원본">
-      <div className="section-heading">
+    <Panel className="data-panel workbook-archive" aria-label="보관된 엑셀 원본">
+      <Toolbar>
         <div>
           <h2>
             <FileSpreadsheet size={22} /> 엑셀 원본
@@ -119,7 +120,7 @@ export default function WorkbookArchiveView({
           </p>
         </div>
         <span className="badge">{archives.length}개 파일</span>
-      </div>
+      </Toolbar>
       {(loadError || error) && (
         <p className="alert error" role="alert">
           {error || loadError}
@@ -146,24 +147,24 @@ export default function WorkbookArchiveView({
               </p>
             </div>
             <div className="workbook-archive-actions">
-              <button
+              <Button
                 type="button"
-                className="secondary"
+                variant="secondary"
                 disabled={Boolean(busy)}
                 onClick={() => void readArchive(archive, false)}
                 aria-label={`${archive.fileName} 원본 열기`}
               >
                 원본 열기
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="secondary"
+                variant="secondary"
                 disabled={Boolean(busy)}
                 onClick={() => void readArchive(archive, true)}
                 aria-label={`${archive.fileName} 원본 다운로드`}
               >
                 <Download size={16} /> 다운로드
-              </button>
+              </Button>
             </div>
           </article>
         ))}
@@ -175,7 +176,7 @@ export default function WorkbookArchiveView({
       </div>
       {opened && (
         <div className="workbook-cell-viewer">
-          <div className="section-heading">
+          <Toolbar>
             <div>
               <h3>{opened.archive.fileName}</h3>
               <p className="small muted">
@@ -183,9 +184,9 @@ export default function WorkbookArchiveView({
                 확인할 수 있어요.
               </p>
             </div>
-          </div>
+          </Toolbar>
           <div className="workbook-cell-filters">
-            <label>
+            <Field>
               원본 시트
               <SelectField
                 value={String(sheetIndex)}
@@ -201,12 +202,13 @@ export default function WorkbookArchiveView({
                   </SelectOption>
                 ))}
               </SelectField>
-            </label>
-            <label>
+            </Field>
+            <Field>
               셀 주소·값·수식 검색
               <span className="workbook-cell-search">
                 <Search size={17} aria-hidden="true" />
-                <input
+                <Input
+                  type="search"
                   value={query}
                   onChange={(event) => {
                     setQuery(event.target.value);
@@ -215,10 +217,9 @@ export default function WorkbookArchiveView({
                   placeholder="예: V30, 여행, SUM"
                 />
               </span>
-            </label>
-            <label className="checkbox">
-              <input
-                type="checkbox"
+            </Field>
+            <Field className="checkbox">
+              <Checkbox
                 checked={formulasOnly}
                 onChange={(event) => {
                   setFormulasOnly(event.target.checked);
@@ -226,14 +227,14 @@ export default function WorkbookArchiveView({
                 }}
               />
               수식이 있는 셀만
-            </label>
+            </Field>
           </div>
           <p className="small muted">
             {sheet?.name} · 내용이 있는 셀 {cells.length.toLocaleString('ko-KR')}개 중{' '}
             {filtered.length.toLocaleString('ko-KR')}개 표시 대상. 값 없이 서식만 있는 셀은
             제외해요. 수식 결과는 원본에 저장된 값이에요.
           </p>
-          <div
+          <TableScroll
             className="data-table-wrap workbook-cell-table"
             role="region"
             aria-label="엑셀 원본 셀 표"
@@ -262,33 +263,33 @@ export default function WorkbookArchiveView({
             {!visible.length && (
               <p className="workbook-archive-empty muted">이 조건에 맞는 셀이 없어요.</p>
             )}
-          </div>
+          </TableScroll>
           {pages > 1 && (
             <nav className="workbook-cell-pagination" aria-label="원본 셀 페이지">
-              <button
+              <Button
                 type="button"
-                className="secondary"
+                variant="secondary"
                 disabled={currentPage === 0}
                 onClick={() => setPage(currentPage - 1)}
               >
                 이전
-              </button>
-              <span>
+              </Button>
+              <span role="status">
                 {currentPage + 1} / {pages} · {currentPage * pageSize + 1}~
                 {Math.min((currentPage + 1) * pageSize, filtered.length)}번째 셀
               </span>
-              <button
+              <Button
                 type="button"
-                className="secondary"
+                variant="secondary"
                 disabled={currentPage === pages - 1}
                 onClick={() => setPage(currentPage + 1)}
               >
                 다음
-              </button>
+              </Button>
             </nav>
           )}
         </div>
       )}
-    </section>
+    </Panel>
   );
 }

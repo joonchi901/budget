@@ -1,3 +1,4 @@
+import { Button, Checkbox, Field } from './ui';
 import { useRef, useState } from 'react';
 import {
   ArrowDown,
@@ -103,7 +104,8 @@ export default function LedgerTree({
               }}
             >
               {descendants.length ? (
-                <button
+                <Button
+                  variant="plain"
                   className="icon-button tree-toggle"
                   aria-label={`${ledger.name} ${expanded ? '접기' : '펼치기'}`}
                   onClick={() =>
@@ -116,11 +118,12 @@ export default function LedgerTree({
                   }
                 >
                   {expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                </button>
+                </Button>
               ) : (
                 <span className="tree-indent" />
               )}
-              <button
+              <Button
+                variant="plain"
                 className="tree-ledger-link"
                 onClick={() => onNavigate(ledger.id)}
                 aria-current={selectedId === ledger.id ? 'page' : undefined}
@@ -130,7 +133,7 @@ export default function LedgerTree({
                   {ledger.name}
                   {ledger.archived ? ' (보관)' : ''}
                 </span>
-              </button>
+              </Button>
               {admin && (
                 <div className="tree-actions">
                   <Popover
@@ -138,18 +141,20 @@ export default function LedgerTree({
                     matchTriggerWidth={false}
                     preferredWidth={220}
                     trigger={(props) => (
-                      <button
+                      <Button
+                        variant="plain"
                         {...props}
                         className="icon-button"
                         aria-label={`${ledger.name} 관리 메뉴`}
                       >
                         <MoreHorizontal size={17} />
-                      </button>
+                      </Button>
                     )}
                   >
                     {({ close }) => (
                       <div className="tree-action-menu">
-                        <button
+                        <Button
+                          variant="plain"
                           aria-label={`${ledger.name} 위치 변경`}
                           onClick={() => {
                             close();
@@ -158,8 +163,9 @@ export default function LedgerTree({
                         >
                           <FolderInput size={16} />
                           위치 변경
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="plain"
                           aria-label={`${ledger.name} 위로 이동`}
                           disabled={index === 0}
                           onClick={() => {
@@ -169,8 +175,9 @@ export default function LedgerTree({
                         >
                           <ArrowUp size={16} />
                           위로 이동
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="plain"
                           aria-label={`${ledger.name} 아래로 이동`}
                           disabled={index === siblings.length - 1}
                           onClick={() => {
@@ -180,7 +187,7 @@ export default function LedgerTree({
                         >
                           <ArrowDown size={16} />
                           아래로 이동
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </Popover>
@@ -196,7 +203,8 @@ export default function LedgerTree({
   }
   return (
     <div className="ledger-tree">
-      <button
+      <Button
+        variant="plain"
         className={`ledger-tree-all ${selectedId === ALL_LEDGERS_ID ? 'active' : ''}`}
         aria-current={selectedId === ALL_LEDGERS_ID ? 'page' : undefined}
         onClick={() => onNavigate(ALL_LEDGERS_ID)}
@@ -209,18 +217,14 @@ export default function LedgerTree({
         }}
       >
         <Layers3 size={20} /> 전체 가계부
-      </button>
+      </Button>
       <ul role="tree" aria-label={name}>
         {children(null)}
       </ul>
-      <label className="checkbox tree-archive-toggle">
-        <input
-          type="checkbox"
-          checked={archived}
-          onChange={(event) => setArchived(event.target.checked)}
-        />
+      <Field className="checkbox tree-archive-toggle">
+        <Checkbox checked={archived} onChange={(event) => setArchived(event.target.checked)} />
         보관한 가계부 표시
-      </label>
+      </Field>
       {admin && (
         <p className="tree-help">
           다른 가계부 위로 끌어 하위에 넣거나, 위치 변경 버튼을 사용하세요.

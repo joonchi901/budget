@@ -1,3 +1,4 @@
+import { FormBody, Button, Field, FormFooter } from './ui';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Bootstrap, Ledger } from '../shared/types';
 import { ledgerDescendantIds, ledgerPath, sortedLedgerChildren } from '../shared/hierarchy';
@@ -51,7 +52,8 @@ export default function HierarchyDialog({
     (!parentId || destinations.some((ledger) => ledger.id === parentId)) &&
     (!beforeId || siblings.some((ledger) => ledger.id === beforeId)),
   );
-  useUnsavedGuard(busy || uncertain);
+  const dirty = parentId !== (intent.parentId ?? '') || beforeId !== (intent.beforeId ?? '');
+  useUnsavedGuard(busy || uncertain || dirty);
   async function save() {
     if ((!admin && !pending.current) || conflict || (!valid && !pending.current) || busy) return;
     setBusy(true);
@@ -95,6 +97,7 @@ export default function HierarchyDialog({
       subtitle={intent.ledger.name}
       onClose={onClose}
       locked={busy || uncertain}
+      dirty={dirty}
     >
       <form
         onSubmit={(event: FormEvent) => {
@@ -102,14 +105,15 @@ export default function HierarchyDialog({
           void save();
         }}
       >
-        <div className="form-body">
+        <FormBody>
           <p className="small muted">
             이 가계부와 모든 하위 가계부가 함께 이동해요. 원본 거래와 자산 금액은 유지돼요.
           </p>
           {(parentId || null) !== (intent.ledger.parentId ?? null) &&
             Object.keys(intent.ledger.tagMappings ?? {}).length > 0 && (
               <p className="small muted">
-                상위 가계부가 바뀌면 기존 분류 대응을 초기화해요. 새 상위 기준으로 다시 설정해 주세요.
+                상위 가계부가 바뀌면 기존 분류 대응을 초기화해요. 새 상위 기준으로 다시 설정해
+                주세요.
               </p>
             )}
           {error && (
@@ -131,9 +135,9 @@ export default function HierarchyDialog({
                   <li key={ledger.id}>{ledgerPath(data.ledgers, ledger.id)}</li>
                 ))}
               </ul>
-              <button
+              <Button
                 type="button"
-                className="secondary"
+                variant="secondary"
                 disabled={!admin || !valid}
                 onClick={() => {
                   setBaseline({
@@ -145,7 +149,7 @@ export default function HierarchyDialog({
                 }}
               >
                 최신 구조를 확인했어요
-              </button>
+              </Button>
             </div>
           )}
           {uncertain && (
@@ -154,7 +158,7 @@ export default function HierarchyDialog({
             </div>
           )}
           <fieldset disabled={busy || uncertain || !admin}>
-            <label>
+            <Field>
               상위 가계부
               <SelectField
                 value={parentId}
@@ -170,8 +174,8 @@ export default function HierarchyDialog({
                   </SelectOption>
                 ))}
               </SelectField>
-            </label>
-            <label>
+            </Field>
+            <Field>
               같은 단계에서의 위치
               <SelectField value={beforeId} onValueChange={setBeforeId}>
                 <SelectOption value="">맨 뒤</SelectOption>
@@ -181,23 +185,24 @@ export default function HierarchyDialog({
                   </SelectOption>
                 ))}
               </SelectField>
-            </label>
+            </Field>
             {!valid && (
               <p className="error" role="alert">
                 목적지가 변경되었어요. 이동할 상위 가계부와 순서를 다시 선택해 주세요.
               </p>
             )}
           </fieldset>
-        </div>
-        <div className="form-footer">
+        </FormBody>
+        <FormFooter>
           <span />
-          <button
-            className="primary"
+          <Button
+            type="submit"
+            variant="primary"
             disabled={busy || conflict || (!admin && !uncertain) || (!valid && !uncertain)}
           >
             {busy ? '이동 중…' : uncertain ? '이동 결과 다시 확인' : '이 위치로 이동'}
-          </button>
-        </div>
+          </Button>
+        </FormFooter>
       </form>
     </Dialog>
   );
