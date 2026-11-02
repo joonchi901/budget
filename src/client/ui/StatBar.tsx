@@ -4,7 +4,7 @@ import { Bar } from './Bar';
 
 const percent = new Intl.NumberFormat('ko-KR', { style: 'percent', maximumFractionDigits: 1 });
 
-/** One stats line: label and amount, then a bar and the share of the total. */
+/** One stats line: label with its share and the amount, then a full-width bar. */
 export function StatBar({
   label,
   value,
@@ -24,10 +24,12 @@ export function StatBar({
 }) {
   return (
     <div className={`ui-stat-bar ${className}`.trim()}>
-      <span className="ui-stat-bar-label">{label}</span>
+      <span className="ui-stat-bar-label">
+        {label}{' '}
+        <span className="ui-stat-bar-percent">{percent.format(total > 0 ? value / total : 0)}</span>
+      </span>
       <Amount value={value} size="sm" />
       <Bar value={value} max={max} color={color} />
-      <span className="ui-stat-bar-percent">{percent.format(total > 0 ? value / total : 0)}</span>
     </div>
   );
 }

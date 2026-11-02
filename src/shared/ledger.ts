@@ -20,6 +20,8 @@ export type FieldDef =
       name: string;
       type: 'select' | 'multiSelect';
       options: TagOption[];
+      /** Shown for records without a value, such as '공동' for 누가. */
+      emptyLabel?: string;
       hidden?: boolean;
     };
 
@@ -107,4 +109,102 @@ export function ledgerForDate(ledgers: Ledger[], date: IsoDate): Ledger | undefi
   return ledgers.find(
     (ledger) => !ledger.archived && ledger.period.start <= date && date <= ledger.period.end,
   );
+}
+
+/** Stats axis name for the fixed 구분 field. */
+export const KIND_AXIS = '구분';
+
+/** Axes a stats view can group by: 구분, then select fields by name across the ledgers. */
+export function statAxes(ledgers: Ledger[]): string[] {
+  const names = ledgers.flatMap((ledger) =>
+    ledger.fields
+      .filter((field) => field.type !== 'text' && !field.hidden)
+      .map((field) => field.name),
+  );
+  return [KIND_AXIS, ...new Set(names)];
+}
+
+export type Share = { name: string; color: string; value: number };
+
+/**
+ * Amounts per option of the `axis` field for records of one nature, largest first. Options with
+ * the same name merge across ledgers. A multi-select record counts in full for each chosen
+ * option, so shares may add up to more than the total. Ledgers without the field are skipped.
+ */
+export function breakdown(
+  records: LedgerRecord[],
+  ledgers: Ledger[],
+  axis: string,
+  nature: KindOption['nature'],
+): Share[] {
+  const kinds = new Map(ledgers.flatMap((ledger) => ledger.kinds.map((kind) => [kind.id, kind])));
+  const shares = new Map<string, Share>();
+  const add = (name: string, color: string, amount: number) => {
+    const share = shares.get(name) ?? { name, color, value: 0 };
+    share.value += amount;
+    shares.set(name, share);
+  };
+  for (const record of records) {
+    const kind = kinds.get(record.kindId);
+    if (kind?.nature !== nature) continue;
+    if (axis === KIND_AXIS) {
+      add(kind.name, kind.color, record.amount);
+      continue;
+    }
+    const ledger = ledgers.find((item) => item.id === record.ledgerId);
+    const field = ledger?.fields.find((item) => item.name === axis);
+    if (!field || field.type === 'text') continue;
+    const value = record.values[field.id];
+    const chosen = Array.isArray(value)
+      ? field.options.filter((option) => value.includes(option.id))
+      : [];
+    if (!chosen.length) add(field.emptyLabel ?? '미지정', '#9B8674', record.amount);
+    for (const option of chosen) add(option.name, option.color, record.amount);
+  }
+  return [...shares.values()].sort((a, b) => b.value - a.value);
+}
+
+export type RecordFilter = {
+  /** Matches 내용 and text field values, ignoring case. */
+  query?: string;
+  nature?: KindOption['nature'];
+  /** Every condition must match: an option name on an axis, as produced by breakdown(). */
+  options?: { axis: string; name: string }[];
+};
+
+/** Records matching all conditions; option names match across ledgers like breakdown(). */
+export function filterRecords(
+  records: LedgerRecord[],
+  ledgers: Ledger[],
+  filter: RecordFilter,
+): LedgerRecord[] {
+  const query = filter.query?.trim().toLocaleLowerCase() ?? '';
+  return records.filter((record) => {
+    const ledger = ledgers.find((item) => item.id === record.ledgerId);
+    const kind = ledger?.kinds.find((item) => item.id === record.kindId);
+    if (!ledger || !kind) return false;
+    if (filter.nature && kind.nature !== filter.nature) return false;
+    if (query) {
+      const texts = [
+        record.title,
+        ...ledger.fields
+          .filter((field) => field.type === 'text')
+          .map((field) => record.values[field.id]),
+      ];
+      if (
+        !texts.some((text) => typeof text === 'string' && text.toLocaleLowerCase().includes(query))
+      )
+        return false;
+    }
+    return (filter.options ?? []).every(({ axis, name }) => {
+      if (axis === KIND_AXIS) return kind.name === name;
+      const field = ledger.fields.find((item) => item.name === axis);
+      if (!field || field.type === 'text') return false;
+      const value = record.values[field.id];
+      const chosen = Array.isArray(value)
+        ? field.options.filter((option) => value.includes(option.id)).map((option) => option.name)
+        : [];
+      return chosen.length ? chosen.includes(name) : (field.emptyLabel ?? '미지정') === name;
+    });
+  });
 }

@@ -67,7 +67,13 @@ const monthLedger = (id: string, name: string, start: string, end: string): Ledg
         option(`${id}-cat-saving`, '주택청약', '#286588'),
       ],
     },
-    { id: `${id}-f-who`, name: '누가', type: 'multiSelect', options: people(id) },
+    {
+      id: `${id}-f-who`,
+      name: '누가',
+      type: 'multiSelect',
+      options: people(id),
+      emptyLabel: '공동',
+    },
     { id: `${id}-f-note`, name: '비고', type: 'text' },
   ],
 });
@@ -102,7 +108,13 @@ export const japanTrip: Ledger = {
         option('trip-pay-cash', '현금', '#64866F'),
       ],
     },
-    { id: 'trip-f-who', name: '누가', type: 'multiSelect', options: people('trip') },
+    {
+      id: 'trip-f-who',
+      name: '누가',
+      type: 'multiSelect',
+      options: people('trip'),
+      emptyLabel: '공동',
+    },
   ],
 };
 export const ledgers = [november, december, japanTrip];

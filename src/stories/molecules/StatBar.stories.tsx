@@ -17,7 +17,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '통계 한 줄. 이름과 금액, 막대와 비율을 보여줍니다. 비율은 value / total, 막대 길이는 value / max입니다. 목록에서는 가장 큰 항목을 max로 넘겨 첫 막대가 가득 차게 합니다.',
+          '통계 한 줄. 이름·비율과 금액, 그 아래 전체 폭 막대를 보여줍니다. 비율은 value / total, 막대 길이는 value / max입니다. 목록에서는 가장 큰 항목을 max로 넘겨 첫 막대가 가득 차게 합니다.',
       },
     },
   },

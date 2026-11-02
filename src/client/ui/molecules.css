@@ -202,6 +202,7 @@
 .ui-list-row-description {
   color: var(--brand-text-secondary);
   font-size: var(--brand-font-size-sm);
+  word-break: keep-all;
   overflow-wrap: anywhere;
 }
 .ui-list-row-trailing {
@@ -225,10 +226,13 @@
   font-weight: var(--brand-font-weight-medium);
   overflow-wrap: anywhere;
 }
+.ui-stat-bar > .ui-bar {
+  grid-column: 1 / -1;
+}
 .ui-stat-bar-percent {
-  min-width: 3.5em;
+  margin-left: var(--brand-space-1);
   color: var(--brand-text-secondary);
   font-size: var(--brand-font-size-caption);
+  font-weight: var(--brand-font-weight-regular);
   font-variant-numeric: tabular-nums;
-  text-align: right;
 }

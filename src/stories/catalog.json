@@ -216,6 +216,94 @@
     "usage": "화면의 내용 경계·요약·도구모음·키보드 스크롤 영역"
   },
   {
+    "name": "RoomListItem",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Room.tsx",
+    "story": "src/stories/organisms/RoomListItem.stories.tsx",
+    "status": "ready",
+    "usage": "방 목록 한 줄: 기간 또는 마지막 내역, 시간, 새 내역 수"
+  },
+  {
+    "name": "RoomHeader",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Room.tsx",
+    "story": "src/stories/organisms/RoomHeader.stories.tsx",
+    "status": "ready",
+    "usage": "방 머리: 뒤로, 이름·기간, ⋯ 메뉴, 표·캘린더·통계(·가계부별) 전환"
+  },
+  {
+    "name": "SummaryStrip",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Room.tsx",
+    "story": "src/stories/organisms/SummaryStrip.stories.tsx",
+    "status": "ready",
+    "usage": "수입·지출·남은 금액"
+  },
+  {
+    "name": "RecordRow / RecordDayGroup / RecordList",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Records.tsx",
+    "story": "src/stories/organisms/RecordList.stories.tsx",
+    "status": "ready",
+    "usage": "날짜별 내역 목록, 날짜별 합계, 원본 가계부 표시"
+  },
+  {
+    "name": "RecordTable",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Records.tsx",
+    "story": "src/stories/organisms/RecordTable.stories.tsx",
+    "status": "ready",
+    "usage": "Notion식 넓게 보기 표"
+  },
+  {
+    "name": "RecordFilterBar",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Records.tsx",
+    "story": "src/stories/organisms/RecordFilterBar.stories.tsx",
+    "status": "ready",
+    "usage": "검색·수입/지출·태그 조건"
+  },
+  {
+    "name": "PeriodCalendar / DayRecords",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Calendar.tsx",
+    "story": "src/stories/organisms/PeriodCalendar.stories.tsx",
+    "status": "ready",
+    "usage": "기간 맞춤 주 단위 달력과 날짜별 내역·이 날짜로 추가"
+  },
+  {
+    "name": "StatsBreakdown",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Stats.tsx",
+    "story": "src/stories/organisms/StatsBreakdown.stories.tsx",
+    "status": "ready",
+    "usage": "태그 단위 통계, 묶음에서 같은 이름 합산"
+  },
+  {
+    "name": "DynamicField / RecordForm",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/RecordForm.tsx",
+    "story": "src/stories/organisms/RecordForm.stories.tsx",
+    "status": "ready",
+    "usage": "내역 입력 폼, 필드 형태별 입력과 옵션 즉석 추가"
+  },
+  {
+    "name": "FieldSchemaEditor / TagOptionEditor",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Settings.tsx",
+    "story": "src/stories/organisms/FieldSchemaEditor.stories.tsx",
+    "status": "ready",
+    "usage": "가계부 필드 구성과 태그 옵션 관리"
+  },
+  {
+    "name": "LedgerCardList / GroupPicker / LedgerPicker",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Groups.tsx",
+    "story": "src/stories/organisms/Groups.stories.tsx",
+    "status": "ready",
+    "usage": "묶음의 가계부별 보기, 소속 묶음 선택, 저장할 가계부 선택"
+  },
+  {
     "name": "Dialog",
     "layer": "05 Templates",
     "source": "src/client/templates/Dialog.tsx",
