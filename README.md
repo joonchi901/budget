@@ -13,8 +13,9 @@
 | `src/client/brand/`         | 디자인 토큰 `tokens.css`, 로고·캐릭터·아이콘 컴포넌트 `Uga.tsx`                                |
 | `src/client/ui/`            | Atoms·Molecules: 버튼, 입력, 태그, 툴팁, 레이아웃, 자체 선택·날짜·색상·파일 입력, 폼·화면 패턴 |
 | `src/client/templates/`     | Templates: 다이얼로그와 미저장 이동 방지                                                       |
+| `src/shared/`               | 도메인 타입과 검증·합계 함수(가계부·필드·태그 옵션·내역·묶음)                                  |
 | `src/client/app-styles.css` | 공통 스타일 진입점. 토큰 → 기본 요소 → 컨트롤 순서로 불러옵니다                                |
-| `src/stories/`              | Storybook 명세: 단계별 폴더(guide, foundations, atoms, molecules, templates)                   |
+| `src/stories/`              | Storybook 명세: 단계별 폴더와 합성 데이터 `fixtures.ts`                                        |
 
 ## 실행
 

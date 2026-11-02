@@ -52,7 +52,7 @@ src/client/
 src/stories/<단계>/                       스토리도 같은 단계로
 ```
 
-`check:ui-spec`은 단계 폴더 밖(`src/client/` 바로 아래)의 TS 파일과 허용되지 않은 방향의 import를 실패로 처리한다. 허용: `ui` → brand, `ledger`·`templates` → brand·ui, `views` → 전부. `views/`의 파일은 화면 목록과 story에 등록해야 한다. 합성 데이터는 Organisms가 받는 타입(가계부·필드 정의·태그 옵션·내역·묶음)과 같은 모양으로 둔다.
+`check:ui-spec`은 단계 폴더 밖(`src/client/` 바로 아래)의 TS 파일과 허용되지 않은 방향의 import를 실패로 처리한다. 허용: `ui` → brand, `ledger` → brand·ui·shared, `templates` → brand·ui, `views` → 전부. `src/shared`는 도메인 계약이라 `ledger`·`views`만 가져온다. `views/`의 파일은 화면 목록과 story에 등록해야 한다. 합성 데이터는 Organisms가 받는 타입(가계부·필드 정의·태그 옵션·내역·묶음)과 같은 모양으로 둔다.
 
 ### 조립 순서
 
@@ -68,7 +68,7 @@ src/stories/<단계>/                       스토리도 같은 단계로
 
 ### 현재 상태
 
-1~~3단계(기존 컴포넌트 이동, 신규 Atoms, 신규 Molecules)를 마쳤다. 기존 요소는 `brand/`·`ui/`·`templates/`에 있고, Storybook은 `00 Guide`~~`05 Templates` 제목으로 정리했다. TagBadge는 `Tag`로 이름을 바꿨다(CSS 클래스는 그대로). 2단계에서 Amount·CountBadge·Bar·Switch·Slider를 추가하고 Input·Textarea·Checkbox·Radio를 `02 Atoms/Inputs` 스토리로 분리했다. 3단계에서 AmountInput·SearchField·FilterChip·ChipSelect·Menu·List·ListRow·StatBar를 추가했다. Molecules 스타일은 `ui/molecules.css`에 있다. Menu를 위해 Popover에 `role="menu"`를 추가했다. [컴포넌트 목록](../src/stories/catalog.json)은 28개 항목이 모두 `ready`(조립 준비)이며 [화면 목록](../src/stories/screens.json)은 비어 있다. 다음은 4단계(도메인 타입과 합성 데이터)다.
+1–4단계(기존 컴포넌트 이동, 신규 Atoms, 신규 Molecules, 도메인 타입과 합성 데이터)를 마쳤다. 기존 요소는 `brand/`·`ui/`·`templates/`에 있고, Storybook은 `00 Guide`부터 `05 Templates`까지 단계 제목으로 정리했다. TagBadge는 `Tag`로 이름을 바꿨다(CSS 클래스는 그대로). 2단계에서 Amount·CountBadge·Bar·Switch·Slider를 추가하고 Input·Textarea·Checkbox·Radio를 `02 Atoms/Inputs` 스토리로 분리했다. 3단계에서 AmountInput·SearchField·FilterChip·ChipSelect·Menu·List·ListRow·StatBar를 추가했다. Molecules 스타일은 `ui/molecules.css`에 있고, Menu를 위해 Popover에 `role="menu"`를 추가했다. 4단계에서 도메인 타입과 검증·합계 함수(`src/shared/ledger.ts`), Notion 샘플 기반 합성 데이터(`src/stories/fixtures.ts`), 합계를 검증하는 `00 Guide/데이터 모델` 스토리를 추가했다. [컴포넌트 목록](../src/stories/catalog.json)은 28개 항목이 모두 `ready`(조립 준비)이며 [화면 목록](../src/stories/screens.json)은 비어 있다. 다음은 5단계(Organisms)다.
 
 ## 실행
 

@@ -41,12 +41,13 @@ for (const path of files) {
 const ts = (await import('typescript')).default;
 const screens = JSON.parse(await readFile('src/stories/screens.json', 'utf8'));
 // Each level may import itself and the levels listed; views assemble everything.
+// `shared` is the domain contract in src/shared, which only domain-aware levels may use.
 const allowedImports = {
   brand: ['brand'],
   ui: ['brand', 'ui'],
-  ledger: ['brand', 'ui', 'ledger'],
+  ledger: ['brand', 'ui', 'ledger', 'shared'],
   templates: ['brand', 'ui', 'templates'],
-  views: ['brand', 'ui', 'ledger', 'templates', 'views'],
+  views: ['brand', 'ui', 'ledger', 'templates', 'views', 'shared'],
 };
 const sources = new Map(screens.map((screen) => [screen.source, screen]));
 for (const screen of screens) {
@@ -73,7 +74,12 @@ for (const path of clientFiles) {
   for (const [, specifier] of (await readFile(path, 'utf8')).matchAll(
     /(?:from|import)\s+['"](\.[^'"]+)['"]/g,
   )) {
-    const target = posix.join(posix.dirname(path), specifier).split('/')[2];
+    const resolved = posix.join(posix.dirname(path), specifier);
+    const target = resolved.startsWith('src/client/')
+      ? resolved.split('/')[2]
+      : resolved.startsWith('src/shared/')
+        ? 'shared'
+        : resolved;
     if (!allowedImports[level].includes(target))
       errors.push(`${path}: ${level}/ must not import ${target}/ (${specifier})`);
   }
