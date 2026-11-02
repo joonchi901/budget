@@ -27,9 +27,10 @@
   min-width: 0;
   padding: var(--brand-space-4);
 }
+/* Room for the tallest bottom bar (a 52px tab bar) so the last content is never covered. */
 .ui-screen[data-has-bottom] .ui-screen-body {
   padding-bottom: calc(
-    var(--brand-space-4) * 2 + var(--brand-control-size) + env(safe-area-inset-bottom)
+    52px + var(--brand-space-3) * 2 + var(--brand-space-4) + env(safe-area-inset-bottom)
   );
 }
 .ui-screen-bottom {

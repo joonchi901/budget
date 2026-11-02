@@ -1,10 +1,5 @@
 /* Organisms: ledger domain blocks. App and Storybook load this same file. */
 
-.ledger-room-header {
-  display: flex;
-  flex-direction: column;
-  gap: var(--brand-space-3);
-}
 .ledger-room-header-bar {
   display: flex;
   align-items: center;
@@ -22,6 +17,42 @@
 .ledger-room-header-title p {
   color: var(--brand-text-secondary);
   font-size: var(--brand-font-size-caption);
+}
+
+.ledger-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+}
+.ledger-tab-bar > .ui-choice-group {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+.ledger-tab-bar .ui-choice-group > .ui-button {
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  min-height: 52px;
+  padding: var(--brand-space-1) 0;
+  border-radius: var(--brand-radius-control);
+  color: var(--brand-muted);
+  font-size: var(--brand-font-size-xs);
+  font-weight: var(--brand-font-weight-medium);
+}
+.ledger-tab-bar .ui-choice-group > .ui-button.selected {
+  color: var(--brand-primary);
+  font-weight: var(--brand-font-weight-bold);
+}
+.ledger-add-button.ui-button {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  min-height: 52px;
+  padding: 0;
+  border-radius: 50%;
+  box-shadow: var(--brand-shadow-raised);
 }
 
 .ledger-summary {
@@ -197,6 +228,7 @@
   padding: 0 6px;
 }
 .ledger-calendar-date {
+  white-space: nowrap;
   font-size: var(--brand-font-size-caption);
   font-weight: var(--brand-font-weight-semibold);
   font-variant-numeric: tabular-nums;

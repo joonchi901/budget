@@ -1,4 +1,4 @@
-export { RoomListItem, RoomHeader, SummaryStrip, type RoomView } from './Room';
+export { RoomListItem, RoomHeader, RoomTabBar, SummaryStrip, type RoomView } from './Room';
 export {
   RecordRow,
   RecordDayGroup,

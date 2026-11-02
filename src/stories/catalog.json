@@ -229,7 +229,15 @@
     "source": "src/client/ledger/Room.tsx",
     "story": "src/stories/organisms/RoomHeader.stories.tsx",
     "status": "ready",
-    "usage": "방 머리: 뒤로, 이름·기간, ⋯ 메뉴, 표·캘린더·통계(·가계부별) 전환"
+    "usage": "방 제목 막대: 뒤로, 이름·기간, ⋯ 메뉴"
+  },
+  {
+    "name": "RoomTabBar",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Room.tsx",
+    "story": "src/stories/organisms/RoomTabBar.stories.tsx",
+    "status": "ready",
+    "usage": "방 하단 막대: 표·캘린더·통계(·가계부별) 전환과 둥근 내역 추가 버튼"
   },
   {
     "name": "SummaryStrip",

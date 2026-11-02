@@ -1,7 +1,17 @@
-import { ChevronLeft, MoreHorizontal } from 'lucide-react';
+import type { ReactNode } from 'react';
+import {
+  CalendarDays,
+  ChartPie,
+  ChevronLeft,
+  Layers,
+  List,
+  MoreHorizontal,
+  Plus,
+} from 'lucide-react';
 import { UgaIcon, type UgaIconName } from '../brand/Uga';
 import {
   Amount,
+  Button,
   CountBadge,
   IconButton,
   ListRow,
@@ -55,50 +65,87 @@ const viewLabels: Record<RoomView, string> = {
   ledgers: '가계부별',
 };
 
-/** Room title bar with back, menu and the view switch. The title is the page heading. */
+/** Room title bar: back to the room list, name and period, ⋯ menu. The title is the page heading. */
 export function RoomHeader({
   title,
   subtitle,
-  views,
-  view,
-  onViewChange,
   onBack,
   menuItems,
 }: {
   title: string;
   subtitle: string;
-  views: RoomView[];
-  view: RoomView;
-  onViewChange(view: RoomView): void;
   onBack(): void;
   menuItems: MenuItem[];
 }) {
   return (
-    <div className="ledger-room-header">
-      <div className="ledger-room-header-bar">
-        <IconButton aria-label="방 목록으로" onClick={onBack}>
-          <ChevronLeft size={22} />
-        </IconButton>
-        <div className="ledger-room-header-title">
-          <h1>{title}</h1>
-          <p>{subtitle}</p>
-        </div>
-        <Menu
-          label={`${title} 메뉴`}
-          items={menuItems}
-          trigger={(props) => (
-            <IconButton {...props} aria-label={`${title} 메뉴`}>
-              <MoreHorizontal size={22} />
-            </IconButton>
-          )}
-        />
+    <div className="ledger-room-header-bar">
+      <IconButton aria-label="방 목록으로" onClick={onBack}>
+        <ChevronLeft size={22} />
+      </IconButton>
+      <div className="ledger-room-header-title">
+        <h1>{title}</h1>
+        <p>{subtitle}</p>
       </div>
+      <Menu
+        label={`${title} 메뉴`}
+        items={menuItems}
+        trigger={(props) => (
+          <IconButton {...props} aria-label={`${title} 메뉴`}>
+            <MoreHorizontal size={22} />
+          </IconButton>
+        )}
+      />
+    </div>
+  );
+}
+
+const viewIcons: Record<RoomView, ReactNode> = {
+  table: <List size={20} />,
+  calendar: <CalendarDays size={20} />,
+  stats: <ChartPie size={20} />,
+  ledgers: <Layers size={20} />,
+};
+
+/**
+ * Bottom bar of a room, within thumb reach: the view switch and the round 내역 추가 button.
+ * The views keep the segmented keyboard contract (arrow keys, Home, End).
+ */
+export function RoomTabBar({
+  views,
+  view,
+  onViewChange,
+  onAdd,
+}: {
+  views: RoomView[];
+  view: RoomView;
+  onViewChange(view: RoomView): void;
+  onAdd(): void;
+}) {
+  return (
+    <div className="ledger-tab-bar">
       <SegmentedControl
         aria-label="보기"
+        appearance="plain"
         value={view}
         onValueChange={onViewChange}
-        options={views.map((value) => ({ value, label: viewLabels[value] }))}
+        options={views.map((value) => ({
+          value,
+          label: (
+            <>
+              {viewIcons[value]}
+              <span>{viewLabels[value]}</span>
+            </>
+          ),
+        }))}
       />
+      <Button
+        variant="primary"
+        className="ledger-add-button"
+        aria-label="내역 추가"
+        onClick={onAdd}
+      >
+        <Plus size={26} />
+      </Button>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Copy, Plus, Settings2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Settings2 } from 'lucide-react';
 import {
   DayRecords,
   LedgerCardList,
@@ -8,6 +8,7 @@ import {
   RecordList,
   RecordTable,
   RoomHeader,
+  RoomTabBar,
   StatsBreakdown,
   SummaryStrip,
   addDays,
@@ -19,7 +20,7 @@ import {
   type RoomView,
 } from '../ledger';
 import { BottomSheet, Screen } from '../templates';
-import { Button, IconButton, Inline, type MenuItem } from '../ui';
+import { IconButton, Inline, type MenuItem } from '../ui';
 import {
   defaultStatAxis,
   filterRecords,
@@ -87,23 +88,12 @@ function Room({
     <Screen
       top={
         <>
-          <RoomHeader
-            title={title}
-            subtitle={subtitle}
-            views={views}
-            view={view}
-            onViewChange={setView}
-            onBack={onBack}
-            menuItems={menuItems}
-          />
+          <RoomHeader title={title} subtitle={subtitle} onBack={onBack} menuItems={menuItems} />
           <SummaryStrip totals={totals(records, ledgers)} />
         </>
       }
       bottom={
-        <Button variant="primary" onClick={() => onAddRecord()}>
-          <Plus size={18} />
-          내역 추가
-        </Button>
+        <RoomTabBar views={views} view={view} onViewChange={setView} onAdd={() => onAddRecord()} />
       }
     >
       {view === 'table' && (
