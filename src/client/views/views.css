@@ -1,0 +1,47 @@
+/* Views: page-level arrangement only; components keep their own styles. */
+
+.view-login {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: var(--brand-space-6) var(--brand-space-4);
+  text-align: center;
+}
+.view-login-card {
+  align-items: center;
+  width: 100%;
+  max-width: 360px;
+}
+.view-login-card > .ui-button {
+  width: 100%;
+}
+.view-login h1 {
+  font-size: var(--brand-font-size-title);
+}
+.view-error {
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border-radius: var(--brand-radius-control);
+  background: var(--brand-danger-soft);
+  color: var(--brand-danger);
+  font-size: var(--brand-font-size-sm);
+}
+.view-home-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+}
+.view-home-title h1 {
+  font-size: var(--brand-font-size-section);
+}
+.view-month-title {
+  font-size: var(--brand-font-size-md);
+}
+.view-danger.ui-button {
+  color: var(--brand-danger);
+}
+.view-icon-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}

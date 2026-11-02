@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "name": "로그인",
+    "source": "src/client/views/LoginView.tsx",
+    "story": "src/stories/views/Login.stories.tsx"
+  },
+  {
+    "name": "방 목록",
+    "source": "src/client/views/RoomListView.tsx",
+    "story": "src/stories/views/RoomList.stories.tsx"
+  },
+  {
+    "name": "가계부 방",
+    "source": "src/client/views/RoomViews.tsx",
+    "story": "src/stories/views/LedgerRoom.stories.tsx"
+  },
+  {
+    "name": "묶음 방",
+    "source": "src/client/views/RoomViews.tsx",
+    "story": "src/stories/views/GroupRoom.stories.tsx"
+  },
+  {
+    "name": "내역 입력",
+    "source": "src/client/views/RecordEntryView.tsx",
+    "story": "src/stories/views/RecordEntry.stories.tsx"
+  },
+  {
+    "name": "가계부 만들기·설정, 묶음 설정",
+    "source": "src/client/views/SetupViews.tsx",
+    "story": "src/stories/views/Setup.stories.tsx"
+  }
+]
