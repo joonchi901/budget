@@ -1,8 +1,7 @@
 import { useEffect, useState, type ComponentProps } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { SelectField, SelectGroup, SelectOption } from '../../client/SelectField';
-import { TagBadge } from '../../client/TagBadge';
+import { SelectField, SelectGroup, SelectOption, Tag } from '../../client/ui';
 
 function ControlledSelect(args: ComponentProps<typeof SelectField>) {
   const [value, setValue] = useState(args.value);
@@ -33,13 +32,13 @@ const options = (
   <>
     <SelectGroup label="생활">
       <SelectOption value="food">
-        <TagBadge name="식비" color="#D28C70" />
+        <Tag name="식비" color="#D28C70" />
       </SelectOption>
       <SelectOption value="transport">
-        <TagBadge name="교통" color="#6C89A4" />
+        <Tag name="교통" color="#6C89A4" />
       </SelectOption>
       <SelectOption value="home">
-        <TagBadge name="주거" color="#64866F" />
+        <Tag name="주거" color="#64866F" />
       </SelectOption>
     </SelectGroup>
     <SelectGroup label="기타">
@@ -52,7 +51,7 @@ const options = (
 );
 
 const meta = {
-  title: '02 Components/SelectField',
+  title: '03 Molecules · 분자/SelectField',
   component: SelectField,
   tags: ['autodocs'],
   parameters: {

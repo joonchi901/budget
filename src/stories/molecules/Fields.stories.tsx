@@ -15,7 +15,7 @@ import {
   Panel,
 } from '../../client/ui';
 const meta = {
-  title: '02 Components/Fields',
+  title: '03 Molecules · 분자/Fields',
   component: TextField,
   tags: ['root-screens'],
   args: { label: '가계부 이름', placeholder: '이름을 입력해 주세요.' },

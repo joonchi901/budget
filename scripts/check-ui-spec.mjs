@@ -1,5 +1,5 @@
 import { readFile, access, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 
 const catalog = JSON.parse(await readFile('src/stories/catalog.json', 'utf8'));
 const statuses = new Set(['shared', 'partial', 'ready', 'legacy']);
@@ -36,22 +36,18 @@ for (const path of files) {
   if (/from ['"].*\/(App|useBudget)['"]/.test(text))
     errors.push(`${path}: production app/session must not mount in Storybook`);
 }
-// Every screen uses shared controls. Native elements belong only to their leaf
-// implementations; a new page cannot silently reintroduce a second UI system.
+// Domain blocks, templates and views use shared controls. Native elements belong only to
+// ui/ leaf implementations; a new view cannot silently reintroduce a second UI system.
 const ts = (await import('typescript')).default;
 const screens = JSON.parse(await readFile('src/stories/screens.json', 'utf8'));
-const nativeOwners = new Set([
-  'ColorField.tsx',
-  'DateFields.tsx',
-  'FileField.tsx',
-  'SelectField.tsx',
-  'TagBadge.tsx',
-  'Popover.tsx',
-  'Tooltip.tsx',
-  'components.tsx',
-  'App.tsx',
-  'main.tsx',
-]);
+// Each level may import itself and the levels listed; views assemble everything.
+const allowedImports = {
+  brand: ['brand'],
+  ui: ['brand', 'ui'],
+  ledger: ['brand', 'ui', 'ledger'],
+  templates: ['brand', 'ui', 'templates'],
+  views: ['brand', 'ui', 'ledger', 'templates', 'views'],
+};
 const sources = new Map(screens.map((screen) => [screen.source, screen]));
 for (const screen of screens) {
   for (const path of [screen.source, screen.story]) {
@@ -62,12 +58,28 @@ for (const screen of screens) {
     }
   }
 }
-for (const path of await filesMatching('src/client', '.tsx')) {
-  if (path.startsWith('src/client/ui/') || path.startsWith('src/client/brand/')) continue;
-  const file = path.slice('src/client/'.length);
-  if (!nativeOwners.has(file) && !sources.has(path))
-    errors.push(`${path}: screen registry and live story required`);
-  if (nativeOwners.has(file) && !['App.tsx', 'components.tsx'].includes(file)) continue;
+const clientFiles = [
+  ...(await filesMatching('src/client', '.ts')),
+  ...(await filesMatching('src/client', '.tsx')),
+];
+for (const path of clientFiles) {
+  const level = path.split('/')[2];
+  if (path.split('/').length === 3 || !allowedImports[level]) {
+    errors.push(
+      `${path}: place components in a level folder (${Object.keys(allowedImports).join(', ')})`,
+    );
+    continue;
+  }
+  for (const [, specifier] of (await readFile(path, 'utf8')).matchAll(
+    /(?:from|import)\s+['"](\.[^'"]+)['"]/g,
+  )) {
+    const target = posix.join(posix.dirname(path), specifier).split('/')[2];
+    if (!allowedImports[level].includes(target))
+      errors.push(`${path}: ${level}/ must not import ${target}/ (${specifier})`);
+  }
+  if (level === 'ui' || level === 'brand' || !path.endsWith('.tsx')) continue;
+  if (level === 'views' && !sources.has(path))
+    errors.push(`${path}: view registry and live story required`);
   const source = ts.createSourceFile(
     path,
     await readFile(path, 'utf8'),

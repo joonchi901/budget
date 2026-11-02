@@ -20,8 +20,9 @@ function Guide() {
         <Stack gap={3}>
           <h2>구성 순서</h2>
           <p>
-            기초 규칙 → 기본 컴포넌트 → 배치 → 화면 패턴 → 도메인 → 전체 화면 → 앱의 데이터·라우팅
-            연결
+            Foundations(기초) → Atoms(원자) → Molecules(분자) → Organisms(유기체) →
+            Templates(템플릿) → Views(화면) → 앱의 데이터·라우팅 연결. 아래 단계는 위 단계를
+            가져오지 않습니다.
           </p>
           <p>
             세로 흐름은 Stack, 가로 흐름은 Inline, 같은 너비의 카드는 Grid로 조립합니다. 달력과
@@ -93,7 +94,7 @@ function Guide() {
   );
 }
 const meta = {
-  title: '00 Guide/시작하기',
+  title: '00 Guide · 안내/시작하기',
   component: Guide,
   parameters: {
     docs: {

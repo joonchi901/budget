@@ -41,7 +41,7 @@ function Foundations() {
   );
 }
 const meta = {
-  title: '01 Foundations/Tokens',
+  title: '01 Foundations · 기초/Tokens',
   component: Foundations,
   parameters: {
     docs: {

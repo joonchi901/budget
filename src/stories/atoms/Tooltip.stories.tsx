@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within, waitFor } from 'storybook/test';
 import { Info } from 'lucide-react';
-import { Tooltip } from '../../client/Tooltip';
+import { Tooltip } from '../../client/ui';
 
 const meta = {
-  title: '02 Components/Tooltip',
+  title: '02 Atoms · 원자/Tooltip',
   component: Tooltip,
   tags: ['autodocs'],
   parameters: {

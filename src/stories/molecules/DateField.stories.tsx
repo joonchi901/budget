@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { DateField, type DateFieldProps } from '../../client/DateFields';
+import { DateField, type DateFieldProps } from '../../client/ui';
 
 function ControlledDate(args: DateFieldProps) {
   const [value, setValue] = useState(args.value);
@@ -29,7 +29,7 @@ function ControlledDate(args: DateFieldProps) {
 }
 
 const meta = {
-  title: '02 Components/DateField',
+  title: '03 Molecules · 분자/DateField',
   component: DateField,
   tags: ['autodocs'],
   parameters: {

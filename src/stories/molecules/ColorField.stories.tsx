@@ -1,7 +1,7 @@
 import { useEffect, useState, type ComponentProps } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { ColorField } from '../../client/ColorField';
+import { ColorField } from '../../client/ui';
 
 function ControlledColor(args: ComponentProps<typeof ColorField>) {
   const [value, setValue] = useState(args.value);
@@ -27,7 +27,7 @@ function ControlledColor(args: ComponentProps<typeof ColorField>) {
 }
 
 const meta = {
-  title: '02 Components/ColorField',
+  title: '03 Molecules · 분자/ColorField',
   component: ColorField,
   tags: ['autodocs'],
   parameters: {

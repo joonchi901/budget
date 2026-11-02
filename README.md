@@ -6,15 +6,15 @@
 
 ## 구성
 
-| 위치                        | 내용                                                                     |
-| --------------------------- | ------------------------------------------------------------------------ |
-| `design/uga/`               | 브랜드 원본: 로고, 대표 캐릭터, 브랜드·UI 보드와 생성 스크립트           |
-| `public/brand/`             | 앱용 SVG 38종과 HTML 브랜드 보드                                         |
-| `src/client/brand/`         | 디자인 토큰 `tokens.css`, 로고·캐릭터·아이콘 컴포넌트 `Uga.tsx`          |
-| `src/client/ui/`            | 버튼, 입력, 선택 그룹, 레이아웃(Stack·Inline·Grid·Surface), 폼·화면 패턴 |
-| `src/client/*.tsx`          | 자체 선택·날짜·월·색상·파일 입력, 툴팁·팝오버, 태그 배지, 다이얼로그 등  |
-| `src/client/app-styles.css` | 공통 스타일 진입점. 토큰 → 기본 요소 → 컨트롤 순서로 불러옵니다          |
-| `src/stories/`              | Storybook 명세: 가이드, 기초 규칙, 컴포넌트, 배치, 패턴                  |
+| 위치                        | 내용                                                                                           |
+| --------------------------- | ---------------------------------------------------------------------------------------------- |
+| `design/uga/`               | 브랜드 원본: 로고, 대표 캐릭터, 브랜드·UI 보드와 생성 스크립트                                 |
+| `public/brand/`             | 앱용 SVG 38종과 HTML 브랜드 보드                                                               |
+| `src/client/brand/`         | 디자인 토큰 `tokens.css`, 로고·캐릭터·아이콘 컴포넌트 `Uga.tsx`                                |
+| `src/client/ui/`            | Atoms·Molecules: 버튼, 입력, 태그, 툴팁, 레이아웃, 자체 선택·날짜·색상·파일 입력, 폼·화면 패턴 |
+| `src/client/templates/`     | Templates: 다이얼로그와 미저장 이동 방지                                                       |
+| `src/client/app-styles.css` | 공통 스타일 진입점. 토큰 → 기본 요소 → 컨트롤 순서로 불러옵니다                                |
+| `src/stories/`              | Storybook 명세: 단계별 폴더(guide, foundations, atoms, molecules, templates)                   |
 
 ## 실행
 

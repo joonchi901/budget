@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { FileField } from '../../client/FileField';
+import { FileField } from '../../client/ui';
 
 const meta = {
-  title: '02 Components/FileField',
+  title: '03 Molecules · 분자/FileField',
   component: FileField,
   tags: ['autodocs'],
   parameters: {

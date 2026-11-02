@@ -1,7 +1,7 @@
 [
   {
     "name": "색상·글자·간격·브랜드",
-    "layer": "기초 규칙",
+    "layer": "01 Foundations",
     "source": "src/client/brand/tokens.css",
     "story": "src/stories/foundations/Foundations.stories.tsx",
     "status": "ready",
@@ -9,106 +9,122 @@
   },
   {
     "name": "Button / IconButton",
-    "layer": "기본 컴포넌트",
+    "layer": "02 Atoms",
     "source": "src/client/ui/Button.tsx",
-    "story": "src/stories/patterns/Actions.stories.tsx",
+    "story": "src/stories/atoms/Button.stories.tsx",
     "status": "ready",
     "usage": "버튼·아이콘 버튼. 키보드·저장 중 동작을 공유"
   },
   {
+    "name": "Input / Textarea / Checkbox / Radio",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Fields.tsx",
+    "story": "src/stories/molecules/Fields.stories.tsx",
+    "status": "ready",
+    "usage": "native props·ref·라벨·폼 검증을 유지하는 입력 요소. Fields 명세에서 함께 확인"
+  },
+  {
+    "name": "Tag",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Tag.tsx",
+    "story": "src/stories/atoms/Tag.stories.tsx",
+    "status": "ready",
+    "usage": "사용자 색상·보관 상태·해제 동작"
+  },
+  {
+    "name": "Tooltip / Popover",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Tooltip.tsx",
+    "story": "src/stories/atoms/Tooltip.stories.tsx",
+    "status": "ready",
+    "usage": "포커스·Escape 및 선택 필드 내부 팝오버"
+  },
+  {
+    "name": "Stack / Inline / Grid / Surface",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Layout.tsx",
+    "story": "src/stories/atoms/Layout.stories.tsx",
+    "status": "ready",
+    "usage": "세로·가로 흐름, 반응형 동일 너비 배치, 내용 경계로 화면을 조립"
+  },
+  {
+    "name": "Field / TextField",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/Fields.tsx",
+    "story": "src/stories/molecules/Fields.stories.tsx",
+    "status": "ready",
+    "usage": "라벨·설명·오류를 입력과 연결"
+  },
+  {
     "name": "SelectField",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/SelectField.tsx",
-    "story": "src/stories/controls/SelectField.stories.tsx",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/SelectField.tsx",
+    "story": "src/stories/molecules/SelectField.stories.tsx",
     "status": "ready",
     "usage": "옵션 그룹·검색·키보드·선택 상태"
   },
   {
     "name": "DateField / MonthField",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/DateFields.tsx",
-    "story": "src/stories/controls/DateField.stories.tsx",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/DateFields.tsx",
+    "story": "src/stories/molecules/DateField.stories.tsx",
     "status": "ready",
-    "usage": "자체 날짜·월 선택, 범위 제한"
-  },
-  {
-    "name": "TagBadge",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/TagBadge.tsx",
-    "story": "src/stories/controls/TagBadge.stories.tsx",
-    "status": "ready",
-    "usage": "사용자 색상·보관 상태·해제 동작"
+    "usage": "자체 날짜·월 선택, 범위 제한. MonthField는 현재 쓰는 화면 없음"
   },
   {
     "name": "ColorField / FileField",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/ColorField.tsx",
-    "story": "src/stories/controls/ColorField.stories.tsx",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/ColorField.tsx",
+    "story": "src/stories/molecules/ColorField.stories.tsx",
     "status": "ready",
-    "usage": "자체 색상 선택·파일 선택"
-  },
-  {
-    "name": "Tooltip / Popover",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/Tooltip.tsx",
-    "story": "src/stories/controls/Tooltip.stories.tsx",
-    "status": "ready",
-    "usage": "포커스·Escape 및 선택 필드 내부 팝오버"
-  },
-  {
-    "name": "Dialog / Empty / Stat",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/components.tsx",
-    "story": "src/stories/controls/Dialog.stories.tsx",
-    "status": "ready",
-    "usage": "모달·빈 상태·금액 요약"
-  },
-  {
-    "name": "Grid",
-    "layer": "배치",
-    "source": "src/client/ui/Layout.tsx",
-    "story": "src/stories/layout/Composition.stories.tsx",
-    "status": "ready",
-    "usage": "요약·카드 목록의 반응형 동일 너비 배치"
-  },
-  {
-    "name": "Stack / Inline / Surface",
-    "layer": "배치",
-    "source": "src/client/ui/Layout.tsx",
-    "story": "src/stories/layout/Composition.stories.tsx",
-    "status": "ready",
-    "usage": "세로·가로 흐름과 내용 경계로 화면을 조립"
-  },
-  {
-    "name": "Field / Input / Textarea / TextField / Checkbox / Radio",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/ui/Fields.tsx",
-    "story": "src/stories/controls/Fields.stories.tsx",
-    "status": "ready",
-    "usage": "전체 입력·라벨의 native 계약, 필수 입력·오류 연결·비활성·ref 보존"
+    "usage": "자체 색상 선택·파일 선택. FileField는 현재 쓰는 화면 없음"
   },
   {
     "name": "SegmentedControl / Tabs",
-    "layer": "기본 컴포넌트",
+    "layer": "03 Molecules",
     "source": "src/client/ui/ChoiceGroup.tsx",
-    "story": "src/stories/controls/ChoiceGroup.stories.tsx",
+    "story": "src/stories/molecules/ChoiceGroup.stories.tsx",
     "status": "ready",
     "usage": "보기 전환·탭의 선택과 방향키 탐색"
   },
   {
+    "name": "Empty",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/Empty.tsx",
+    "story": "src/stories/molecules/Empty.stories.tsx",
+    "status": "ready",
+    "usage": "빈 기록·검색 결과 없음 안내"
+  },
+  {
+    "name": "Stat",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/Stat.tsx",
+    "story": "src/stories/molecules/Stat.stories.tsx",
+    "status": "ready",
+    "usage": "금액 요약"
+  },
+  {
     "name": "FormBody / FormFooter / FormGrid / FormSection / CloseButton",
-    "layer": "화면 패턴",
+    "layer": "03 Molecules",
     "source": "src/client/ui/Patterns.tsx",
-    "story": "src/stories/controls/Fields.stories.tsx",
+    "story": "src/stories/molecules/Fields.stories.tsx",
     "status": "ready",
     "usage": "편집창의 입력·행동 영역·반응형 폼. 미저장 취소는 Dialog 계약 사용"
   },
   {
     "name": "Panel / SummaryGrid / Toolbar / TableScroll",
-    "layer": "화면 패턴",
+    "layer": "03 Molecules",
     "source": "src/client/ui/Patterns.tsx",
-    "story": "src/stories/layout/Composition.stories.tsx",
+    "story": "src/stories/molecules/Patterns.stories.tsx",
     "status": "ready",
     "usage": "화면의 내용 경계·요약·도구모음·키보드 스크롤 영역"
+  },
+  {
+    "name": "Dialog",
+    "layer": "05 Templates",
+    "source": "src/client/templates/Dialog.tsx",
+    "story": "src/stories/templates/Dialog.stories.tsx",
+    "status": "ready",
+    "usage": "모달·미저장 내용 확인. FullScreenSheet의 바탕"
   }
 ]

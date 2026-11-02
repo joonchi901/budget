@@ -47,13 +47,13 @@ const preview: Preview = {
     options: {
       storySort: {
         order: [
-          '00 Guide',
-          '01 Foundations',
-          '02 Components',
-          '03 Layout',
-          '04 Patterns',
-          '05 Domain',
-          '06 Screens',
+          '00 Guide · 안내',
+          '01 Foundations · 기초',
+          '02 Atoms · 원자',
+          '03 Molecules · 분자',
+          '04 Organisms · 유기체',
+          '05 Templates · 템플릿',
+          '06 Views · 화면',
         ],
       },
     },

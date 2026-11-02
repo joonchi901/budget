@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -7,15 +6,13 @@ import {
   type ReactNode,
 } from 'react';
 import { X } from 'lucide-react';
-import { UgaIllustration, UgaMascot } from './brand/Uga';
-import { Button, CloseButton, DialogCloseContext, FormBody, FormFooter, IconButton } from './ui';
+import { Button, CloseButton, DialogCloseContext, FormBody, FormFooter, IconButton } from '../ui';
 import {
   navigationWarning,
   registerNavigationGuard,
   subscribeNavigationWarning,
 } from './navigation-guard';
 
-export const won = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
 export function useUnsavedGuard(hasUnsavedChanges: boolean) {
   useLayoutEffect(() => {
     if (!hasUnsavedChanges) return;
@@ -141,45 +138,5 @@ export function Dialog({
         )}
       </dialog>
     </DialogCloseContext.Provider>
-  );
-}
-export function Empty({
-  children,
-  illustration = 'empty',
-}: {
-  children: ReactNode;
-  illustration?: 'empty' | 'search';
-}) {
-  return (
-    <div className="empty uga-empty">
-      {illustration === 'search' ? (
-        <UgaMascot pose="search" size={92} />
-      ) : (
-        <UgaIllustration name="empty-state" size={120} />
-      )}
-      <p>{children}</p>
-    </div>
-  );
-}
-export function Stat({
-  label,
-  amount,
-  hint,
-  accent = false,
-}: {
-  label: string;
-  amount: number;
-  hint: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className={`stat ${accent ? 'accent' : ''}`}>
-      <span>{label}</span>
-      <strong>
-        {won(amount)}
-        <small>원</small>
-      </strong>
-      <p>{hint}</p>
-    </div>
   );
 }

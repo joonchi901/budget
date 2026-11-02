@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { X } from 'lucide-react';
 import './tag-badge.css';
 
-interface TagBadgeProps {
+interface TagProps {
   name: string;
   color: string;
   archived?: boolean;
@@ -34,7 +34,7 @@ function badgeColors(color: string): CSSProperties {
 }
 
 /** The same saved tag color is used for record cells, pickers and management previews. */
-export function TagBadge({
+export function Tag({
   name,
   color,
   archived,
@@ -42,7 +42,7 @@ export function TagBadge({
   onRemove,
   removeLabel,
   disabled,
-}: TagBadgeProps) {
+}: TagProps) {
   return (
     <Tooltip content={title}>
       <span

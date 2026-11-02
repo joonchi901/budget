@@ -2,7 +2,7 @@ import { useState, type ComponentProps } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { Button, Field, Input, FormBody } from '../../client/ui';
-import { Dialog } from '../../client/components';
+import { Dialog } from '../../client/templates/Dialog';
 
 function DialogExample(args: ComponentProps<typeof Dialog>) {
   const [open, setOpen] = useState(false);
@@ -27,7 +27,7 @@ function DialogExample(args: ComponentProps<typeof Dialog>) {
 }
 
 const meta = {
-  title: '02 Components/Dialog',
+  title: '05 Templates · 템플릿/Dialog',
   component: Dialog,
   tags: ['autodocs'],
   parameters: {

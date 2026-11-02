@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { TagBadge } from '../../client/TagBadge';
+import { Tag } from '../../client/ui';
 
 const meta = {
-  title: '02 Components/TagBadge',
-  component: TagBadge,
+  title: '02 Atoms · 원자/Tag',
+  component: Tag,
   tags: ['autodocs'],
   parameters: {
     docs: {
@@ -23,7 +23,7 @@ const meta = {
     disabled: { control: 'boolean' },
     onRemove: { control: false },
   },
-} satisfies Meta<typeof TagBadge>;
+} satisfies Meta<typeof Tag>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Ready: Story = {};
@@ -44,12 +44,12 @@ export const Colors: Story = {
   },
   render: () => (
     <div className="tag-badge-list" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-      <TagBadge name="식비" color="#D28C70" />
-      <TagBadge name="교통" color="#6C89A4" />
-      <TagBadge name="주거" color="#64866F" />
-      <TagBadge name="여가" color="#9176A6" />
-      <TagBadge name="밝은 색상" color="#FFFFDD" />
-      <TagBadge name="어두운 색상" color="#222222" />
+      <Tag name="식비" color="#D28C70" />
+      <Tag name="교통" color="#6C89A4" />
+      <Tag name="주거" color="#64866F" />
+      <Tag name="여가" color="#9176A6" />
+      <Tag name="밝은 색상" color="#FFFFDD" />
+      <Tag name="어두운 색상" color="#222222" />
     </div>
   ),
 };
@@ -60,7 +60,7 @@ export const Removable: Story = {
     return removed ? (
       <p role="status">태그 선택을 해제했어요.</p>
     ) : (
-      <TagBadge
+      <Tag
         {...args}
         onRemove={() => {
           setRemoved(true);

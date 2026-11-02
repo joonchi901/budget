@@ -4,7 +4,7 @@ import { Plus, Settings2 } from 'lucide-react';
 import { Button, IconButton, Inline, Stack } from '../../client/ui';
 
 const meta = {
-  title: '02 Components/Actions',
+  title: '02 Atoms · 원자/Button',
   component: Button,
   tags: ['autodocs'],
   parameters: {

@@ -41,7 +41,7 @@ function Example({ tabs = false, disabled = false }) {
   );
 }
 const meta = {
-  title: '02 Components/ChoiceGroup',
+  title: '03 Molecules · 분자/ChoiceGroup',
   component: Example,
   tags: ['root-screens'],
   parameters: { layout: 'padded' },

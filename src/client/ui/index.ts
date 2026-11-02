@@ -25,3 +25,12 @@ export {
 export { SegmentedControl, Tabs, type ChoiceOption, type ChoiceGroupProps } from './ChoiceGroup';
 export { CloseButton, DialogCloseContext } from './CloseButton';
 export { TableScroll } from './Patterns';
+export { Tag } from './Tag';
+export { Tooltip } from './Tooltip';
+export { Popover, useControlLabel } from './Popover';
+export { SelectField, SelectGroup, SelectOption } from './SelectField';
+export { DateField, MonthField, type DateFieldProps } from './DateFields';
+export { ColorField } from './ColorField';
+export { FileField } from './FileField';
+export { Empty } from './Empty';
+export { Stat, won } from './Stat';

@@ -46,7 +46,7 @@ src/client/
 src/stories/<단계>/                       스토리도 같은 단계로
 ```
 
-`src/client/` 바로 아래의 SelectField·DateFields 등은 `ui/`로 옮긴다. `check:ui-spec`에 아래 단계가 위 단계를 import하면 실패하는 규칙을 추가한다. 합성 데이터는 Organisms가 받는 타입(가계부·필드 정의·태그 옵션·내역·묶음)과 같은 모양으로 둔다.
+`check:ui-spec`은 단계 폴더 밖(`src/client/` 바로 아래)의 TS 파일과 허용되지 않은 방향의 import를 실패로 처리한다. 허용: `ui` → brand, `ledger`·`templates` → brand·ui, `views` → 전부. `views/`의 파일은 화면 목록과 story에 등록해야 한다. 합성 데이터는 Organisms가 받는 타입(가계부·필드 정의·태그 옵션·내역·묶음)과 같은 모양으로 둔다.
 
 ### 조립 순서
 
@@ -62,37 +62,7 @@ src/stories/<단계>/                       스토리도 같은 단계로
 
 ### 현재 상태
 
-계위 재구성 전이다. Storybook 제목은 `01 Foundations`·`02 Components`·`03 Layout`이고, 컴포넌트는 `src/client/` 바로 아래와 `ui/`에 있다. [컴포넌트 목록](../src/stories/catalog.json)은 14개 항목이 모두 `ready`(조립 준비)이며 [화면 목록](../src/stories/screens.json)은 비어 있다.
-
-### 조립 규칙
-
-- `Stack`: 세로 흐름, `Inline`: 줄바꿈 가능한 가로 흐름, `Grid`: 같은 너비의 카드, `Surface`: 내용의 경계.
-- `gap`/`padding`은 토큰 번호를 받는다. 예: `gap={4}`는 `--brand-space-4`(16px).
-- Grid는 데스크톱 `columns`, 761~1000px `tabletColumns`, 760px 이하 `mobileColumns`를 받는다. 기본 모바일 1열. 달력의 7일 열과 표는 전용 배치를 유지한다.
-- `as`로 HTML 의미를 유지한다. `ul`/`ol`을 쓰면 자식은 `li`로 만든다.
-- Button 기본 `type`은 `button`. 저장은 명시적 `type="submit"`. `busy`는 중복 클릭을 차단한다. IconButton은 `aria-label` 필수.
-- `Input`/`Textarea`/`Checkbox`/`Radio`/`Field`는 native props·ref·라벨·폼 검증을 유지한다. 설명과 오류 연결이 필요한 새 폼은 `TextField`로 조립한다.
-- `FormBody`/`FormFooter`/`FormGrid`/`FormSection`은 모든 편집창의 공통 구조다. `Panel`/`SummaryGrid`/`Toolbar`/`TableScroll`은 화면의 내용 경계·요약·도구·표 영역을 담당한다. 가로로 긴 표는 이름이 있는 키보드 스크롤 영역에 둔다.
-- `SegmentedControl`은 선택 상태를 `aria-pressed`로, `Tabs`는 tablist/tab/tabpanel 계약으로 표현한다. 방향키·Home·End는 비활성 옵션을 건너뛴다. 별도 시각 패턴이 있으면 `appearance="plain"`을 사용한다.
-- `Dialog dirty`와 `CloseButton`은 미저장 내용을 버릴지 확인한다. 계속 작성 시 값과 포커스를 유지하고, 버리면 원래 열기 버튼으로 돌아간다. 저장 성공은 화면의 `onClose`/`onSaved`로 직접 닫는다. `locked` 동안은 닫기와 Escape를 막는다.
-- 날짜·선택·색상은 기존 자체 컨트롤을 사용한다. 태그는 사용자 색상과 배지 표현을 유지한다.
-- Storybook과 이후 앱은 같은 [app-styles.css](../src/client/app-styles.css)를 같은 순서로 읽는다. Storybook 전용 CSS는 캔버스 여백만 정한다.
-
-```tsx
-<Surface padding={4}>
-  <Stack gap={4}>
-    <h2>가계부 요약</h2>
-    <Grid columns={3} tabletColumns={2} mobileColumns={1} gap={3}>
-      {/* 실제 요약 컴포넌트 */}
-    </Grid>
-    <Inline gap={2} justify="end">
-      <Button variant="primary" onClick={onCreate}>
-        내역 추가
-      </Button>
-    </Inline>
-  </Stack>
-</Surface>
-```
+1단계(기존 컴포넌트 이동)를 마쳤다. 기존 요소는 `brand/`·`ui/`·`templates/`에 있고, Storybook은 `00 Guide`~`05 Templates` 제목으로 정리했다. TagBadge는 `Tag`로 이름을 바꿨다(CSS 클래스는 그대로). Input·Textarea·Checkbox·Radio는 아직 별도 Atoms 스토리 없이 `03 Molecules/Fields`에서 함께 확인한다. [컴포넌트 목록](../src/stories/catalog.json)은 16개 항목이 모두 `ready`(조립 준비)이며 [화면 목록](../src/stories/screens.json)은 비어 있다. 다음은 2단계(신규 Atoms)다.
 
 ## 실행
 

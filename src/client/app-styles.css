@@ -3,6 +3,6 @@
 @import './styles.css';
 @import './design-system.css';
 @import './controls.css';
-@import './date-fields.css';
+@import './ui/date-fields.css';
 @import './ux-refinements.css';
 @import './ui/ui.css';

@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Stat } from '../../client/components';
+import { Stat } from '../../client/ui';
 
 const meta = {
-  title: '02 Components/Stat',
+  title: '03 Molecules · 분자/Stat',
   component: Stat,
   tags: ['autodocs'],
   parameters: {
