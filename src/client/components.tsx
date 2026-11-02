@@ -16,21 +16,6 @@ import {
 } from './navigation-guard';
 
 export const won = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
-export const labels = { expense: '지출', income: '수입' };
-export const fieldName = (field: string | null) =>
-  ({
-    amount: '금액',
-    description: '내용',
-    date: '날짜',
-    tagIds: '태그',
-    ownerId: '귀속',
-    paymentMethodId: '결제수단',
-    allocationAsset: '배분 자산',
-    allocationAmount: '배분 금액',
-    assetId: '출금 자산',
-    toAssetId: '입금 자산',
-  })[field ?? ''] ?? '내역';
-export const ownerName = (id: string) => (id === 'shared' ? '공동' : id === 'u1' ? '나' : '와이프');
 export function useUnsavedGuard(hasUnsavedChanges: boolean) {
   useLayoutEffect(() => {
     if (!hasUnsavedChanges) return;

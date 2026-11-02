@@ -4,23 +4,23 @@
     "layer": "기초 규칙",
     "source": "src/client/brand/tokens.css",
     "story": "src/stories/foundations/Foundations.stories.tsx",
-    "status": "shared",
-    "usage": "앱과 Storybook이 같은 CSS 토큰 및 SVG 컴포넌트를 사용"
+    "status": "ready",
+    "usage": "Storybook과 이후 앱이 같은 CSS 토큰 및 SVG 컴포넌트를 사용"
   },
   {
     "name": "Button / IconButton",
     "layer": "기본 컴포넌트",
     "source": "src/client/ui/Button.tsx",
     "story": "src/stories/patterns/Actions.stories.tsx",
-    "status": "shared",
-    "usage": "전체 주요 화면과 편집창의 버튼·아이콘 버튼. 키보드·저장 중 동작을 공유"
+    "status": "ready",
+    "usage": "버튼·아이콘 버튼. 키보드·저장 중 동작을 공유"
   },
   {
     "name": "SelectField",
     "layer": "기본 컴포넌트",
     "source": "src/client/SelectField.tsx",
     "story": "src/stories/controls/SelectField.stories.tsx",
-    "status": "shared",
+    "status": "ready",
     "usage": "옵션 그룹·검색·키보드·선택 상태"
   },
   {
@@ -28,7 +28,7 @@
     "layer": "기본 컴포넌트",
     "source": "src/client/DateFields.tsx",
     "story": "src/stories/controls/DateField.stories.tsx",
-    "status": "shared",
+    "status": "ready",
     "usage": "자체 날짜·월 선택, 범위 제한"
   },
   {
@@ -36,7 +36,7 @@
     "layer": "기본 컴포넌트",
     "source": "src/client/TagBadge.tsx",
     "story": "src/stories/controls/TagBadge.stories.tsx",
-    "status": "shared",
+    "status": "ready",
     "usage": "사용자 색상·보관 상태·해제 동작"
   },
   {
@@ -44,7 +44,7 @@
     "layer": "기본 컴포넌트",
     "source": "src/client/ColorField.tsx",
     "story": "src/stories/controls/ColorField.stories.tsx",
-    "status": "shared",
+    "status": "ready",
     "usage": "자체 색상 선택·파일 선택"
   },
   {
@@ -52,7 +52,7 @@
     "layer": "기본 컴포넌트",
     "source": "src/client/Tooltip.tsx",
     "story": "src/stories/controls/Tooltip.stories.tsx",
-    "status": "shared",
+    "status": "ready",
     "usage": "포커스·Escape 및 선택 필드 내부 팝오버"
   },
   {
@@ -60,7 +60,7 @@
     "layer": "기본 컴포넌트",
     "source": "src/client/components.tsx",
     "story": "src/stories/controls/Dialog.stories.tsx",
-    "status": "shared",
+    "status": "ready",
     "usage": "모달·빈 상태·금액 요약"
   },
   {
@@ -68,63 +68,23 @@
     "layer": "배치",
     "source": "src/client/ui/Layout.tsx",
     "story": "src/stories/layout/Composition.stories.tsx",
-    "status": "shared",
-    "usage": "거래·자산 요약, 계획 카드, 하위 가계부의 반응형 배치"
+    "status": "ready",
+    "usage": "요약·카드 목록의 반응형 동일 너비 배치"
   },
   {
     "name": "Stack / Inline / Surface",
     "layer": "배치",
     "source": "src/client/ui/Layout.tsx",
     "story": "src/stories/layout/Composition.stories.tsx",
-    "status": "shared",
-    "usage": "통계·태그·계획 등 화면 조립과 문서 예시가 같은 소스를 사용"
-  },
-  {
-    "name": "RoomHeader",
-    "layer": "화면 패턴",
-    "source": "src/client/RoomHeader.tsx",
-    "story": "src/stories/patterns/RoomHeader.stories.tsx",
-    "status": "shared",
-    "usage": "실제 방 이름·계위·보기 전환·이동"
-  },
-  {
-    "name": "LedgerRooms",
-    "layer": "도메인",
-    "source": "src/client/LedgerRooms.tsx",
-    "story": "src/stories/domain/LedgerRooms.stories.tsx",
-    "status": "shared",
-    "usage": "목록·검색·관리자/사용자·보관·빈 상태"
-  },
-  {
-    "name": "LedgerCalendar",
-    "layer": "도메인",
-    "source": "src/client/LedgerCalendar.tsx",
-    "story": "src/stories/domain/LedgerCalendar.stories.tsx",
-    "status": "shared",
-    "usage": "월별 내역·날짜별 추가·상세 목록"
-  },
-  {
-    "name": "LedgerTree",
-    "layer": "도메인",
-    "source": "src/client/LedgerTree.tsx",
-    "story": "src/stories/domain/LedgerTree.stories.tsx",
-    "status": "shared",
-    "usage": "중첩 경로·보관·사용자 권한별 이동"
-  },
-  {
-    "name": "TagFields",
-    "layer": "도메인",
-    "source": "src/client/TagFields.tsx",
-    "story": "src/stories/domain/TagFields.stories.tsx",
-    "status": "shared",
-    "usage": "단일/복수·가계부 범위·상하위 옵션. 실제 폼에서 공통 버튼·입력을 사용"
+    "status": "ready",
+    "usage": "세로·가로 흐름과 내용 경계로 화면을 조립"
   },
   {
     "name": "Field / Input / Textarea / TextField / Checkbox / Radio",
     "layer": "기본 컴포넌트",
     "source": "src/client/ui/Fields.tsx",
     "story": "src/stories/controls/Fields.stories.tsx",
-    "status": "shared",
+    "status": "ready",
     "usage": "전체 입력·라벨의 native 계약, 필수 입력·오류 연결·비활성·ref 보존"
   },
   {
@@ -132,135 +92,23 @@
     "layer": "기본 컴포넌트",
     "source": "src/client/ui/ChoiceGroup.tsx",
     "story": "src/stories/controls/ChoiceGroup.stories.tsx",
-    "status": "shared",
-    "usage": "방·거래 종류·통계·자산·계획·데이터 탭의 선택과 방향키 탐색"
+    "status": "ready",
+    "usage": "보기 전환·탭의 선택과 방향키 탐색"
   },
   {
     "name": "FormBody / FormFooter / FormGrid / FormSection / CloseButton",
     "layer": "화면 패턴",
     "source": "src/client/ui/Patterns.tsx",
     "story": "src/stories/controls/Fields.stories.tsx",
-    "status": "shared",
-    "usage": "전체 편집창의 입력·행동 영역·반응형 폼. 미저장 취소는 Dialog 계약 사용"
+    "status": "ready",
+    "usage": "편집창의 입력·행동 영역·반응형 폼. 미저장 취소는 Dialog 계약 사용"
   },
   {
     "name": "Panel / SummaryGrid / Toolbar / TableScroll",
     "layer": "화면 패턴",
     "source": "src/client/ui/Patterns.tsx",
-    "story": "src/stories/screens/Ledger.stories.tsx",
-    "status": "shared",
-    "usage": "화면의 내용 경계·요약·도구모음·키보드 스크롤. 표·차트·달력의 전용 배치는 유지"
-  },
-  {
-    "name": "로그인·불러오기",
-    "source": "src/client/SessionScreen.tsx",
-    "story": "src/stories/screens/Session.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "거래 목록",
-    "source": "src/client/LedgerView.tsx",
-    "story": "src/stories/screens/Ledger.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "내역 추가·수정",
-    "source": "src/client/TransactionForm.tsx",
-    "story": "src/stories/screens/Transaction.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "자산·이동·잔액 조정",
-    "source": "src/client/AssetsView.tsx",
-    "story": "src/stories/screens/Assets.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "카드·통장",
-    "source": "src/client/PaymentsView.tsx",
-    "story": "src/stories/screens/Payments.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "통계",
-    "source": "src/client/AnalyticsView.tsx",
-    "story": "src/stories/screens/Analytics.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "계획·일정",
-    "source": "src/client/PlanningView.tsx",
-    "story": "src/stories/screens/Planning.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "태그 설정",
-    "source": "src/client/TagManager.tsx",
-    "story": "src/stories/screens/Tags.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "데이터·백업·가져오기",
-    "source": "src/client/DataView.tsx",
-    "story": "src/stories/screens/Data.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "엑셀 검토",
-    "source": "src/client/ExcelImportView.tsx",
-    "story": "src/stories/screens/Data.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "원본 엑셀 보기",
-    "source": "src/client/WorkbookArchiveView.tsx",
-    "story": "src/stories/screens/Data.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "가계부 설정",
-    "source": "src/client/LedgerForm.tsx",
-    "story": "src/stories/screens/Settings.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "계위 변경",
-    "source": "src/client/HierarchyDialog.tsx",
-    "story": "src/stories/screens/Settings.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
-  },
-  {
-    "name": "구성원 권한",
-    "source": "src/client/MemberRoles.tsx",
-    "story": "src/stories/screens/Settings.stories.tsx",
-    "layer": "화면",
-    "status": "shared",
-    "usage": "실제 화면·편집창의 기본/빈 값/오류/권한 등 해당 상태를 합성 데이터로 검증"
+    "story": "src/stories/layout/Composition.stories.tsx",
+    "status": "ready",
+    "usage": "화면의 내용 경계·요약·도구모음·키보드 스크롤 영역"
   }
 ]

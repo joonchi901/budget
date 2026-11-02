@@ -45,17 +45,6 @@
 .tag-badge .tag-badge-remove:hover:not(:disabled) {
   background: var(--shadow-color);
 }
-.row-tags .tag-badge.custom-tag,
-.asset-tags .tag-badge.custom-tag {
-  font-size: 12px;
-  min-height: 25px;
-  padding: 3px 7px;
-}
-.row-tags.transaction-tag-badges {
-  max-width: 240px;
-  gap: 5px;
-  margin-top: 0;
-}
 @media (prefers-reduced-motion: reduce) {
   .tag-badge .tag-badge-remove {
     transition: none;
@@ -68,34 +57,4 @@
   align-items: center;
   gap: 6px;
   margin-top: 6px;
-}
-.planning-condition.planning-condition-badges {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  color: var(--muted);
-  background: transparent;
-}
-.management-tags button.tag-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  background: transparent;
-}
-.management-tags button.tag-filter:hover:not(:disabled) {
-  background: var(--canvas);
-}
-.management-tags button.tag-filter[aria-pressed='true'] {
-  border-color: var(--accent-line);
-  background: var(--blue-soft);
-}
-.tag-filter-check {
-  flex-shrink: 0;
-  opacity: 0;
-}
-.tag-filter-check.selected {
-  opacity: 1;
 }

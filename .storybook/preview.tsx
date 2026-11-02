@@ -1,49 +1,9 @@
-import type { StoryApiRoute } from '../src/stories/api-scenarios';
 import type { Preview } from '@storybook/react-vite';
 import '../src/client/app-styles.css';
 import './preview.css';
 
-// Prevent accidental writes when exploring a component which can also call an API.
-// Storybook's own asset/module requests are unaffected; no production app is mounted.
-let apiRoutes: StoryApiRoute[] = [];
-const originalFetch = globalThis.fetch.bind(globalThis);
-globalThis.fetch = (input, init) => {
-  const url = new URL(input instanceof Request ? input.url : String(input), location.href);
-  if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
-    const method = (
-      init?.method ?? (input instanceof Request ? input.method : 'GET')
-    ).toUpperCase();
-    const route = apiRoutes.find(
-      (item) => item.path === url.pathname && (item.method ?? 'GET').toUpperCase() === method,
-    );
-    const response = () =>
-      new Response(
-        JSON.stringify(
-          route?.response ?? {
-            error: 'UI 명세에서는 서버에 저장하지 않아요.',
-            code: 'STORYBOOK_OFFLINE',
-          },
-        ),
-        {
-          status: route ? (route.status ?? 200) : 503,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-    return route?.delayMs
-      ? new Promise((resolve) => setTimeout(() => resolve(response()), route.delayMs))
-      : Promise.resolve(response());
-  }
-  return originalFetch(input, init);
-};
-
 const preview: Preview = {
   tags: ['autodocs'],
-  beforeEach(context) {
-    apiRoutes = context.parameters.apiRoutes ?? [];
-    return () => {
-      apiRoutes = [];
-    };
-  },
   decorators: [
     (Story, context) =>
       context.parameters.ownsMain ? (

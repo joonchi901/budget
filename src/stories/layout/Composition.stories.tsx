@@ -1,6 +1,17 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, within } from 'storybook/test';
-import { Button, Grid, Inline, Stack, Surface } from '../../client/ui';
+import {
+  Button,
+  Grid,
+  Inline,
+  Panel,
+  Stack,
+  SummaryGrid,
+  Surface,
+  TableScroll,
+  Toolbar,
+} from '../../client/ui';
+import { Stat } from '../../client/components';
 import { TagBadge } from '../../client/TagBadge';
 
 const meta = {
@@ -11,7 +22,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Stack은 세로 흐름, Inline은 줄바꿈 가능한 가로 흐름, Grid는 동일 너비 열, Surface는 내용의 시각적 경계를 담당합니다. gap/padding은 brand-space 토큰 번호(1=4px, 2=8px)입니다. Grid는 1000px 이하 tabletColumns, 760px 이하 mobileColumns를 사용하며 기본 모바일 열 수는 1입니다. HTML 의미를 as로 유지하고, 달력의 7일 열과 데이터 표는 전용 레이아웃으로 남깁니다. 실제 앱의 하위 가계부 목록과 거래 요약에서 Grid를 사용합니다.',
+          'Stack은 세로 흐름, Inline은 줄바꿈 가능한 가로 흐름, Grid는 동일 너비 열, Surface는 내용의 시각적 경계를 담당합니다. gap/padding은 brand-space 토큰 번호(1=4px, 2=8px)입니다. Grid는 1000px 이하 tabletColumns, 760px 이하 mobileColumns를 사용하며 기본 모바일 열 수는 1입니다. HTML 의미를 as로 유지하고, 달력의 7일 열과 데이터 표는 전용 레이아웃으로 남깁니다.',
       },
     },
   },
@@ -112,4 +123,50 @@ export const SemanticComposition: Story = {
       </Stack>
     </Surface>
   ),
+};
+
+export const ScreenPatterns: Story = {
+  render: () => (
+    <Panel aria-labelledby="patterns-title">
+      <Toolbar>
+        <h2 id="patterns-title">이번 달 요약</h2>
+        <Button variant="secondary">조건 바꾸기</Button>
+      </Toolbar>
+      <SummaryGrid columns={3}>
+        <Stat label="수입" amount={3200000} hint="합성 예시" />
+        <Stat label="지출" amount={1875000} hint="합성 예시" />
+        <Stat label="남은 금액" amount={1325000} hint="수입 - 지출" accent />
+      </SummaryGrid>
+      <TableScroll aria-label="합성 기록 표">
+        <table>
+          <thead>
+            <tr>
+              <th>날짜</th>
+              <th>내용</th>
+              <th>금액</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>11월 2일</td>
+              <td>장보기</td>
+              <td>48,000원</td>
+            </tr>
+          </tbody>
+        </table>
+      </TableScroll>
+    </Panel>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Panel은 화면의 내용 경계, Toolbar는 제목과 행동, SummaryGrid는 요약 카드, TableScroll은 이름 있는 키보드 스크롤 영역입니다.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const region = within(canvasElement).getByRole('region', { name: '합성 기록 표' });
+    await expect(region).toHaveAttribute('tabindex', '0');
+  },
 };

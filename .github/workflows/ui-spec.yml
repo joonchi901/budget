@@ -9,9 +9,6 @@ on:
       - 'scripts/check-ui-spec.mjs'
       - 'package*.json'
       - 'tsconfig.json'
-      - 'tests/**'
-      - 'playwright.config.ts'
-      - 'scripts/e2e.mjs'
       - '.github/workflows/ui-spec.yml'
   push:
     branches: [main]
@@ -23,9 +20,6 @@ on:
       - 'scripts/check-ui-spec.mjs'
       - 'package*.json'
       - 'tsconfig.json'
-      - 'tests/**'
-      - 'playwright.config.ts'
-      - 'scripts/e2e.mjs'
       - '.github/workflows/ui-spec.yml'
   workflow_dispatch:
 permissions:
@@ -47,10 +41,7 @@ jobs:
           cache: npm
       - run: npm ci --no-audit
       - run: npx playwright install --with-deps chromium
-      - run: npm run check
-      - run: npm run build:storybook
-      - run: npm run test:storybook
-      - run: npm run test:e2e
+      - run: npm run check:ui
       - uses: actions/upload-artifact@v4
         with:
           name: uga-ui-specification

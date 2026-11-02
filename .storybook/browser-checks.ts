@@ -6,7 +6,6 @@ const config: TestRunnerConfig = {
   async preVisit(page) {
     await page.setViewportSize({ width: Number(process.env.UI_TEST_WIDTH || 1440), height: 1000 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.route('**/api/**', (route) => route.abort('blockedbyclient'));
   },
   async postVisit(page, context) {
     await injectAxe(page);
@@ -32,11 +31,7 @@ const config: TestRunnerConfig = {
     if (overflow.content > overflow.viewport + 1) {
       throw new Error(`가로 넘침: 화면 ${overflow.viewport}px / 내용 ${overflow.content}px`);
     }
-    if (
-      /roomheader--(root-room|mobile320)|ledgerrooms--(populated|long-names)|guide-.*--overview|06-screens-(ledger--populated|transaction--new|session--production|assets--populated|payments--populated|analytics--monthly-flow|planning--budget|tags--configured|data--backup|settings--create-ledger)/.test(
-        context.id,
-      )
-    ) {
+    if (/guide-.*--overview/.test(context.id)) {
       await mkdir('output/storybook', { recursive: true });
       await page.screenshot({
         path: `output/storybook/${context.id}-${process.env.UI_TEST_WIDTH || 1440}.png`,
