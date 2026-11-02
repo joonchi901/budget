@@ -221,7 +221,7 @@
     "source": "src/client/ledger/Room.tsx",
     "story": "src/stories/organisms/RoomListItem.stories.tsx",
     "status": "ready",
-    "usage": "방 목록 한 줄: 기간 또는 마지막 내역, 시간, 새 내역 수"
+    "usage": "방 목록 한 줄: 마지막 내역(하위 포함) 또는 기간·하위 수, 시간, 새 내역 수"
   },
   {
     "name": "RoomHeader",
@@ -237,7 +237,7 @@
     "source": "src/client/ledger/Room.tsx",
     "story": "src/stories/organisms/RoomTabBar.stories.tsx",
     "status": "ready",
-    "usage": "방 하단 막대: 표·캘린더·통계(·가계부별) 전환과 둥근 내역 추가 버튼"
+    "usage": "방 하단 막대: 표·캘린더·통계(·하위) 전환과 둥근 내역 추가 버튼"
   },
   {
     "name": "SummaryStrip",
@@ -304,12 +304,12 @@
     "usage": "가계부 필드 구성과 태그 옵션 관리"
   },
   {
-    "name": "LedgerCardList / GroupPicker / LedgerPicker",
+    "name": "ChildLedgerList / ChildPicker / ParentPicker / LedgerPicker",
     "layer": "04 Organisms",
-    "source": "src/client/ledger/Groups.tsx",
-    "story": "src/stories/organisms/Groups.stories.tsx",
+    "source": "src/client/ledger/Hierarchy.tsx",
+    "story": "src/stories/organisms/Hierarchy.stories.tsx",
     "status": "ready",
-    "usage": "묶음의 가계부별 보기, 소속 묶음 선택, 저장할 가계부 선택"
+    "usage": "상위 가계부의 하위 보기, 하위·상위 가계부 선택(순환 제외), 상위 방에서 저장할 가계부 선택"
   },
   {
     "name": "Dialog",

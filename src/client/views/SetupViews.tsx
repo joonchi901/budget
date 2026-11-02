@@ -1,8 +1,9 @@
 import { useId, useState } from 'react';
 import { UgaIcon, type UgaIconName } from '../brand/Uga';
 import {
+  ChildPicker,
   FieldSchemaEditor,
-  GroupPicker,
+  ParentPicker,
   TagOptionEditor,
   addDays,
   addMonths,
@@ -11,7 +12,6 @@ import {
 import { FullScreenSheet } from '../templates';
 import {
   Button,
-  ChipSelect,
   DateField,
   Field,
   Grid,
@@ -22,7 +22,15 @@ import {
   Switch,
   TextField,
 } from '../ui';
-import type { FieldDef, Group, Id, IsoDate, KindOption, Ledger } from '../../shared/ledger';
+import {
+  isParent,
+  leafLedgers,
+  type FieldDef,
+  type Id,
+  type IsoDate,
+  type KindOption,
+  type Ledger,
+} from '../../shared/ledger';
 
 const ICONS: { value: UgaIconName; label: string }[] = [
   { value: 'ledger', label: '기록' },
@@ -37,7 +45,7 @@ const DEFAULT_KINDS: Omit<KindOption, 'id'>[] = [
   { name: '지출', color: '#AE393B', nature: 'expense' },
 ];
 
-/** Name, period and icon, shared by creating and editing a ledger. */
+/** Name, period and icon, shared by creating and editing a ledger. Parents have no period. */
 function LedgerBasics({
   name,
   onNameChange,
@@ -49,8 +57,9 @@ function LedgerBasics({
 }: {
   name: string;
   onNameChange(name: string): void;
-  period: { start: IsoDate; end: IsoDate };
-  onPeriodChange(period: { start: IsoDate; end: IsoDate }): void;
+  /** Omit for a parent, whose span comes from its children. */
+  period?: { start: IsoDate; end: IsoDate };
+  onPeriodChange?(period: { start: IsoDate; end: IsoDate }): void;
   icon: string;
   onIconChange(icon: string): void;
   nameError?: string;
@@ -61,31 +70,33 @@ function LedgerBasics({
       <TextField
         label="이름"
         value={name}
-        placeholder="예: 12월, 일본여행"
+        placeholder={period ? '예: 12월, 일본여행' : '예: 2026, 여행'}
         required
         error={nameError}
         onChange={(event) => onNameChange(event.target.value)}
       />
-      <Grid columns={2} mobileColumns={2} gap={2}>
-        <Stack gap={2}>
-          <Field htmlFor={`${id}-start`}>시작일</Field>
-          <DateField
-            id={`${id}-start`}
-            value={period.start}
-            max={period.end}
-            onValueChange={(start) => onPeriodChange({ ...period, start })}
-          />
-        </Stack>
-        <Stack gap={2}>
-          <Field htmlFor={`${id}-end`}>종료일</Field>
-          <DateField
-            id={`${id}-end`}
-            value={period.end}
-            min={period.start}
-            onValueChange={(end) => onPeriodChange({ ...period, end })}
-          />
-        </Stack>
-      </Grid>
+      {period && onPeriodChange && (
+        <Grid columns={2} mobileColumns={2} gap={2}>
+          <Stack gap={2}>
+            <Field htmlFor={`${id}-start`}>시작일</Field>
+            <DateField
+              id={`${id}-start`}
+              value={period.start}
+              max={period.end}
+              onValueChange={(start) => onPeriodChange({ ...period, start })}
+            />
+          </Stack>
+          <Stack gap={2}>
+            <Field htmlFor={`${id}-end`}>종료일</Field>
+            <DateField
+              id={`${id}-end`}
+              value={period.end}
+              min={period.start}
+              onValueChange={(end) => onPeriodChange({ ...period, end })}
+            />
+          </Stack>
+        </Grid>
+      )}
       <Field>
         아이콘
         <SelectField value={icon} onValueChange={onIconChange}>
@@ -103,7 +114,7 @@ function LedgerBasics({
   );
 }
 
-/** Fresh ids keep a copied ledger independent; names stay so group stats still merge. */
+/** Fresh ids keep a copied ledger independent; names stay so parent stats still merge. */
 function copySchema(source: Ledger) {
   return {
     kinds: source.kinds.map((kind) => ({ ...kind, id: crypto.randomUUID() })),
@@ -119,43 +130,63 @@ function copySchema(source: Ledger) {
   };
 }
 
+/** A parent spans its record-holding ledgers' periods. */
+function spanOf(ledgers: Ledger[], childIds: Id[], fallback: { start: IsoDate; end: IsoDate }) {
+  const periods = childIds
+    .map((id) => ledgers.find((ledger) => ledger.id === id))
+    .flatMap((child) => (child ? leafLedgers(ledgers, child) : []))
+    .map((leaf) => leaf.period);
+  if (!periods.length) return fallback;
+  return {
+    start: periods.reduce(
+      (min, period) => (period.start < min ? period.start : min),
+      periods[0].start,
+    ),
+    end: periods.reduce((max, period) => (period.end > max ? period.end : max), periods[0].end),
+  };
+}
+
+type Role = 'records' | 'parent';
+
 /**
- * Creating a ledger: empty, or copied from an existing one with its fields, tags and kinds and
- * the period moved one month later. Copying can also bring the source's 고정지출 records.
+ * Creating a ledger. One that holds records starts empty or copied from another (fields, tags
+ * and kinds, period one month later, optionally its 고정지출 records). A 상위 가계부 only picks
+ * its children. Either can sit under several parents.
  */
 export function CreateLedgerView({
   ledgers,
-  groups,
   today,
   initialSourceId,
   onCreate,
-  onCreateGroup,
+  onCreateParent,
   onClose,
 }: {
   ledgers: Ledger[];
-  groups: Group[];
   today: IsoDate;
   /** Start in copy mode from this ledger, e.g. from a room's 복사해서 만들기. */
   initialSourceId?: Id;
-  onCreate(result: { ledger: Ledger; groupIds: Id[]; copyFixedFrom?: Id }): void;
-  onCreateGroup?(name: string): Id;
+  onCreate(result: { ledger: Ledger; parentIds: Id[]; copyFixedFrom?: Id }): void;
+  onCreateParent?(name: string): Id;
   onClose(): void;
 }) {
-  const sources = ledgers.filter((ledger) => !ledger.archived);
+  const sources = ledgers.filter((ledger) => !ledger.archived && !isParent(ledger));
+  const [role, setRole] = useState<Role>('records');
   const [mode, setMode] = useState<'empty' | 'copy'>(initialSourceId ? 'copy' : 'empty');
   const [sourceId, setSourceId] = useState(initialSourceId ?? sources[0]?.id ?? '');
   const source = sources.find((ledger) => ledger.id === sourceId);
+  const thisMonth = { start: today, end: addDays(addMonths(today, 1), -1) };
   const nextPeriod = (ledger?: Ledger) =>
     ledger
       ? { start: addMonths(ledger.period.start, 1), end: addMonths(ledger.period.end, 1) }
-      : { start: today, end: addDays(addMonths(today, 1), -1) };
+      : thisMonth;
   const [name, setName] = useState('');
   const [period, setPeriod] = useState(() => nextPeriod(mode === 'copy' ? source : undefined));
   const [icon, setIcon] = useState(source && mode === 'copy' ? source.icon : 'ledger');
   const [fields, setFields] = useState<FieldDef[]>(() =>
     mode === 'copy' && source ? copySchema(source).fields : [],
   );
-  const [groupIds, setGroupIds] = useState<Id[]>([]);
+  const [childIds, setChildIds] = useState<Id[]>([]);
+  const [parentIds, setParentIds] = useState<Id[]>([]);
   const [copyFixed, setCopyFixed] = useState(true);
   const [nameError, setNameError] = useState<string>();
 
@@ -172,13 +203,29 @@ export function CreateLedgerView({
       setNameError('이름을 입력해 주세요.');
       return;
     }
+    const id = crypto.randomUUID();
+    if (role === 'parent') {
+      onCreate({
+        ledger: {
+          id,
+          name: name.trim(),
+          icon,
+          period: spanOf(ledgers, childIds, thisMonth),
+          kinds: [],
+          fields: [],
+          childIds,
+        },
+        parentIds,
+      });
+      return;
+    }
     const kinds =
       mode === 'copy' && source
         ? copySchema(source).kinds
         : DEFAULT_KINDS.map((kind) => ({ ...kind, id: crypto.randomUUID() }));
     onCreate({
-      ledger: { id: crypto.randomUUID(), name: name.trim(), icon, period, kinds, fields },
-      groupIds,
+      ledger: { id, name: name.trim(), icon, period, kinds, fields, childIds: [] },
+      parentIds,
       copyFixedFrom: mode === 'copy' && copyFixed ? source?.id : undefined,
     });
   };
@@ -195,84 +242,104 @@ export function CreateLedgerView({
       }
     >
       <Stack gap={6}>
-        <Stack gap={3}>
-          <SegmentedControl
-            aria-label="시작 방식"
-            value={mode}
-            onValueChange={(next) => switchSource(next)}
-            options={[
-              { value: 'empty', label: '빈 가계부' },
-              { value: 'copy', label: '복사해서 만들기', disabled: !sources.length },
-            ]}
-          />
-          {mode === 'copy' && source && (
-            <>
-              <Field>
-                복사할 가계부
-                <SelectField value={sourceId} onValueChange={(id) => switchSource('copy', id)}>
-                  {sources.map((ledger) => (
-                    <SelectOption key={ledger.id} value={ledger.id}>
-                      {ledger.name} · {periodLabel(ledger.period)}
-                    </SelectOption>
-                  ))}
-                </SelectField>
-              </Field>
-              <Field>
-                <Switch
-                  checked={copyFixed}
-                  onChange={(event) => setCopyFixed(event.target.checked)}
-                />
-                고정지출 내역도 가져오기
-              </Field>
-            </>
-          )}
-        </Stack>
+        <SegmentedControl<Role>
+          aria-label="가계부 종류"
+          value={role}
+          onValueChange={setRole}
+          options={[
+            { value: 'records', label: '내역을 적는 가계부' },
+            { value: 'parent', label: '상위 가계부' },
+          ]}
+        />
+        {role === 'records' && (
+          <Stack gap={3}>
+            <SegmentedControl
+              aria-label="시작 방식"
+              value={mode}
+              onValueChange={(next) => switchSource(next)}
+              options={[
+                { value: 'empty', label: '빈 가계부' },
+                { value: 'copy', label: '복사해서 만들기', disabled: !sources.length },
+              ]}
+            />
+            {mode === 'copy' && source && (
+              <>
+                <Field>
+                  복사할 가계부
+                  <SelectField value={sourceId} onValueChange={(id) => switchSource('copy', id)}>
+                    {sources.map((ledger) => (
+                      <SelectOption key={ledger.id} value={ledger.id}>
+                        {ledger.name} · {periodLabel(ledger.period)}
+                      </SelectOption>
+                    ))}
+                  </SelectField>
+                </Field>
+                <Field>
+                  <Switch
+                    checked={copyFixed}
+                    onChange={(event) => setCopyFixed(event.target.checked)}
+                  />
+                  고정지출 내역도 가져오기
+                </Field>
+              </>
+            )}
+          </Stack>
+        )}
         <LedgerBasics
           name={name}
           onNameChange={(value) => {
             setName(value);
             setNameError(undefined);
           }}
-          period={period}
+          period={role === 'records' ? period : undefined}
           onPeriodChange={setPeriod}
           icon={icon}
           onIconChange={setIcon}
           nameError={nameError}
         />
-        <Stack gap={3}>
-          <h3>필드</h3>
-          <FieldSchemaEditor fields={fields} onChange={setFields} />
-        </Stack>
-        <GroupPicker
-          groups={groups}
-          value={groupIds}
-          onValueChange={setGroupIds}
-          onCreateGroup={onCreateGroup}
+        {role === 'records' ? (
+          <Stack gap={3}>
+            <h3>필드</h3>
+            <FieldSchemaEditor fields={fields} onChange={setFields} />
+          </Stack>
+        ) : (
+          <ChildPicker ledgers={ledgers} value={childIds} onValueChange={setChildIds} />
+        )}
+        <ParentPicker
+          ledgers={ledgers}
+          value={parentIds}
+          onValueChange={setParentIds}
+          onCreateParent={onCreateParent}
         />
       </Stack>
     </FullScreenSheet>
   );
 }
 
-/** A ledger's settings: basics, fields, each select field's tags, groups and archiving. */
+/**
+ * A ledger's settings. One that holds records edits basics, fields and each select field's
+ * tags; a parent edits its children. Both choose their parents and can be archived.
+ */
 export function LedgerSettingsView({
   ledger,
-  groups,
+  ledgers,
   onSave,
   onArchive,
   onClose,
 }: {
   ledger: Ledger;
-  groups: Group[];
-  onSave(result: { ledger: Ledger; groupIds: Id[] }): void;
+  /** All ledgers, to place this one among parents and children. */
+  ledgers: Ledger[];
+  onSave(result: { ledger: Ledger; parentIds: Id[] }): void;
   onArchive(ledger: Ledger): void;
   onClose(): void;
 }) {
-  const initialGroups = groups
-    .filter((group) => group.ledgerIds.includes(ledger.id))
-    .map((group) => group.id);
+  const parent = isParent(ledger);
+  const initialParents = ledgers
+    .filter((item) => item.childIds.includes(ledger.id))
+    .map((item) => item.id);
   const [draft, setDraft] = useState(ledger);
-  const [groupIds, setGroupIds] = useState(initialGroups);
+  const [parentIds, setParentIds] = useState(initialParents);
   const selectFields = draft.fields.filter(
     (field): field is Extract<FieldDef, { type: 'select' | 'multiSelect' }> =>
       field.type !== 'text',
@@ -280,7 +347,7 @@ export function LedgerSettingsView({
   const [tagFieldId, setTagFieldId] = useState(selectFields[0]?.id ?? '');
   const tagField = selectFields.find((field) => field.id === tagFieldId);
   const dirty =
-    JSON.stringify(draft) !== JSON.stringify(ledger) || groupIds.join() !== initialGroups.join();
+    JSON.stringify(draft) !== JSON.stringify(ledger) || parentIds.join() !== initialParents.join();
   return (
     <FullScreenSheet
       title="가계부 설정"
@@ -294,8 +361,17 @@ export function LedgerSettingsView({
           </Button>
           <Button
             variant="primary"
-            disabled={!draft.name.trim()}
-            onClick={() => onSave({ ledger: { ...draft, name: draft.name.trim() }, groupIds })}
+            disabled={!draft.name.trim() || (parent && !draft.childIds.length)}
+            onClick={() =>
+              onSave({
+                ledger: {
+                  ...draft,
+                  name: draft.name.trim(),
+                  period: parent ? spanOf(ledgers, draft.childIds, draft.period) : draft.period,
+                },
+                parentIds,
+              })
+            }
           >
             저장
           </Button>
@@ -306,133 +382,61 @@ export function LedgerSettingsView({
         <LedgerBasics
           name={draft.name}
           onNameChange={(name) => setDraft({ ...draft, name })}
-          period={draft.period}
+          period={parent ? undefined : draft.period}
           onPeriodChange={(period) => setDraft({ ...draft, period })}
           icon={draft.icon}
           onIconChange={(icon) => setDraft({ ...draft, icon })}
           nameError={draft.name.trim() ? undefined : '이름을 입력해 주세요.'}
         />
-        <Stack gap={3}>
-          <h3>필드</h3>
-          <FieldSchemaEditor
-            fields={draft.fields}
-            onChange={(fields) => setDraft({ ...draft, fields })}
+        {parent ? (
+          <ChildPicker
+            ledgers={ledgers}
+            self={ledger}
+            value={draft.childIds}
+            onValueChange={(childIds) => setDraft({ ...draft, childIds })}
           />
-        </Stack>
-        {tagField && (
-          <Stack gap={3}>
-            <h3>태그 옵션</h3>
-            <Field>
-              필드
-              <SelectField value={tagFieldId} onValueChange={setTagFieldId}>
-                {selectFields.map((field) => (
-                  <SelectOption key={field.id} value={field.id}>
-                    {field.name}
-                  </SelectOption>
-                ))}
-              </SelectField>
-            </Field>
-            <TagOptionEditor
-              field={tagField}
-              onChange={(options) =>
-                setDraft({
-                  ...draft,
-                  fields: draft.fields.map((field) =>
-                    field.id === tagField.id ? { ...tagField, options } : field,
-                  ),
-                })
-              }
-            />
-          </Stack>
+        ) : (
+          <>
+            <Stack gap={3}>
+              <h3>필드</h3>
+              <FieldSchemaEditor
+                fields={draft.fields}
+                onChange={(fields) => setDraft({ ...draft, fields })}
+              />
+            </Stack>
+            {tagField && (
+              <Stack gap={3}>
+                <h3>태그 옵션</h3>
+                <Field>
+                  필드
+                  <SelectField value={tagFieldId} onValueChange={setTagFieldId}>
+                    {selectFields.map((field) => (
+                      <SelectOption key={field.id} value={field.id}>
+                        {field.name}
+                      </SelectOption>
+                    ))}
+                  </SelectField>
+                </Field>
+                <TagOptionEditor
+                  field={tagField}
+                  onChange={(options) =>
+                    setDraft({
+                      ...draft,
+                      fields: draft.fields.map((field) =>
+                        field.id === tagField.id ? { ...tagField, options } : field,
+                      ),
+                    })
+                  }
+                />
+              </Stack>
+            )}
+          </>
         )}
-        <GroupPicker groups={groups} value={groupIds} onValueChange={setGroupIds} />
-      </Stack>
-    </FullScreenSheet>
-  );
-}
-
-/** A group's settings: name, icon and which ledgers it gathers; a ledger may be in many groups. */
-export function GroupSettingsView({
-  group,
-  ledgers,
-  onSave,
-  onArchive,
-  onClose,
-}: {
-  /** Omit to create a group. */
-  group?: Group;
-  ledgers: Ledger[];
-  onSave(group: Group): void;
-  onArchive?(group: Group): void;
-  onClose(): void;
-}) {
-  const [initial] = useState<Group>(
-    () => group ?? { id: crypto.randomUUID(), name: '', icon: 'star', ledgerIds: [] },
-  );
-  const [draft, setDraft] = useState(initial);
-  const [error, setError] = useState<string>();
-  const save = () => {
-    if (!draft.name.trim()) {
-      setError('이름을 입력해 주세요.');
-      return;
-    }
-    onSave({ ...draft, name: draft.name.trim() });
-  };
-  return (
-    <FullScreenSheet
-      title={group ? '묶음 설정' : '묶음 만들기'}
-      subtitle={group?.name}
-      dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
-      onClose={onClose}
-      footer={
-        <>
-          {group && onArchive && (
-            <Button className="view-danger" onClick={() => onArchive(group)}>
-              보관
-            </Button>
-          )}
-          <Button variant="primary" onClick={save}>
-            {group ? '저장' : '만들기'}
-          </Button>
-        </>
-      }
-    >
-      <Stack gap={5}>
-        <TextField
-          label="이름"
-          value={draft.name}
-          placeholder="예: 2026, 여행"
-          required
-          error={error}
-          onChange={(event) => {
-            setDraft({ ...draft, name: event.target.value });
-            setError(undefined);
-          }}
-        />
-        <Field>
-          아이콘
-          <SelectField value={draft.icon} onValueChange={(icon) => setDraft({ ...draft, icon })}>
-            {ICONS.map((choice) => (
-              <SelectOption key={choice.value} value={choice.value}>
-                <span className="view-icon-option">
-                  <UgaIcon name={choice.value} size={22} />
-                  {choice.label}
-                </span>
-              </SelectOption>
-            ))}
-          </SelectField>
-        </Field>
-        <ChipSelect
-          label="포함할 가계부"
-          options={ledgers.map((ledger) => ({
-            id: ledger.id,
-            name: `${ledger.name} · ${periodLabel(ledger.period)}`,
-            color: '#B9A27A',
-            archived: ledger.archived,
-          }))}
-          value={draft.ledgerIds}
-          onValueChange={(ledgerIds) => setDraft({ ...draft, ledgerIds })}
-          multiple
+        <ParentPicker
+          ledgers={ledgers}
+          self={ledger}
+          value={parentIds}
+          onValueChange={setParentIds}
         />
       </Stack>
     </FullScreenSheet>

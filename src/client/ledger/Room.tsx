@@ -20,10 +20,11 @@ import {
   won,
   type MenuItem,
 } from '../ui';
-import type { Group, IsoDate, Ledger, LedgerRecord, Totals } from '../../shared/ledger';
-import { periodLabel, whenLabel } from './format';
+import type { IsoDate, Ledger, LedgerRecord, Totals } from '../../shared/ledger';
+import { whenLabel } from './format';
+import { ledgerMeta } from './Hierarchy';
 
-/** One room in the room list: icon, name, latest record or period, time and unseen count. */
+/** One room in the room list: icon, name, latest record or period/children, time and unseen count. */
 export function RoomListItem({
   room,
   latest,
@@ -31,21 +32,18 @@ export function RoomListItem({
   today,
   onOpen,
 }: {
-  room: Ledger | Group;
+  room: Ledger;
+  /** The newest record in the room, including its children's. */
   latest?: LedgerRecord;
   unseen?: number;
   today: IsoDate;
   onOpen(): void;
 }) {
-  const group = 'ledgerIds' in room;
-  const meta = group ? `묶음 · 가계부 ${room.ledgerIds.length}개` : periodLabel(room.period);
   return (
     <ListRow
       leading={<UgaIcon name={room.icon as UgaIconName} size={36} />}
       title={room.name}
-      description={
-        latest ? `${group ? '묶음 · ' : ''}${latest.title} · ${won(latest.amount)}원` : meta
-      }
+      description={latest ? `${latest.title} · ${won(latest.amount)}원` : ledgerMeta(room)}
       trailing={
         <>
           {latest && <span>{whenLabel(latest.createdAt, today)}</span>}
@@ -62,7 +60,7 @@ const viewLabels: Record<RoomView, string> = {
   table: '표',
   calendar: '캘린더',
   stats: '통계',
-  ledgers: '가계부별',
+  ledgers: '하위',
 };
 
 /** Room title bar: back to the room list, name and period, ⋯ menu. The title is the page heading. */

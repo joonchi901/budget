@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, within } from 'storybook/test';
 import { RecordTable } from '../../client/ledger';
-import { groupRecords } from '../../shared/ledger';
-import { groups, ledgers, november, records } from '../fixtures';
+import { roomRecords } from '../../shared/ledger';
+import { ledgers, november, records, year2026 } from '../fixtures';
 
 const meta = {
   title: '04 Organisms · 유기체/RecordTable',
@@ -39,5 +39,5 @@ export const November: Story = {
   },
 };
 export const GroupRoom: Story = {
-  args: { records: groupRecords(groups[0], records), showLedger: true },
+  args: { records: roomRecords(ledgers, year2026, records), showLedger: true },
 };

@@ -15,17 +15,12 @@
     "story": "src/stories/views/LedgerRoom.stories.tsx"
   },
   {
-    "name": "묶음 방",
-    "source": "src/client/views/RoomViews.tsx",
-    "story": "src/stories/views/GroupRoom.stories.tsx"
-  },
-  {
     "name": "내역 입력",
     "source": "src/client/views/RecordEntryView.tsx",
     "story": "src/stories/views/RecordEntry.stories.tsx"
   },
   {
-    "name": "가계부 만들기·설정, 묶음 설정",
+    "name": "가계부 만들기·설정",
     "source": "src/client/views/SetupViews.tsx",
     "story": "src/stories/views/Setup.stories.tsx"
   }

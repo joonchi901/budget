@@ -5,7 +5,6 @@
 import {
   recordProblems,
   type FieldValue,
-  type Group,
   type Ledger,
   type LedgerRecord,
   type Member,
@@ -25,7 +24,7 @@ const people = (prefix: string) => [
   option(`${prefix}-who-p2`, '예디', '#F08A5D'),
   option(`${prefix}-who-p3`, '예미', '#A7D7C5'),
 ];
-// Copying a ledger gives new ids but keeps names, so group stats can merge options by name.
+// Copying a ledger gives new ids but keeps names, so parent stats can merge options by name.
 const monthLedger = (id: string, name: string, start: string, end: string): Ledger => ({
   id,
   name,
@@ -76,6 +75,7 @@ const monthLedger = (id: string, name: string, start: string, end: string): Ledg
     },
     { id: `${id}-f-note`, name: '비고', type: 'text' },
   ],
+  childIds: [],
 });
 
 export const november = monthLedger('nov', '11월', '2026-10-23', '2026-11-22');
@@ -116,13 +116,37 @@ export const japanTrip: Ledger = {
       emptyLabel: '공동',
     },
   ],
+  childIds: [],
 };
-export const ledgers = [november, december, japanTrip];
 
-export const groups: Group[] = [
-  { id: 'g-2026', name: '2026', icon: 'planning', ledgerIds: ['trip', 'nov', 'dec'] },
-  { id: 'g-travel', name: '여행', icon: 'sprout', ledgerIds: ['trip'] },
-];
+// Parents gather records only through their children; nothing is recorded on them directly.
+const parent = (
+  id: string,
+  name: string,
+  icon: string,
+  start: string,
+  end: string,
+  childIds: string[],
+): Ledger => ({
+  id,
+  name,
+  icon,
+  period: { start, end },
+  kinds: [],
+  fields: [],
+  childIds,
+});
+/** 2026 › 하반기 › 11월·12월 and 2026 › 일본여행, while 일본여행 also sits under 여행. */
+export const secondHalf = parent('h2', '하반기', 'planning', '2026-07-01', '2026-12-31', [
+  'nov',
+  'dec',
+]);
+export const year2026 = parent('y2026', '2026', 'planning', '2026-01-01', '2026-12-31', [
+  'h2',
+  'trip',
+]);
+export const travel = parent('travel', '여행', 'sprout', '2026-10-09', '2026-10-12', ['trip']);
+export const ledgers = [november, december, japanTrip, secondHalf, year2026, travel];
 
 let sequence = 0;
 function record(

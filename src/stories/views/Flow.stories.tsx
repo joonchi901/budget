@@ -1,14 +1,9 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
-import { GroupRoomView, LedgerRoomView, RecordEntryView, RoomListView } from '../../client/views';
-import type { Group, IsoDate, Ledger, LedgerRecord } from '../../shared/ledger';
-import {
-  FIXTURE_TODAY,
-  groups,
-  ledgers as initialLedgers,
-  records as initialRecords,
-} from '../fixtures';
+import { LedgerRoomView, RecordEntryView, RoomListView } from '../../client/views';
+import { leafLedgers, type IsoDate, type Ledger, type LedgerRecord } from '../../shared/ledger';
+import { FIXTURE_TODAY, ledgers as initialLedgers, records as initialRecords } from '../fixtures';
 
 type Entry = { ledgers: Ledger[]; date?: IsoDate; record?: LedgerRecord };
 
@@ -19,14 +14,13 @@ type Entry = { ledgers: Ledger[]; date?: IsoDate; record?: LedgerRecord };
 function Flow() {
   const [ledgers, setLedgers] = useState(initialLedgers);
   const [records, setRecords] = useState(initialRecords);
-  const [room, setRoom] = useState<Ledger | Group>();
+  const [room, setRoom] = useState<Ledger>();
   const [entry, setEntry] = useState<Entry>();
-  const scope = (target: Ledger | Group) =>
-    'ledgerIds' in target ? ledgers.filter((item) => target.ledgerIds.includes(item.id)) : [target];
   const actions = {
     today: FIXTURE_TODAY,
     onBack: () => setRoom(undefined),
-    onAddRecord: (date?: IsoDate) => room && setEntry({ ledgers: scope(room), date }),
+    onAddRecord: (date?: IsoDate) =>
+      room && setEntry({ ledgers: leafLedgers(ledgers, room), date }),
     onOpenRecord: (record: LedgerRecord) =>
       setEntry({ ledgers: ledgers.filter((item) => item.id === record.ledgerId), record }),
     onOpenSettings: () => {},
@@ -36,28 +30,20 @@ function Flow() {
       {!room && (
         <RoomListView
           ledgers={ledgers}
-          groups={groups}
           records={records}
           today={FIXTURE_TODAY}
           onOpenRoom={setRoom}
           onCreate={() => {}}
         />
       )}
-      {room && 'ledgerIds' in room && (
-        <GroupRoomView
-          {...actions}
-          group={room}
-          ledgers={ledgers}
-          records={records}
-          onOpenLedger={setRoom}
-        />
-      )}
-      {room && !('ledgerIds' in room) && (
+      {room && (
         <LedgerRoomView
           {...actions}
           ledger={ledgers.find((item) => item.id === room.id)!}
+          ledgers={ledgers}
           records={records}
           onCopy={() => {}}
+          onOpenLedger={setRoom}
         />
       )}
       {entry && (

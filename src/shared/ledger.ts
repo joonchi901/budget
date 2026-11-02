@@ -25,14 +25,23 @@ export type FieldDef =
       hidden?: boolean;
     };
 
+/**
+ * A ledger is one room. A ledger with children (상위 가계부) holds no records and no fields of
+ * its own; it gathers every record of the ledgers below it. Ledgers nest to any depth and one
+ * ledger may sit under several parents, but never under itself (no cycles).
+ */
 export type Ledger = {
   id: Id;
   name: string;
   /** UgaIcon name. */
   icon: string;
   period: { start: IsoDate; end: IsoDate };
+  /** Empty for a parent. */
   kinds: KindOption[];
+  /** Empty for a parent. */
   fields: FieldDef[];
+  /** Direct children; empty for a ledger that holds records. */
+  childIds: Id[];
   archived?: boolean;
 };
 
@@ -53,9 +62,6 @@ export type LedgerRecord = {
   createdAt: string;
 };
 
-/** A group (묶음) gathers ledgers. A ledger may sit in several groups. */
-export type Group = { id: Id; name: string; icon: string; ledgerIds: Id[]; archived?: boolean };
-
 export type Member = { id: Id; name: string };
 
 export type Totals = { income: number; expense: number; balance: number };
@@ -64,6 +70,7 @@ export type Totals = { income: number; expense: number; balance: number };
 export function recordProblems(ledger: Ledger, record: LedgerRecord): string[] {
   const problems: string[] = [];
   if (record.ledgerId !== ledger.id) problems.push('다른 가계부의 내역');
+  if (isParent(ledger)) problems.push('상위 가계부에는 내역을 둘 수 없음');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(record.date)) problems.push('날짜');
   if (!ledger.kinds.some((kind) => kind.id === record.kindId)) problems.push('구분');
   if (!record.title.trim()) problems.push('내용');
@@ -98,13 +105,49 @@ export function totals(records: LedgerRecord[], ledgers: Ledger[]): Totals {
   return { income, expense, balance: income - expense };
 }
 
-/** Records of the group's ledgers. Filtering keeps each record once however groups overlap. */
-export function groupRecords(group: Group, records: LedgerRecord[]): LedgerRecord[] {
-  const ledgerIds = new Set(group.ledgerIds);
-  return records.filter((record) => ledgerIds.has(record.ledgerId));
+export const isParent = (ledger: Ledger) => ledger.childIds.length > 0;
+
+/** Every ledger below `root` (not itself), each once even when reachable by several paths. */
+export function descendants(ledgers: Ledger[], root: Ledger): Ledger[] {
+  const byId = new Map(ledgers.map((ledger) => [ledger.id, ledger]));
+  const seen = new Set<Id>([root.id]);
+  const found: Ledger[] = [];
+  const visit = (ledger: Ledger) => {
+    for (const id of ledger.childIds) {
+      const child = byId.get(id);
+      if (!child || seen.has(id)) continue;
+      seen.add(id);
+      found.push(child);
+      visit(child);
+    }
+  };
+  visit(root);
+  return found;
 }
 
-/** The ledger to suggest when adding a record from a group room on a given date. */
+/** The ledgers that hold the room's records: itself, or every record-holding ledger below it. */
+export function leafLedgers(ledgers: Ledger[], root: Ledger): Ledger[] {
+  return isParent(root) ? descendants(ledgers, root).filter((ledger) => !isParent(ledger)) : [root];
+}
+
+/** The room's records. Each record counts once however the ledgers overlap. */
+export function roomRecords(
+  ledgers: Ledger[],
+  root: Ledger,
+  records: LedgerRecord[],
+): LedgerRecord[] {
+  const ids = new Set(leafLedgers(ledgers, root).map((ledger) => ledger.id));
+  return records.filter((record) => ids.has(record.ledgerId));
+}
+
+/** Whether `child` may go under `parent` without a cycle (not itself, not one of its ancestors). */
+export function canNest(ledgers: Ledger[], parent: Ledger, child: Ledger): boolean {
+  return (
+    parent.id !== child.id && !descendants(ledgers, child).some((item) => item.id === parent.id)
+  );
+}
+
+/** The ledger to suggest when adding a record from a parent room on a given date. */
 export function ledgerForDate(ledgers: Ledger[], date: IsoDate): Ledger | undefined {
   return ledgers.find(
     (ledger) => !ledger.archived && ledger.period.start <= date && date <= ledger.period.end,

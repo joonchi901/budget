@@ -6,7 +6,7 @@ export type AmountProps = Omit<HTMLAttributes<HTMLSpanElement>, 'children'> & {
   /** Amounts are positive; only signed results such as a remaining balance are negative. */
   value: number;
   tone?: 'income' | 'expense' | 'neutral';
-  /** Prefix + for income and − for expense so meaning never relies on color alone. */
+  /** Prefix + for income and − for expense so meaning never relies on color alone; 0 has no sign. */
   signed?: boolean;
   size?: 'sm' | 'md' | 'lg';
 };
@@ -21,7 +21,15 @@ export function Amount({
   ...props
 }: AmountProps) {
   const sign =
-    value < 0 ? '−' : signed && tone === 'income' ? '+' : signed && tone === 'expense' ? '−' : '';
+    value < 0
+      ? '−'
+      : !signed || value === 0
+        ? ''
+        : tone === 'income'
+          ? '+'
+          : tone === 'expense'
+            ? '−'
+            : '';
   return (
     <span {...props} className={`ui-amount ${className}`.trim()} data-tone={tone} data-size={size}>
       {sign}

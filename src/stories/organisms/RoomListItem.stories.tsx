@@ -3,12 +3,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { List } from '../../client/ui';
 import { RoomListItem } from '../../client/ledger';
-import { FIXTURE_TODAY, groups, japanTrip, ledgers, november, records } from '../fixtures';
+import { roomRecords, type Ledger } from '../../shared/ledger';
+import { FIXTURE_TODAY, japanTrip, ledgers, november, records } from '../fixtures';
 
-const latestOf = (ledgerIds: string[]) =>
-  records
-    .filter((record) => ledgerIds.includes(record.ledgerId))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+const latestOf = (room: Ledger) =>
+  roomRecords(ledgers, room, records).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 
 const meta = {
   title: '04 Organisms · 유기체/RoomListItem',
@@ -18,7 +17,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '방 목록의 한 줄. 가계부는 기간, 묶음은 포함한 가계부 수를 보여주고, 내역이 있으면 마지막 내역과 시간을 대신 보여줍니다. 상대가 추가한 새 내역 수를 배지로 표시합니다.',
+          '방 목록의 한 줄. 내역이 있으면 마지막 내역과 시간, 없으면 기간(상위 가계부는 하위 수)을 보여줍니다. 상위 가계부의 마지막 내역은 하위 가계부까지 포함합니다. 상대가 추가한 새 내역 수를 배지로 표시합니다.',
       },
     },
   },
@@ -28,19 +27,16 @@ const meta = {
     return (
       <>
         <List aria-label="방 목록" style={{ maxWidth: 390 }}>
-          {[...ledgers, ...groups].map((room) => {
-            const ids = 'ledgerIds' in room ? room.ledgerIds : [room.id];
-            return (
-              <RoomListItem
-                key={room.id}
-                room={room}
-                latest={latestOf(ids)}
-                unseen={room.id === november.id ? 3 : 0}
-                today={FIXTURE_TODAY}
-                onOpen={() => setOpened(room.name)}
-              />
-            );
-          })}
+          {ledgers.map((room) => (
+            <RoomListItem
+              key={room.id}
+              room={room}
+              latest={latestOf(room)}
+              unseen={room.id === november.id ? 3 : 0}
+              today={FIXTURE_TODAY}
+              onOpen={() => setOpened(room.name)}
+            />
+          ))}
         </List>
         <p role="status">{opened && `${opened} 열기`}</p>
       </>
@@ -50,7 +46,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const LedgersAndGroups: Story = {
+export const LedgersAndParents: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);
     await expect(c.getByText('12월').closest('button')).toHaveTextContent('11/23 – 12/22');
@@ -62,7 +58,7 @@ export const LedgersAndGroups: Story = {
 export const Single: Story = {
   render: (args) => (
     <List aria-label="방 목록" style={{ maxWidth: 390 }}>
-      <RoomListItem {...args} room={japanTrip} latest={latestOf([japanTrip.id])} />
+      <RoomListItem {...args} room={japanTrip} latest={latestOf(japanTrip)} />
     </List>
   ),
 };

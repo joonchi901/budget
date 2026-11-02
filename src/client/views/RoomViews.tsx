@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Copy, Settings2 } from 'lucide-react';
 import {
   DayRecords,
-  LedgerCardList,
+  ChildLedgerList,
   PeriodCalendar,
   RecordFilterBar,
   RecordList,
@@ -15,7 +15,7 @@ import {
   addMonths,
   dayLabel,
   monthLabel,
-  periodLabel,
+  ledgerMeta,
   type NatureFilter,
   type RoomView,
 } from '../ledger';
@@ -24,9 +24,10 @@ import { IconButton, Inline, type MenuItem } from '../ui';
 import {
   defaultStatAxis,
   filterRecords,
-  groupRecords,
+  isParent,
+  leafLedgers,
+  roomRecords,
   totals,
-  type Group,
   type IsoDate,
   type KindOption,
   type Ledger,
@@ -44,7 +45,7 @@ type RoomActions = {
 type Condition = { axis: string; name: string };
 const conditionLabel = ({ axis, name }: Condition) => `${axis}: ${name}`;
 
-/** Shared body of ledger and group rooms: table, calendar, stats and (groups) ledgers views. */
+/** Room body: table, calendar and stats views, plus 하위 for parents. */
 function Room({
   title,
   subtitle,
@@ -168,55 +169,32 @@ function Room({
   );
 }
 
-/** One ledger's room. */
+/**
+ * A ledger's room. Without children it shows its own records over its period; with children
+ * (상위 가계부) it gathers every record below it, marks each record's ledger, steps the calendar
+ * by month and adds a 하위 view to drill into the children.
+ */
 export function LedgerRoomView({
   ledger,
-  records,
-  onOpenSettings,
-  onCopy,
-  ...actions
-}: RoomActions & {
-  ledger: Ledger;
-  records: LedgerRecord[];
-  onOpenSettings(): void;
-  onCopy(): void;
-}) {
-  return (
-    <Room
-      {...actions}
-      title={ledger.name}
-      subtitle={periodLabel(ledger.period)}
-      ledgers={[ledger]}
-      records={records.filter((record) => record.ledgerId === ledger.id)}
-      views={['table', 'calendar', 'stats']}
-      menuItems={[
-        { label: '설정', icon: <Settings2 size={18} />, onSelect: onOpenSettings },
-        { label: '복사해서 만들기', icon: <Copy size={18} />, onSelect: onCopy },
-      ]}
-      showLedger={false}
-      calendar={{ period: ledger.period }}
-    />
-  );
-}
-
-/** A group's room: its ledgers' records together, a month calendar and a per-ledger view. */
-export function GroupRoomView({
-  group,
   ledgers,
   records,
   onOpenSettings,
+  onCopy,
   onOpenLedger,
   ...actions
 }: RoomActions & {
-  group: Group;
-  /** All ledgers; the group's are picked by id. */
+  ledger: Ledger;
+  /** All ledgers, to resolve children. */
   ledgers: Ledger[];
   records: LedgerRecord[];
   onOpenSettings(): void;
+  /** 복사해서 만들기, for ledgers that hold records. */
+  onCopy(): void;
   onOpenLedger(ledger: Ledger): void;
 }) {
-  const own = ledgers.filter((ledger) => group.ledgerIds.includes(ledger.id));
-  const scoped = groupRecords(group, records);
+  const parent = isParent(ledger);
+  const leaves = leafLedgers(ledgers, ledger);
+  const scoped = roomRecords(ledgers, ledger, records);
   const [month, setMonth] = useState(() => {
     const latest = scoped.reduce((last, record) => (record.date > last ? record.date : last), '');
     return (latest || actions.today).slice(0, 7);
@@ -226,34 +204,50 @@ export function GroupRoomView({
   return (
     <Room
       {...actions}
-      title={group.name}
-      subtitle={`묶음 · 가계부 ${own.length}개`}
-      ledgers={own}
+      title={ledger.name}
+      subtitle={ledgerMeta(ledger)}
+      ledgers={leaves}
       records={scoped}
-      views={['table', 'calendar', 'stats', 'ledgers']}
-      menuItems={[{ label: '설정', icon: <Settings2 size={18} />, onSelect: onOpenSettings }]}
-      showLedger
-      calendar={{
-        period: { start, end },
-        navigation: (
-          <Inline justify="between">
-            <IconButton
-              aria-label="이전 달"
-              onClick={() => setMonth(addMonths(start, -1).slice(0, 7))}
-            >
-              <ChevronLeft size={20} />
-            </IconButton>
-            <h2 className="view-month-title">{monthLabel(month)}</h2>
-            <IconButton
-              aria-label="다음 달"
-              onClick={() => setMonth(addMonths(start, 1).slice(0, 7))}
-            >
-              <ChevronRight size={20} />
-            </IconButton>
-          </Inline>
-        ),
-      }}
-      ledgersView={<LedgerCardList ledgers={own} records={scoped} onOpen={onOpenLedger} />}
+      views={parent ? ['table', 'calendar', 'stats', 'ledgers'] : ['table', 'calendar', 'stats']}
+      menuItems={[
+        { label: '설정', icon: <Settings2 size={18} />, onSelect: onOpenSettings },
+        ...(parent
+          ? []
+          : [{ label: '복사해서 만들기', icon: <Copy size={18} />, onSelect: onCopy }]),
+      ]}
+      showLedger={parent}
+      calendar={
+        parent
+          ? {
+              period: { start, end },
+              navigation: (
+                <Inline justify="between">
+                  <IconButton
+                    aria-label="이전 달"
+                    onClick={() => setMonth(addMonths(start, -1).slice(0, 7))}
+                  >
+                    <ChevronLeft size={20} />
+                  </IconButton>
+                  <h2 className="view-month-title">{monthLabel(month)}</h2>
+                  <IconButton
+                    aria-label="다음 달"
+                    onClick={() => setMonth(addMonths(start, 1).slice(0, 7))}
+                  >
+                    <ChevronRight size={20} />
+                  </IconButton>
+                </Inline>
+              ),
+            }
+          : { period: ledger.period }
+      }
+      ledgersView={
+        <ChildLedgerList
+          parent={ledger}
+          ledgers={ledgers}
+          records={records}
+          onOpen={onOpenLedger}
+        />
+      }
     />
   );
 }

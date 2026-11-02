@@ -3,18 +3,15 @@ import { Plus } from 'lucide-react';
 import { UgaLogo } from '../brand/Uga';
 import { RoomListItem } from '../ledger';
 import { Screen } from '../templates';
-import { Button, Empty, List, Menu, SearchField, SegmentedControl } from '../ui';
-import type { Group, IsoDate, Ledger, LedgerRecord } from '../../shared/ledger';
-
-type RoomFilter = 'all' | 'ledger' | 'group';
+import { Button, Empty, List, SearchField } from '../ui';
+import { roomRecords, type IsoDate, type Ledger, type LedgerRecord } from '../../shared/ledger';
 
 /**
- * Home: every ledger and group as rooms, most recent activity first, like a messenger.
- * Search and the 전체·가계부·묶음 switch narrow the list; 새로 만들기 starts a ledger or group.
+ * Home: every ledger as a room, most recent activity first, like a messenger. A parent's
+ * activity includes its children's records. Search narrows by name; 새 가계부 creates one.
  */
 export function RoomListView({
   ledgers,
-  groups,
   records,
   unseen = {},
   today,
@@ -22,29 +19,24 @@ export function RoomListView({
   onCreate,
 }: {
   ledgers: Ledger[];
-  groups: Group[];
   records: LedgerRecord[];
   /** Records the other member added since this member last opened each room. */
   unseen?: Record<string, number>;
   today: IsoDate;
-  onOpenRoom(room: Ledger | Group): void;
-  onCreate(kind: 'ledger' | 'group'): void;
+  onOpenRoom(room: Ledger): void;
+  onCreate(): void;
 }) {
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<RoomFilter>('all');
-  const latest = (room: Ledger | Group) => {
-    const ids = 'ledgerIds' in room ? room.ledgerIds : [room.id];
-    return records
-      .filter((record) => ids.includes(record.ledgerId))
-      .reduce<LedgerRecord | undefined>(
-        (last, record) => (!last || record.createdAt > last.createdAt ? record : last),
-        undefined,
-      );
-  };
-  const rooms = [...(filter === 'group' ? [] : ledgers), ...(filter === 'ledger' ? [] : groups)]
+  const rooms = ledgers
     .filter((room) => !room.archived)
     .filter((room) => room.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
-    .map((room) => ({ room, latest: latest(room) }))
+    .map((room) => ({
+      room,
+      latest: roomRecords(ledgers, room, records).reduce<LedgerRecord | undefined>(
+        (last, record) => (!last || record.createdAt > last.createdAt ? record : last),
+        undefined,
+      ),
+    }))
     .sort((a, b) => (b.latest?.createdAt ?? '').localeCompare(a.latest?.createdAt ?? ''));
   return (
     <Screen
@@ -55,36 +47,16 @@ export function RoomListView({
           </h1>
           <SearchField
             aria-label="가계부 검색"
-            placeholder="가계부·묶음 이름"
+            placeholder="가계부 이름"
             value={query}
             onValueChange={setQuery}
-          />
-          <SegmentedControl<RoomFilter>
-            aria-label="방 종류"
-            value={filter}
-            onValueChange={setFilter}
-            options={[
-              { value: 'all', label: '전체' },
-              { value: 'ledger', label: '가계부' },
-              { value: 'group', label: '묶음' },
-            ]}
           />
         </>
       }
       bottom={
-        <Menu
-          label="새로 만들기"
-          items={[
-            { label: '가계부 만들기', onSelect: () => onCreate('ledger') },
-            { label: '묶음 만들기', onSelect: () => onCreate('group') },
-          ]}
-          trigger={(props) => (
-            <Button {...props} variant="primary">
-              <Plus size={18} />
-              새로 만들기
-            </Button>
-          )}
-        />
+        <Button variant="primary" onClick={onCreate}>
+          <Plus size={18} />새 가계부
+        </Button>
       }
     >
       {rooms.length ? (

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { RecordList } from '../../client/ledger';
-import { groupRecords, type LedgerRecord } from '../../shared/ledger';
-import { groups, ledgers, november, records } from '../fixtures';
+import { roomRecords, type LedgerRecord } from '../../shared/ledger';
+import { ledgers, november, records, year2026 } from '../fixtures';
 
 const novemberRecords = records.filter((record) => record.ledgerId === november.id);
 
@@ -43,6 +43,6 @@ export const Newest: Story = {
   },
 };
 export const GroupRoom: Story = {
-  args: { records: groupRecords(groups[0], records), showLedger: true, order: 'oldest' },
+  args: { records: roomRecords(ledgers, year2026, records), showLedger: true, order: 'oldest' },
 };
 export const Empty: Story = { args: { records: [] } };

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { StatsBreakdown } from '../../client/ledger';
-import { groupRecords, type KindOption } from '../../shared/ledger';
-import { groups, ledgers, november, records } from '../fixtures';
+import { leafLedgers, roomRecords, type KindOption } from '../../shared/ledger';
+import { ledgers, november, records, year2026 } from '../fixtures';
 
 const meta = {
   title: '04 Organisms · 유기체/StatsBreakdown',
@@ -67,7 +67,7 @@ export const ByPerson: Story = {
   },
 };
 export const GroupByPayment: Story = {
-  args: { records: groupRecords(groups[0], records), axis: '결제방식' },
+  args: { records: roomRecords(ledgers, year2026, records), axis: '결제방식' },
   play: async ({ canvasElement }) => {
     const rows = within(canvasElement).getAllByRole('button', { name: /원/ });
     for (const text of ['국민카드', '1,083,572원']) await expect(rows[0]).toHaveTextContent(text);
@@ -75,7 +75,11 @@ export const GroupByPayment: Story = {
 };
 export const Income: Story = { args: { nature: 'income', axis: '구분' } };
 export const GroupByLedger: Story = {
-  args: { records: groupRecords(groups[0], records), ledgers, axis: '가계부' },
+  args: {
+    records: roomRecords(ledgers, year2026, records),
+    ledgers: leafLedgers(ledgers, year2026),
+    axis: '가계부',
+  },
   play: async ({ canvasElement }) => {
     const rows = within(canvasElement).getAllByRole('button', { name: /원/ });
     for (const text of ['11월', '1,875,052원']) await expect(rows[0]).toHaveTextContent(text);

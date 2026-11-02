@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { LedgerRoomView } from '../../client/views';
-import { FIXTURE_TODAY, december, november, records } from '../fixtures';
+import { FIXTURE_TODAY, december, ledgers, november, records, travel, year2026 } from '../fixtures';
 
 const meta = {
   title: '06 Views · 화면/가계부 방',
@@ -14,12 +14,13 @@ const meta = {
     docs: {
       description: {
         component:
-          '가계부 하나의 방. 상단에 방 이름·기간·요약과 표·캘린더·통계 전환이 고정되고, 하단에 내역 추가가 있습니다. 표는 날짜별 목록(넓게 보기로 전체 열), 캘린더는 기간 달력과 날짜별 내역, 통계는 태그별 금액이며 통계 항목을 누르면 그 조건의 표로 이동합니다.',
+          '가계부 하나의 방. 상단에 방 이름·기간·요약, 하단에 표·캘린더·통계 전환과 내역 추가가 있습니다. 하위 가계부가 있으면(상위 가계부) 아래 모든 내역을 한 번씩 모아 원본 가계부를 표시하고, 캘린더는 월 단위로 넘기며, 하위 보기에서 각 하위 방으로 들어갑니다. 통계 항목을 누르면 그 조건의 표로 이동합니다.',
       },
     },
   },
   args: {
     ledger: november,
+    ledgers,
     records,
     today: FIXTURE_TODAY,
     onBack: () => {},
@@ -27,6 +28,7 @@ const meta = {
     onOpenRecord: () => {},
     onOpenSettings: () => {},
     onCopy: () => {},
+    onOpenLedger: () => {},
   },
   render: function Logged(args) {
     const [log, setLog] = useState('');
@@ -38,6 +40,7 @@ const meta = {
           onOpenRecord={(record) => setLog(`열기: ${record.title}`)}
           onOpenSettings={() => setLog('설정')}
           onCopy={() => setLog('복사')}
+          onOpenLedger={(ledger) => setLog(`하위: ${ledger.name}`)}
         />
         <p role="status" className="sr-only">
           {log}
@@ -53,6 +56,7 @@ export const Table: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);
     await expect(c.getByRole('heading', { level: 1, name: '11월' })).toBeVisible();
+    await expect(c.queryByRole('button', { name: '하위' })).toBeNull();
     await userEvent.type(c.getByRole('searchbox', { name: '내역 검색' }), '쿠팡이츠');
     await expect(c.getAllByRole('button', { name: /쿠팡이츠/ })).toHaveLength(6);
     await userEvent.click(c.getByRole('button', { name: '조회 조건' }));
@@ -82,3 +86,27 @@ export const StatsToTable: Story = {
   },
 };
 export const Empty: Story = { args: { ledger: december } };
+export const ParentYear: Story = {
+  args: { ledger: year2026 },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await expect(c.getByText('하위 2개')).toBeVisible();
+    await expect(c.getByText('남은 금액').nextElementSibling).toHaveTextContent('5,645,218원');
+    await expect(c.queryByRole('menuitem', { name: '복사해서 만들기' })).toBeNull();
+    await userEvent.click(c.getByRole('button', { name: '하위' }));
+    await userEvent.click(c.getByRole('button', { name: /^하반기/ }));
+    await expect(c.getByRole('status')).toHaveTextContent('하위: 하반기');
+  },
+};
+export const ParentMonthCalendar: Story = {
+  args: { ledger: year2026 },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await userEvent.click(c.getByRole('button', { name: '캘린더' }));
+    await expect(c.getByRole('heading', { name: '2026년 11월' })).toBeVisible();
+    await userEvent.click(c.getByRole('button', { name: '이전 달' }));
+    await expect(c.getByRole('heading', { name: '2026년 10월' })).toBeVisible();
+    await expect(c.getByRole('button', { name: /^10월 9일 \(금\), 지출 692,000원/ })).toBeEnabled();
+  },
+};
+export const ParentTravel: Story = { args: { ledger: travel } };
