@@ -62,3 +62,22 @@ export const Single: Story = {
     </List>
   ),
 };
+export const UnknownIcon: Story = {
+  render: (args) => (
+    <List aria-label="방 목록" style={{ maxWidth: 390 }}>
+      <RoomListItem {...args} room={{ ...japanTrip, icon: '/../../api/session?' }} />
+    </List>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '저장된 아이콘 값이 알려진 이름이 아니면 기본 아이콘을 씁니다. 값이 이미지 경로를 바꾸지 못합니다.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const icon = canvasElement.querySelector('img')!;
+    await expect(icon.getAttribute('src')).toBe('/brand/uga-icon-ledger.svg');
+  },
+};

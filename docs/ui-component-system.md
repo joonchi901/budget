@@ -1,6 +1,6 @@
 # UI 컴포넌트와 살아있는 명세
 
-기준일: 2026-11-02
+기준일: 2026-11-03
 
 ## 컴포넌트 계위 (기준)
 
@@ -69,6 +69,38 @@ src/stories/<단계>/                       스토리도 같은 단계로
 ### 현재 상태
 
 1–7단계를 마쳤다. Storybook은 `00 Guide`부터 `06 Views`까지 단계 제목으로 정리했다. 2단계 Atoms: Amount·CountBadge·Bar·Switch·Slider와 `02 Atoms/Inputs`. 3단계 Molecules: AmountInput·SearchField·FilterChip·ChipSelect·Menu·List·ListRow·StatBar(`ui/molecules.css`, Menu를 위한 Popover `role="menu"`). 4단계: 도메인 타입과 검증·합계 함수(`src/shared/ledger.ts`), Notion 샘플 기반 합성 데이터(`src/stories/fixtures.ts`), `00 Guide/데이터 모델`. 5단계 Organisms(`src/client/ledger/`): 방(RoomListItem·RoomHeader·RoomTabBar·SummaryStrip), 내역(RecordRow·RecordDayGroup·RecordList·RecordTable·RecordFilterBar), 캘린더(PeriodCalendar·DayRecords), 통계(StatsBreakdown), 입력(DynamicField·RecordForm), 설정(FieldSchemaEditor·TagOptionEditor), 상위·하위(ChildLedgerList·ChildPicker·ParentPicker·LedgerPicker). 통계·조건 함수 `statAxes`·`breakdown`·`filterRecords`를 `src/shared`에 더했다. 6단계 Templates(`src/client/templates/`): Screen(방 목록·방 공통 틀), FullScreenSheet·BottomSheet(Dialog 위). 7단계 Views(`src/client/views/`): 로그인, 방 목록, 가계부 방(하위가 있으면 상위 가계부 상태), 내역 입력, 가계부 만들기·설정. 화면은 [화면 목록](../src/stories/screens.json)에 등록하고 기본 너비는 모바일 390px이다. Views까지 API·저장은 없고 상위 콜백만 부른다. `06 Views/전체 흐름`은 화면을 메모리 상태로 연결해, 추가한 내역이 표·캘린더·통계·방 목록에 반영되는지 검증한다. 1차 검토로 태그 옵션의 색 견본(ColorField `compact`), 새 내역의 금액 포커스와 기간 안 기본 날짜, 둥근 넓게 보기 표(최신순·한 줄), 중복 표현 정리(지출 표시·통계 합계·로고 제목), 검색+조회 조건 한 줄 도구, 알약형 태그, 통계 기본 기준(옵션이 가장 많은 단일 선택 필드)과 상위 가계부의 가계부별 기준을 반영했다. 이후 가계부와 묶음을 하나로 합쳐, 하위 가계부가 있는 가계부(상위 가계부)가 아래 모든 내역을 모아 보여주도록 바꿨다(여러 단계, 순환 금지, 상위는 자기 내역 없음). 다음은 단계별 검토 의견 반영과 앱 연결(DB·API·로그인)이다.
+
+### 조립 규칙
+
+- `Stack`: 세로 흐름, `Inline`: 줄바꿈 가능한 가로 흐름, `Grid`: 같은 너비의 카드, `Surface`: 내용의 경계.
+- `gap`/`padding`은 토큰 번호를 받는다. 예: `gap={4}`는 `--brand-space-4`(16px).
+- Grid는 데스크톱 `columns`, 761~1000px `tabletColumns`, 760px 이하 `mobileColumns`를 받는다. 기본 모바일 1열. 달력의 7일 열과 표는 전용 배치를 유지한다.
+- `as`로 HTML 의미를 유지한다. `ul`/`ol`을 쓰면 자식은 `li`로 만든다.
+- Button 기본 `type`은 `button`. 저장은 명시적 `type="submit"`. `busy`는 중복 클릭을 차단한다. IconButton은 `aria-label` 필수.
+- `Input`/`Textarea`/`Checkbox`/`Radio`/`Field`는 native props·ref·라벨·폼 검증을 유지한다. 설명과 오류 연결이 필요한 새 폼은 `TextField`로 조립한다.
+- `FormBody`/`FormFooter`/`FormGrid`/`FormSection`은 모든 편집창의 공통 구조다. `Panel`/`SummaryGrid`/`Toolbar`/`TableScroll`은 화면의 내용 경계·요약·도구·표 영역을 담당한다. 가로로 긴 표는 이름이 있는 키보드 스크롤 영역에 둔다.
+- `SegmentedControl`은 선택 상태를 `aria-pressed`로, `Tabs`는 tablist/tab/tabpanel 계약으로 표현한다. 방향키·Home·End는 비활성 옵션을 건너뛴다. 별도 시각 패턴이 있으면 `appearance="plain"`을 사용한다.
+- `Dialog dirty`와 `CloseButton`은 미저장 내용을 버릴지 확인한다. 계속 작성 시 값과 포커스를 유지하고, 버리면 원래 열기 버튼으로 돌아간다. 저장 성공은 화면의 `onClose`/`onSaved`로 직접 닫는다. `locked` 동안은 닫기와 Escape를 막는다.
+- 날짜·선택·색상은 기존 자체 컨트롤을 사용한다. 태그는 사용자 색상과 배지 표현을 유지한다.
+- Dialog를 열면 `[data-autofocus]`가 붙은 칸에 포커스를 둔다. 새 내역은 금액부터 시작해 휴대폰에서 숫자 키패드가 바로 열린다.
+- 다른 사람이 저장했을 수 있는 값(색·아이콘·아바타)은 컴포넌트가 다시 검증한다. 색은 `isHexColor`를 통과한 `#RRGGBB`만 CSS로 보내고, Uga 이미지는 알려진 이름만 경로로 만든다. 사용자 글자는 HTML로 넣지 않는다.
+- Storybook과 이후 앱은 같은 [app-styles.css](../src/client/app-styles.css)를 같은 순서로 읽는다. Storybook 전용 CSS는 캔버스 여백만 정한다.
+
+```tsx
+<Surface padding={4}>
+  <Stack gap={4}>
+    <h2>가계부 요약</h2>
+    <Grid columns={3} tabletColumns={2} mobileColumns={1} gap={3}>
+      {/* 실제 요약 컴포넌트 */}
+    </Grid>
+    <Inline gap={2} justify="end">
+      <Button variant="primary" onClick={onCreate}>
+        내역 추가
+      </Button>
+    </Inline>
+  </Stack>
+</Surface>
+```
 
 ## 실행
 

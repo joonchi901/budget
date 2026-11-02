@@ -1,22 +1,29 @@
 /** Assets from the reviewed Uga board. These images never alter stored ledger values. */
 type AssetProps = { size?: number; className?: string; alt?: string };
 
-export type UgaIconName =
-  | 'home'
-  | 'ledger'
-  | 'assets'
-  | 'payments'
-  | 'analytics'
-  | 'planning'
-  | 'tags'
-  | 'data'
-  | 'bone'
-  | 'bones'
-  | 'heart'
-  | 'star'
-  | 'sprout'
-  | 'meat'
-  | 'moneybag';
+export const UGA_ICON_NAMES = [
+  'home',
+  'ledger',
+  'assets',
+  'payments',
+  'analytics',
+  'planning',
+  'tags',
+  'data',
+  'bone',
+  'bones',
+  'heart',
+  'star',
+  'sprout',
+  'meat',
+  'moneybag',
+] as const;
+export type UgaIconName = (typeof UGA_ICON_NAMES)[number];
+const UGA_MOODS = ['happy', 'calm', 'surprise', 'sleep'] as const;
+// Icons and moods are stored per ledger or profile and may come from another member; only a
+// known name becomes an image path, so a stored "/../../api/..." cannot redirect the request.
+const known = <T extends string>(names: readonly T[], value: string, fallback: T): T =>
+  names.includes(value as T) ? (value as T) : fallback;
 
 export type UgaPose =
   | 'representative'
@@ -39,7 +46,7 @@ export function UgaIcon({
   return (
     <img
       className={`uga-icon ${className}`.trim()}
-      src={`/brand/uga-icon-${name}.svg`}
+      src={`/brand/uga-icon-${known(UGA_ICON_NAMES, name, 'ledger')}.svg`}
       width={size}
       height={size}
       alt={alt}
@@ -77,11 +84,11 @@ export function UgaAvatar({
   size = 36,
   className = '',
   alt = '',
-}: AssetProps & { mood?: 'happy' | 'calm' | 'surprise' | 'sleep' }) {
+}: AssetProps & { mood?: (typeof UGA_MOODS)[number] }) {
   return (
     <img
       className={`uga-avatar ${className}`.trim()}
-      src={`/brand/uga-avatar-${mood}.svg`}
+      src={`/brand/uga-avatar-${known(UGA_MOODS, mood, 'happy')}.svg`}
       width={size}
       height={size}
       alt={alt}

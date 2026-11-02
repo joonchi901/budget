@@ -51,3 +51,19 @@ export const Empty: Story = {
   args: { value: 0, max: 0 },
   parameters: { docs: { description: { story: 'max가 0이면 빈 트랙만 보입니다.' } } },
 };
+export const UnsafeColor: Story = {
+  args: { value: 50, max: 100, color: 'url(https://example.invalid/track.png)' },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '공유 가계부의 다른 멤버가 저장한 색이 #RRGGBB가 아니면 쓰지 않습니다. url(...) 같은 값이 다른 사람의 브라우저에서 외부 요청을 만들지 못합니다.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const bar = canvasElement.querySelector<HTMLElement>('.ui-bar')!;
+    await expect(bar.style.getPropertyValue('--ui-bar-color')).toBe('');
+    await expect(getComputedStyle(bar.querySelector('.ui-bar-fill')!).backgroundImage).toBe('none');
+  },
+};

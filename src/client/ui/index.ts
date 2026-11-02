@@ -25,7 +25,7 @@ export {
 export { SegmentedControl, Tabs, type ChoiceOption, type ChoiceGroupProps } from './ChoiceGroup';
 export { CloseButton, DialogCloseContext } from './CloseButton';
 export { TableScroll } from './Patterns';
-export { Tag } from './Tag';
+export { Tag, isHexColor } from './Tag';
 export { Tooltip } from './Tooltip';
 export { Popover, useControlLabel } from './Popover';
 export { SelectField, SelectGroup, SelectOption } from './SelectField';

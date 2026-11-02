@@ -1,9 +1,10 @@
 import type { CSSProperties, HTMLAttributes } from 'react';
+import { isHexColor } from './Tag';
 
 export type BarProps = Omit<HTMLAttributes<HTMLSpanElement>, 'children'> & {
   value: number;
   max: number;
-  /** A tag option's saved color; defaults to the brand coral. */
+  /** A tag option's saved color (`#RRGGBB`; anything else falls back to the brand coral). */
   color?: string;
 };
 
@@ -15,7 +16,13 @@ export function Bar({ value, max, color, className = '', style, ...props }: BarP
       {...props}
       aria-hidden="true"
       className={`ui-bar ${className}`.trim()}
-      style={{ '--ui-bar-ratio': ratio, '--ui-bar-color': color, ...style } as CSSProperties}
+      style={
+        {
+          '--ui-bar-ratio': ratio,
+          '--ui-bar-color': isHexColor(color) ? color : undefined,
+          ...style,
+        } as CSSProperties
+      }
     >
       <span className="ui-bar-fill" />
     </span>

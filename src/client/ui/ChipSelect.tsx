@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Check, Plus } from 'lucide-react';
 import { Button } from './Button';
 import { Input } from './Fields';
-import { badgeColors } from './Tag';
+import { badgeColors, isHexColor } from './Tag';
 
 export type ChipOption = { id: string; name: string; color: string; archived?: boolean };
 
@@ -83,7 +83,9 @@ export function ChipSelect({
                 style={
                   selected
                     ? badgeColors(option.color)
-                    : ({ '--ui-chip-color': option.color } as CSSProperties)
+                    : ({
+                        '--ui-chip-color': isHexColor(option.color) ? option.color : undefined,
+                      } as CSSProperties)
                 }
                 onClick={() => toggle(option.id)}
               >

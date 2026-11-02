@@ -113,3 +113,21 @@ export const ArchivedSelected: Story = {
   },
 };
 export const Disabled: Story = { args: { disabled: true } };
+export const UnsafeColor: Story = {
+  args: {
+    label: '카테고리',
+    value: [],
+    options: [{ id: 'x1', name: '외부 색', color: 'url(https://example.invalid/track.png)' }],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: '저장된 색이 #RRGGBB가 아니면 칩의 색 점에 쓰지 않습니다.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const dot = canvasElement.querySelector<HTMLElement>('.ui-chip-dot')!;
+    await expect(getComputedStyle(dot).backgroundImage).toBe('none');
+  },
+};
