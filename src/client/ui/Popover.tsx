@@ -23,7 +23,7 @@ interface TriggerProps {
   ref: RefObject<HTMLButtonElement | null>;
   onClick(): void;
   'aria-expanded': boolean;
-  'aria-haspopup': 'dialog';
+  'aria-haspopup': 'dialog' | 'menu';
   'aria-controls': string;
 }
 
@@ -37,6 +37,7 @@ export function Popover({
   className = '',
   matchTriggerWidth = true,
   preferredWidth = 292,
+  role = 'dialog',
 }: {
   trigger(props: TriggerProps): ReactNode;
   children(context: { close(): void }): ReactNode;
@@ -47,6 +48,8 @@ export function Popover({
   className?: string;
   matchTriggerWidth?: boolean;
   preferredWidth?: number;
+  /** A menu panel owns menuitems directly; everything else is a labelled dialog. */
+  role?: 'dialog' | 'menu';
 }) {
   const id = useId();
   const anchor = useRef<HTMLButtonElement>(null);
@@ -146,7 +149,7 @@ export function Popover({
         ref: anchor,
         onClick: () => setOpen(!open),
         'aria-expanded': open,
-        'aria-haspopup': 'dialog',
+        'aria-haspopup': role,
         'aria-controls': id,
       })}
       {open && (
@@ -154,7 +157,7 @@ export function Popover({
           id={id}
           ref={panel}
           popover="manual"
-          role="dialog"
+          role={role}
           aria-label={label}
           className={`ui-popover ${className}`}
         >

@@ -144,6 +144,62 @@
     "usage": "금액 요약"
   },
   {
+    "name": "AmountInput",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/AmountInput.tsx",
+    "story": "src/stories/molecules/AmountInput.stories.tsx",
+    "status": "ready",
+    "usage": "내역 입력의 큰 금액 입력. 숫자만, 입력 중 쉼표, 커서 유지"
+  },
+  {
+    "name": "SearchField",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/SearchField.tsx",
+    "story": "src/stories/molecules/SearchField.stories.tsx",
+    "status": "ready",
+    "usage": "검색 입력. 지우기 버튼과 Escape"
+  },
+  {
+    "name": "FilterChip",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/FilterChip.tsx",
+    "story": "src/stories/molecules/FilterChip.stories.tsx",
+    "status": "ready",
+    "usage": "적용한 조회 조건. 칩 전체가 해제 버튼"
+  },
+  {
+    "name": "ChipSelect",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/ChipSelect.tsx",
+    "story": "src/stories/molecules/ChipSelect.stories.tsx",
+    "status": "ready",
+    "usage": "Notion식 단일·다중 선택과 옵션 즉석 추가"
+  },
+  {
+    "name": "Menu",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/Menu.tsx",
+    "story": "src/stories/molecules/Menu.stories.tsx",
+    "status": "ready",
+    "usage": "드롭다운 메뉴. 방향키·Escape, 위험 동작 구분"
+  },
+  {
+    "name": "List / ListRow",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/List.tsx",
+    "story": "src/stories/molecules/List.stories.tsx",
+    "status": "ready",
+    "usage": "목록 표면과 한 줄(앞 그림·제목·보조 줄·오른쪽 값), 줄 전체 버튼"
+  },
+  {
+    "name": "StatBar",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/StatBar.tsx",
+    "story": "src/stories/molecules/StatBar.stories.tsx",
+    "status": "ready",
+    "usage": "통계 한 줄: 이름·금액·막대·비율"
+  },
+  {
     "name": "FormBody / FormFooter / FormGrid / FormSection / CloseButton",
     "layer": "03 Molecules",
     "source": "src/client/ui/Patterns.tsx",

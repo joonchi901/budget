@@ -68,7 +68,7 @@ src/stories/<단계>/                       스토리도 같은 단계로
 
 ### 현재 상태
 
-1단계(기존 컴포넌트 이동)와 2단계(신규 Atoms)를 마쳤다. 기존 요소는 `brand/`·`ui/`·`templates/`에 있고, Storybook은 `00 Guide`~`05 Templates` 제목으로 정리했다. TagBadge는 `Tag`로 이름을 바꿨다(CSS 클래스는 그대로). 2단계에서 Amount·CountBadge·Bar·Switch·Slider를 추가하고 Input·Textarea·Checkbox·Radio를 `02 Atoms/Inputs` 스토리로 분리했다. 금액 서식 `won`은 Amount에 있고 Stat이 이를 사용한다. [컴포넌트 목록](../src/stories/catalog.json)은 21개 항목이 모두 `ready`(조립 준비)이며 [화면 목록](../src/stories/screens.json)은 비어 있다. 다음은 3단계(신규 Molecules: 드롭다운 메뉴·목록 포함)다.
+1~~3단계(기존 컴포넌트 이동, 신규 Atoms, 신규 Molecules)를 마쳤다. 기존 요소는 `brand/`·`ui/`·`templates/`에 있고, Storybook은 `00 Guide`~~`05 Templates` 제목으로 정리했다. TagBadge는 `Tag`로 이름을 바꿨다(CSS 클래스는 그대로). 2단계에서 Amount·CountBadge·Bar·Switch·Slider를 추가하고 Input·Textarea·Checkbox·Radio를 `02 Atoms/Inputs` 스토리로 분리했다. 3단계에서 AmountInput·SearchField·FilterChip·ChipSelect·Menu·List·ListRow·StatBar를 추가했다. Molecules 스타일은 `ui/molecules.css`에 있다. Menu를 위해 Popover에 `role="menu"`를 추가했다. [컴포넌트 목록](../src/stories/catalog.json)은 28개 항목이 모두 `ready`(조립 준비)이며 [화면 목록](../src/stories/screens.json)은 비어 있다. 다음은 4단계(도메인 타입과 합성 데이터)다.
 
 ## 실행
 
