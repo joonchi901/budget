@@ -19,9 +19,25 @@
     "name": "Input / Textarea / Checkbox / Radio",
     "layer": "02 Atoms",
     "source": "src/client/ui/Fields.tsx",
-    "story": "src/stories/molecules/Fields.stories.tsx",
+    "story": "src/stories/atoms/Inputs.stories.tsx",
     "status": "ready",
-    "usage": "native props·ref·라벨·폼 검증을 유지하는 입력 요소. Fields 명세에서 함께 확인"
+    "usage": "native props·ref·라벨·폼 검증을 유지하는 입력 요소"
+  },
+  {
+    "name": "Switch",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Fields.tsx",
+    "story": "src/stories/atoms/Switch.stories.tsx",
+    "status": "ready",
+    "usage": "바로 적용되는 켜기/끄기 설정. role=\"switch\"인 native checkbox"
+  },
+  {
+    "name": "Slider",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Fields.tsx",
+    "story": "src/stories/atoms/Slider.stories.tsx",
+    "status": "ready",
+    "usage": "native range를 토큰으로 다시 그린 슬라이더. 채워진 구간이 값을 따라감"
   },
   {
     "name": "Tag",
@@ -46,6 +62,30 @@
     "story": "src/stories/atoms/Layout.stories.tsx",
     "status": "ready",
     "usage": "세로·가로 흐름, 반응형 동일 너비 배치, 내용 경계로 화면을 조립"
+  },
+  {
+    "name": "Amount",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Amount.tsx",
+    "story": "src/stories/atoms/Amount.stories.tsx",
+    "status": "ready",
+    "usage": "원 단위 금액. 고정 폭 숫자, 수입·지출 색과 +/− 부호"
+  },
+  {
+    "name": "CountBadge",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/CountBadge.tsx",
+    "story": "src/stories/atoms/CountBadge.stories.tsx",
+    "status": "ready",
+    "usage": "방 목록의 새 내역 수. 스크린 리더에는 전체 문구 전달"
+  },
+  {
+    "name": "Bar",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Bar.tsx",
+    "story": "src/stories/atoms/Bar.stories.tsx",
+    "status": "ready",
+    "usage": "통계용 장식 막대. 태그 저장 색상 사용, 값은 글자로 함께 표시"
   },
   {
     "name": "Field / TextField",

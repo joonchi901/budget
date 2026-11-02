@@ -11,7 +11,7 @@ export {
   type Space,
   type Columns,
 } from './Layout';
-export { Input, Checkbox, Radio, Textarea, Field, TextField } from './Fields';
+export { Input, Checkbox, Radio, Switch, Slider, Textarea, Field, TextField } from './Fields';
 export {
   FormBody,
   FormFooter,
@@ -33,4 +33,7 @@ export { DateField, MonthField, type DateFieldProps } from './DateFields';
 export { ColorField } from './ColorField';
 export { FileField } from './FileField';
 export { Empty } from './Empty';
-export { Stat, won } from './Stat';
+export { Stat } from './Stat';
+export { Amount, won, type AmountProps } from './Amount';
+export { CountBadge, type CountBadgeProps } from './CountBadge';
+export { Bar, type BarProps } from './Bar';

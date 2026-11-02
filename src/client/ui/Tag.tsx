@@ -34,15 +34,7 @@ function badgeColors(color: string): CSSProperties {
 }
 
 /** The same saved tag color is used for record cells, pickers and management previews. */
-export function Tag({
-  name,
-  color,
-  archived,
-  title,
-  onRemove,
-  removeLabel,
-  disabled,
-}: TagProps) {
+export function Tag({ name, color, archived, title, onRemove, removeLabel, disabled }: TagProps) {
   return (
     <Tooltip content={title}>
       <span

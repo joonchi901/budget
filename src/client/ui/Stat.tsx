@@ -1,4 +1,5 @@
-export const won = (value: number) => new Intl.NumberFormat('ko-KR').format(value);
+import { won } from './Amount';
+
 export function Stat({
   label,
   amount,

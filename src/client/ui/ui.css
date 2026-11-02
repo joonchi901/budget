@@ -169,3 +169,144 @@
   outline: var(--brand-focus-width) solid var(--brand-focus-ring);
   outline-offset: calc(-1 * var(--brand-focus-width));
 }
+
+/* Money: fixed-width digits; income/expense also differ by sign when signed. */
+.ui-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--brand-font-weight-semibold);
+  font-size: var(--brand-font-size-md);
+  line-height: var(--brand-line-height-tight);
+  color: var(--brand-text);
+  white-space: nowrap;
+}
+.ui-amount[data-size='sm'] {
+  font-size: var(--brand-font-size-sm);
+}
+.ui-amount[data-size='lg'] {
+  font-size: var(--brand-font-size-amount);
+  font-weight: var(--brand-font-weight-bold);
+}
+.ui-amount[data-tone='income'] {
+  color: var(--brand-success);
+}
+.ui-amount[data-tone='expense'] {
+  color: var(--brand-danger);
+}
+.ui-amount-unit {
+  margin-left: 0.1em;
+  font-size: 0.8em;
+  font-weight: var(--brand-font-weight-medium);
+}
+
+.ui-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--brand-radius-pill);
+  background: var(--brand-accent);
+  color: var(--brand-surface);
+  font-size: var(--brand-font-size-xs);
+  font-weight: var(--brand-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.ui-bar {
+  display: block;
+  width: 100%;
+  height: 8px;
+  border-radius: var(--brand-radius-pill);
+  background: var(--brand-surface-muted);
+  overflow: hidden;
+}
+.ui-bar-fill {
+  display: block;
+  width: calc(var(--ui-bar-ratio) * 100%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ui-bar-color, var(--brand-coral));
+  /* Keeps very light saved colors visible against the track. */
+  box-shadow: inset 0 0 0 1px #382b231a;
+}
+
+/* Switch: a checkbox with role="switch". !important matches the global checkbox sizing rule. */
+input.ui-switch {
+  width: 44px !important;
+  height: 26px !important;
+  min-height: 26px !important;
+  border: 1.5px solid var(--brand-line-strong);
+  border-radius: var(--brand-radius-pill);
+  background-color: var(--brand-surface-muted);
+  background-image: radial-gradient(
+    circle,
+    var(--brand-surface) 0 8px,
+    var(--brand-line-strong) 8px 9px,
+    transparent 9.5px
+  );
+  background-size: 22px 22px;
+  background-position: 1px center;
+  background-repeat: no-repeat;
+  transition:
+    background-color var(--brand-motion-normal) var(--brand-ease),
+    background-position var(--brand-motion-normal) var(--brand-ease);
+}
+input.ui-switch:checked {
+  border-color: var(--brand-primary);
+  background-color: var(--brand-primary);
+  background-image: radial-gradient(circle, var(--brand-surface) 0 8px, transparent 8.5px);
+  background-position: calc(100% - 1px) center;
+}
+input.ui-switch:disabled {
+  opacity: 0.45;
+}
+
+/* Slider: native range semantics and keyboard, redrawn with tokens. */
+.ui-slider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: var(--brand-control-size);
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  --ui-slider-track: linear-gradient(
+    to right,
+    var(--brand-primary) calc(var(--ui-slider-ratio) * 100%),
+    var(--brand-surface-muted) 0
+  );
+}
+.ui-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--brand-radius-pill);
+  background: var(--ui-slider-track);
+}
+.ui-slider::-moz-range-track {
+  height: 6px;
+  border-radius: var(--brand-radius-pill);
+  background: var(--ui-slider-track);
+}
+.ui-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px;
+  border: 2px solid var(--brand-primary);
+  border-radius: 50%;
+  background: var(--brand-surface);
+  box-shadow: var(--brand-shadow-button);
+}
+.ui-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--brand-primary);
+  border-radius: 50%;
+  background: var(--brand-surface);
+  box-shadow: var(--brand-shadow-button);
+}
+.ui-slider:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
