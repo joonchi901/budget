@@ -310,5 +310,21 @@
     "story": "src/stories/templates/Dialog.stories.tsx",
     "status": "ready",
     "usage": "모달·미저장 내용 확인. FullScreenSheet의 바탕"
+  },
+  {
+    "name": "Screen",
+    "layer": "05 Templates",
+    "source": "src/client/templates/Screen.tsx",
+    "story": "src/stories/templates/Screen.stories.tsx",
+    "status": "ready",
+    "usage": "방 목록·방 화면의 모바일 틀: 고정 상단, 본문, 하단 고정 행동"
+  },
+  {
+    "name": "FullScreenSheet / BottomSheet",
+    "layer": "05 Templates",
+    "source": "src/client/templates/Sheets.tsx",
+    "story": "src/stories/templates/Sheets.stories.tsx",
+    "status": "ready",
+    "usage": "입력·설정 전체 화면 시트와 짧은 내용용 하단 시트"
   }
 ]

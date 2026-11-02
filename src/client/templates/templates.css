@@ -1,0 +1,73 @@
+/* Templates: page and sheet frames. App and Storybook load this same file. */
+
+.ui-screen {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  min-height: 100dvh;
+  margin: 0 auto;
+}
+.ui-screen-top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-3) var(--brand-space-4);
+  background: var(--brand-canvas);
+  box-shadow: 0 1px 0 var(--brand-line);
+}
+.ui-screen-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-4);
+  min-width: 0;
+  padding: var(--brand-space-4);
+}
+.ui-screen[data-has-bottom] .ui-screen-body {
+  padding-bottom: calc(
+    var(--brand-space-4) * 2 + var(--brand-control-size) + env(safe-area-inset-bottom)
+  );
+}
+.ui-screen-bottom {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  padding: var(--brand-space-3) var(--brand-space-4)
+    calc(var(--brand-space-3) + env(safe-area-inset-bottom));
+  background: var(--brand-surface-glass);
+  box-shadow: 0 -1px 0 var(--brand-line);
+}
+.ui-screen-bottom > * {
+  width: 100%;
+  max-width: 528px;
+}
+
+@media (max-width: 760px) {
+  .dialog.ui-sheet-full {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    border-radius: 0;
+  }
+  .dialog.ui-sheet-full .form-footer {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+  .dialog.ui-sheet-bottom {
+    width: 100%;
+    max-width: none;
+    max-height: 85dvh;
+    margin: auto 0 0;
+    border-radius: var(--brand-radius-dialog) var(--brand-radius-dialog) 0 0;
+  }
+}
+.dialog.ui-sheet-full .form-footer > .ui-button {
+  flex: 1;
+}

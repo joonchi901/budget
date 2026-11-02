@@ -1,10 +1,4 @@
-import {
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react';
+import { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { Button, CloseButton, DialogCloseContext, FormBody, FormFooter, IconButton } from '../ui';
 import {
@@ -34,6 +28,7 @@ export function Dialog({
   onClose,
   locked = false,
   dirty = false,
+  className = '',
   children,
 }: {
   title: string;
@@ -42,6 +37,8 @@ export function Dialog({
   locked?: boolean;
   /** User closes must confirm discarding unsaved data; successful saves call onClose directly. */
   dirty?: boolean;
+  /** Layout variant, such as the full-screen or bottom sheet templates. */
+  className?: string;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -75,7 +72,7 @@ export function Dialog({
     <DialogCloseContext.Provider value={requestClose}>
       <dialog
         ref={ref}
-        className="dialog"
+        className={`dialog ${className}`.trim()}
         aria-label={title}
         onInputCapture={() => setValidationMessage('')}
         onInvalidCapture={(event) => {

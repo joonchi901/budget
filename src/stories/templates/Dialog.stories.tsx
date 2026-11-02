@@ -2,7 +2,7 @@ import { useState, type ComponentProps } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { Button, Field, Input, FormBody } from '../../client/ui';
-import { Dialog } from '../../client/templates/Dialog';
+import { Dialog } from '../../client/templates';
 
 function DialogExample(args: ComponentProps<typeof Dialog>) {
   const [open, setOpen] = useState(false);
