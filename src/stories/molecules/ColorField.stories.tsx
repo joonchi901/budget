@@ -82,3 +82,14 @@ export const InvalidDraft: Story = {
     await expect(input).toHaveValue('#64866F');
   },
 };
+export const Compact: Story = {
+  args: { compact: true, 'aria-label': '장보기 색상' },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '태그 옵션 목록처럼 좁은 곳에서는 색 견본만 보이고, 누르면 팔레트와 직접 입력이 열립니다.',
+      },
+    },
+  },
+};

@@ -57,6 +57,8 @@ export function Dialog({
   useLayoutEffect(() => {
     const el = ref.current!;
     el.showModal();
+    // showModal focuses the close button first; a form can name the field to start on instead.
+    el.querySelector<HTMLElement>('[data-autofocus]')?.focus();
     return () => {
       el.close();
       // Nested dialogs can close in either cleanup order. Restore only after both

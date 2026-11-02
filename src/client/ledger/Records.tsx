@@ -1,20 +1,27 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
 import {
   Amount,
   Button,
   Empty,
+  Field,
   FilterChip,
+  IconButton,
   Inline,
   List,
   ListRow,
   SearchField,
   SegmentedControl,
   Stack,
+  Switch,
   TableScroll,
   Tag,
 } from '../ui';
 import { totals, type Ledger, type LedgerRecord, type TagOption } from '../../shared/ledger';
 import { dayLabel, shortDate } from './format';
+
+// The amount's sign and color already say 수입/지출; only other kind names, like 고정지출, add meaning.
+const natureName = { income: '수입', expense: '지출' };
 
 type RecordContext = {
   ledgers: Ledger[];
@@ -53,7 +60,7 @@ export function RecordRow({
       description={
         <span className="ledger-record-meta">
           {showLedger && <span className="ledger-record-source">{ledger.name}</span>}
-          <span>{kind.name}</span>
+          {kind.name !== natureName[kind.nature] && <span>{kind.name}</span>}
           {tags.map((tag) => (
             <Tag key={tag.id} name={tag.name} color={tag.color} archived={tag.archived} />
           ))}
@@ -142,11 +149,12 @@ export function RecordTable({
       ),
     ),
   ];
+  // Newest first, like the list it replaces.
   const sorted = [...records].sort(
-    (a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt),
+    (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
   );
   return (
-    <TableScroll aria-label="내역 표">
+    <TableScroll aria-label="내역 표" className="ledger-table-scroll">
       <table className="ledger-table">
         <thead>
           <tr>
@@ -189,7 +197,7 @@ export function RecordTable({
                     <td key={name}>
                       {field?.type === 'text' && typeof value === 'string' && value}
                       {field && field.type !== 'text' && Array.isArray(value) && (
-                        <Inline gap={1}>
+                        <Inline gap={1} wrap={false}>
                           {field.options
                             .filter((option) => value.includes(option.id))
                             .map((option) => (
@@ -211,12 +219,17 @@ export function RecordTable({
 
 export type NatureFilter = 'all' | 'income' | 'expense';
 
-/** Search, 수입/지출 switch and applied tag conditions above a record list. */
+/**
+ * One row above the records: search and a 조회 조건 button. The panel holds 수입/지출 and the
+ * wide table switch; applied conditions stay visible as removable chips.
+ */
 export function RecordFilterBar({
   query,
   onQueryChange,
   nature,
   onNatureChange,
+  wide,
+  onWideChange,
   conditions = [],
   onRemoveCondition,
 }: {
@@ -224,30 +237,60 @@ export function RecordFilterBar({
   onQueryChange(query: string): void;
   nature: NatureFilter;
   onNatureChange(nature: NatureFilter): void;
+  /** Wide table instead of the day list. */
+  wide: boolean;
+  onWideChange(wide: boolean): void;
   /** Applied option conditions shown as "카테고리: 장보기". */
   conditions?: string[];
   onRemoveCondition?(condition: string): void;
 }) {
+  const [open, setOpen] = useState(false);
+  const panel = useId();
   return (
-    <Stack gap={2} className="ledger-filter-bar">
-      <SearchField
-        aria-label="내역 검색"
-        placeholder="내용·메모 검색"
-        value={query}
-        onValueChange={onQueryChange}
-      />
-      <SegmentedControl
-        aria-label="수입·지출 보기"
-        value={nature}
-        onValueChange={onNatureChange}
-        options={[
-          { value: 'all', label: '전체' },
-          { value: 'income', label: '수입' },
-          { value: 'expense', label: '지출' },
-        ]}
-      />
-      {conditions.length > 0 && (
+    <Stack gap={2}>
+      <div className="ledger-filter-row">
+        <SearchField
+          aria-label="내역 검색"
+          placeholder="내용·메모 검색"
+          value={query}
+          onValueChange={onQueryChange}
+        />
+        <IconButton
+          aria-label="조회 조건"
+          aria-expanded={open}
+          aria-controls={panel}
+          data-active={nature !== 'all' || wide || undefined}
+          onClick={() => setOpen(!open)}
+        >
+          <SlidersHorizontal size={20} />
+        </IconButton>
+      </div>
+      {open && (
+        <Stack id={panel} gap={3} className="ledger-filter-panel">
+          <SegmentedControl
+            aria-label="수입·지출 보기"
+            value={nature}
+            onValueChange={onNatureChange}
+            options={[
+              { value: 'all', label: '전체' },
+              { value: 'income', label: '수입' },
+              { value: 'expense', label: '지출' },
+            ]}
+          />
+          <Field>
+            <Switch checked={wide} onChange={(event) => onWideChange(event.target.checked)} />
+            넓게 보기
+          </Field>
+        </Stack>
+      )}
+      {(nature !== 'all' || conditions.length > 0) && (
         <Inline gap={2}>
+          {nature !== 'all' && (
+            <FilterChip
+              label={nature === 'income' ? '수입만' : '지출만'}
+              onRemove={() => onNatureChange('all')}
+            />
+          )}
           {conditions.map((condition) => (
             <FilterChip
               key={condition}

@@ -55,6 +55,7 @@ export const Table: Story = {
     await expect(c.getByRole('heading', { level: 1, name: '11월' })).toBeVisible();
     await userEvent.type(c.getByRole('searchbox', { name: '내역 검색' }), '쿠팡이츠');
     await expect(c.getAllByRole('button', { name: /쿠팡이츠/ })).toHaveLength(6);
+    await userEvent.click(c.getByRole('button', { name: '조회 조건' }));
     await userEvent.click(c.getByRole('switch', { name: '넓게 보기' }));
     await expect(c.getByRole('region', { name: '내역 표' })).toBeVisible();
   },
@@ -74,8 +75,9 @@ export const StatsToTable: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);
     await userEvent.click(c.getByRole('button', { name: '통계' }));
-    await userEvent.click(c.getByRole('button', { name: /^자동이체/ }));
-    await expect(c.getByRole('button', { name: '결제방식: 자동이체 필터 해제' })).toBeVisible();
+    await userEvent.click(c.getByRole('button', { name: /^용돈/ }));
+    await expect(c.getByRole('button', { name: '카테고리: 용돈 필터 해제' })).toBeVisible();
+    await expect(c.getByRole('button', { name: '지출만 필터 해제' })).toBeVisible();
     await expect(c.getAllByRole('heading', { level: 2 })[0]).toHaveTextContent('11월 1일');
   },
 };

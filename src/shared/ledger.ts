@@ -114,14 +114,28 @@ export function ledgerForDate(ledgers: Ledger[], date: IsoDate): Ledger | undefi
 /** Stats axis name for the fixed 구분 field. */
 export const KIND_AXIS = '구분';
 
-/** Axes a stats view can group by: 구분, then select fields by name across the ledgers. */
+/** Stats axis comparing the ledgers of a group, e.g. 11월 vs 12월. */
+export const LEDGER_AXIS = '가계부';
+const LEDGER_COLORS = ['#D28C70', '#64866F', '#6C89A4', '#9176A6', '#E8AD3F', '#B9A27A'];
+
+/** Axes a stats view can group by: 구분, 가계부 for several ledgers, then select fields by name. */
 export function statAxes(ledgers: Ledger[]): string[] {
   const names = ledgers.flatMap((ledger) =>
     ledger.fields
       .filter((field) => field.type !== 'text' && !field.hidden)
       .map((field) => field.name),
   );
-  return [KIND_AXIS, ...new Set(names)];
+  return [KIND_AXIS, ...(ledgers.length > 1 ? [LEDGER_AXIS] : []), ...new Set(names)];
+}
+
+/** The most detailed single-select field (most options), such as 카테고리; else 구분. */
+export function defaultStatAxis(ledgers: Ledger[]): string {
+  let best: { name: string; options: number } | undefined;
+  for (const ledger of ledgers)
+    for (const field of ledger.fields)
+      if (field.type === 'select' && !field.hidden && field.options.length > (best?.options ?? 0))
+        best = { name: field.name, options: field.options.length };
+  return best?.name ?? KIND_AXIS;
 }
 
 export type Share = { name: string; color: string; value: number };
@@ -151,7 +165,12 @@ export function breakdown(
       add(kind.name, kind.color, record.amount);
       continue;
     }
-    const ledger = ledgers.find((item) => item.id === record.ledgerId);
+    const index = ledgers.findIndex((item) => item.id === record.ledgerId);
+    const ledger = ledgers[index];
+    if (axis === LEDGER_AXIS && ledger) {
+      add(ledger.name, LEDGER_COLORS[index % LEDGER_COLORS.length], record.amount);
+      continue;
+    }
     const field = ledger?.fields.find((item) => item.name === axis);
     if (!field || field.type === 'text') continue;
     const value = record.values[field.id];
@@ -198,6 +217,7 @@ export function filterRecords(
     }
     return (filter.options ?? []).every(({ axis, name }) => {
       if (axis === KIND_AXIS) return kind.name === name;
+      if (axis === LEDGER_AXIS) return ledger.name === name;
       const field = ledger.fields.find((item) => item.name === axis);
       if (!field || field.type === 'text') return false;
       const value = record.values[field.id];

@@ -12,6 +12,13 @@ import {
   type LedgerRecord,
 } from '../../shared/ledger';
 
+const withinPeriod = (ledger: Ledger, date: IsoDate) =>
+  date < ledger.period.start
+    ? ledger.period.start
+    : date > ledger.period.end
+      ? ledger.period.end
+      : date;
+
 const draftFor = (ledger: Ledger, date: IsoDate): RecordDraft => ({
   date,
   kindId: (ledger.kinds.find((kind) => kind.nature === 'expense') ?? ledger.kinds[0]).id,
@@ -51,11 +58,18 @@ export function RecordEntryView({
   onLedgerChange?(ledger: Ledger): void;
   onClose(): void;
 }) {
-  const startDate = record?.date ?? date ?? today;
   const [options, setOptions] = useState(ledgers);
   const [ledgerId, setLedgerId] = useState(
-    record?.ledgerId ?? (ledgerForDate(ledgers, startDate) ?? ledgers[0]).id,
+    record?.ledgerId ?? (ledgerForDate(ledgers, date ?? today) ?? ledgers[0]).id,
   );
+  // Without a chosen date, start inside the ledger's period so the record shows on its calendar.
+  const startDate =
+    record?.date ??
+    date ??
+    withinPeriod(
+      ledgers.find((item) => item.id === ledgerId)!,
+      today,
+    );
   const ledger = options.find((item) => item.id === ledgerId)!;
   const initial: RecordDraft = record
     ? {
@@ -108,7 +122,7 @@ export function RecordEntryView({
   return (
     <FullScreenSheet
       title={record ? '내역 수정' : '내역 추가'}
-      subtitle={ledger.name}
+      subtitle={ledgers.length > 1 && !record ? undefined : ledger.name}
       dirty={dirty}
       onClose={onClose}
       footer={
@@ -145,7 +159,11 @@ export function RecordEntryView({
             onValueChange={(id) => {
               const next = options.find((item) => item.id === id)!;
               setLedgerId(id);
-              setDraft({ ...draftFor(next, draft.date), title: draft.title, amount: draft.amount });
+              setDraft({
+                ...draftFor(next, withinPeriod(next, draft.date)),
+                title: draft.title,
+                amount: draft.amount,
+              });
             }}
           />
         )}
@@ -160,6 +178,7 @@ export function RecordEntryView({
           onChange={setDraft}
           onCreateOption={createOption}
           suggestions={suggestions}
+          autoFocusAmount={!record}
         />
       </Stack>
     </FullScreenSheet>

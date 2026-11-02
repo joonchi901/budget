@@ -1,5 +1,4 @@
 import {
-  Amount,
   Button,
   Empty,
   List,
@@ -62,9 +61,6 @@ export function StatsBreakdown({
           </SelectOption>
         ))}
       </SelectField>
-      <p className="ledger-stats-total">
-        {nature === 'expense' ? '지출' : '수입'} 합계 <Amount value={total} tone={nature} />
-      </p>
       {multiple && (
         <p className="small muted">
           여러 명을 고른 내역은 사람마다 전체 금액으로 셉니다. 비율의 합이 100%를 넘을 수 있어요.

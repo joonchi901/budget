@@ -19,12 +19,11 @@ import {
   type RoomView,
 } from '../ledger';
 import { BottomSheet, Screen } from '../templates';
-import { Button, Field, IconButton, Inline, Switch, type MenuItem } from '../ui';
+import { Button, IconButton, Inline, type MenuItem } from '../ui';
 import {
-  KIND_AXIS,
+  defaultStatAxis,
   filterRecords,
   groupRecords,
-  statAxes,
   totals,
   type Group,
   type IsoDate,
@@ -76,7 +75,7 @@ function Room({
   const [conditions, setConditions] = useState<Condition[]>([]);
   const [wide, setWide] = useState(false);
   const [day, setDay] = useState<IsoDate>();
-  const [axis, setAxis] = useState(() => statAxes(ledgers)[1] ?? KIND_AXIS);
+  const [axis, setAxis] = useState(() => defaultStatAxis(ledgers));
   const [statNature, setStatNature] = useState<KindOption['nature']>('expense');
   const shown = filterRecords(records, ledgers, {
     query,
@@ -114,17 +113,13 @@ function Room({
             onQueryChange={setQuery}
             nature={nature}
             onNatureChange={setNature}
+            wide={wide}
+            onWideChange={setWide}
             conditions={conditions.map(conditionLabel)}
             onRemoveCondition={(label) =>
               setConditions(conditions.filter((item) => conditionLabel(item) !== label))
             }
           />
-          <Inline justify="end">
-            <Field>
-              <Switch checked={wide} onChange={(event) => setWide(event.target.checked)} />
-              넓게 보기
-            </Field>
-          </Inline>
           {wide ? (
             <RecordTable records={shown} {...context} />
           ) : (

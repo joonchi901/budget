@@ -50,10 +50,9 @@ export function RoomListView({
     <Screen
       top={
         <>
-          <div className="view-home-title">
-            <UgaLogo size={112} alt="" />
-            <h1>가계부</h1>
-          </div>
+          <h1 className="view-home-title">
+            <UgaLogo size={112} alt="우리의 가계부" />
+          </h1>
           <SearchField
             aria-label="가계부 검색"
             placeholder="가계부·묶음 이름"
@@ -102,7 +101,7 @@ export function RoomListView({
           ))}
         </List>
       ) : (
-        <Empty illustration="search">
+        <Empty illustration={query ? 'search' : 'empty'}>
           {query ? `'${query}'와 맞는 방이 없어요.` : '아직 방이 없어요. 새로 만들어 보세요.'}
         </Empty>
       )}

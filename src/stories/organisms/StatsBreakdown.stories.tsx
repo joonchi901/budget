@@ -74,3 +74,11 @@ export const GroupByPayment: Story = {
   },
 };
 export const Income: Story = { args: { nature: 'income', axis: '구분' } };
+export const GroupByLedger: Story = {
+  args: { records: groupRecords(groups[0], records), ledgers, axis: '가계부' },
+  play: async ({ canvasElement }) => {
+    const rows = within(canvasElement).getAllByRole('button', { name: /원/ });
+    for (const text of ['11월', '1,875,052원']) await expect(rows[0]).toHaveTextContent(text);
+    for (const text of ['일본여행', '811,900원']) await expect(rows[1]).toHaveTextContent(text);
+  },
+};

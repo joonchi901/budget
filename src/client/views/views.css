@@ -16,7 +16,7 @@
   width: 100%;
 }
 .view-login h1 {
-  font-size: var(--brand-font-size-title);
+  line-height: 0;
 }
 .view-error {
   padding: var(--brand-space-3) var(--brand-space-4);
@@ -26,13 +26,7 @@
   font-size: var(--brand-font-size-sm);
 }
 .view-home-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--brand-space-3);
-}
-.view-home-title h1 {
-  font-size: var(--brand-font-size-section);
+  line-height: 0;
 }
 .view-month-title {
   font-size: var(--brand-font-size-md);

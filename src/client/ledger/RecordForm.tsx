@@ -60,6 +60,7 @@ export function RecordForm({
   onChange,
   onCreateOption,
   suggestions = [],
+  autoFocusAmount = false,
 }: {
   ledger: Ledger;
   draft: RecordDraft;
@@ -67,6 +68,8 @@ export function RecordForm({
   onCreateOption?(fieldId: Id, name: string): Id;
   /** Earlier 내용 values; up to four that extend what is typed are offered. */
   suggestions?: string[];
+  /** Start on 금액 so phones open the number pad, e.g. for a new record. */
+  autoFocusAmount?: boolean;
 }) {
   const id = useId();
   const set = (patch: Partial<RecordDraft>) => onChange({ ...draft, ...patch });
@@ -95,6 +98,7 @@ export function RecordForm({
           id={`${id}-amount`}
           value={draft.amount}
           onValueChange={(amount) => set({ amount })}
+          data-autofocus={autoFocusAmount || undefined}
           placeholder="0"
           required
         />

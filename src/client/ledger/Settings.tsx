@@ -171,6 +171,7 @@ export function TagOptionEditor({
           <li key={option.id} className="ui-list-item">
             <Inline gap={2} align="center" className="ledger-option-row">
               <ColorField
+                compact
                 aria-label={`${option.name} 색상`}
                 value={option.color}
                 onValueChange={(color) => update(option.id, { color })}
