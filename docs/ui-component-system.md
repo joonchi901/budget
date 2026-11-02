@@ -2,22 +2,67 @@
 
 기준일: 2026-11-02
 
-## 현재 상태
+## 컴포넌트 계위 (기준)
 
-이전 앱 화면은 핵심 UX 재설계를 위해 제거했다. 남은 것은 토큰·기본 컴포넌트·배치·화면 패턴과 이를 실행하는 Storybook이다. 새 화면은 이 요소로 조립하고, 만들 때마다 화면 목록과 story에 등록한다.
+원자 컴포넌트부터 단계적으로 조립해 View까지 구성한다. 화면이 다루는 제품·데이터 기준은 [가계부 재설계 기준](./ledger-baseline.md)을 따른다.
 
-[컴포넌트 목록](../src/stories/catalog.json)은 14개 항목을 등록하며 모두 `ready`(조립 준비) 상태다. [화면 목록](../src/stories/screens.json)은 비어 있다.
+| 단계           | 역할                                                    | 가계부를 아는지 | 데이터      |
+| -------------- | ------------------------------------------------------- | --------------- | ----------- |
+| 01 Foundations | 토큰(색·글자·간격·모서리·그림자·모션), 우가 브랜드 자산 | 모름            | 없음        |
+| 02 Atoms       | 더 쪼갤 수 없는 단일 요소                               | 모름            | props만     |
+| 03 Molecules   | 원자를 묶어 기능 하나를 하는 요소                       | 모름            | props만     |
+| 04 Organisms   | 내역·필드·태그·가계부·묶음 개념을 아는 블록             | 앎              | props만     |
+| 05 Templates   | 모바일 화면의 틀. 위치만 정하고 내용은 슬롯으로 비운다  | 모름            | 없음        |
+| 06 Views       | Templates에 Organisms를 넣고 합성 데이터로 완성한 화면  | 앎              | 합성 데이터 |
 
-| 계층           | 책임                               | 위치                                           |
-| -------------- | ---------------------------------- | ---------------------------------------------- |
-| 01 Foundations | 의미 색·글자·간격·모션·브랜드 자산 | `src/client/brand/`                            |
-| 02 Components  | 버튼·선택·날짜·태그·툴팁·모달·요약 | `src/client/ui/Button.tsx`, 기존 공통 컴포넌트 |
-| 03 Layout      | 세로 흐름·가로 흐름·격자·내용 경계 | `src/client/ui/Layout.tsx`                     |
-| 04 Patterns    | 버튼 조합·폼·패널·요약·표 영역     | `src/client/ui/Patterns.tsx`                   |
-| 05 Domain      | (재설계 후) 업무 단위 컴포넌트     | 새 도메인 컴포넌트                             |
-| 06 Screens     | (재설계 후) 전체 화면              | `src/stories/screens/`                         |
+- 아래 단계는 위 단계를 import하지 않는다. 업무 규칙을 Atoms·Molecules 안에 넣지 않는다.
+- Views까지 API 호출·저장 로직이 없다. 서버 연결과 상태 관리는 이후 앱 연결 층이 맡는다. 그래서 모든 화면 상태(빈 값·오류·긴 이름 등)를 Storybook에서 재현한다.
+- 사이드바 이름은 영문 단계명에 한글 설명을 붙인다. 예: `02 Atoms · 원자`. Views의 기본 너비는 모바일 390px이다.
 
-의존 방향은 위에서 아래가 아니라 **앱 → 도메인/패턴 → 기본 요소/배치 → 토큰**이다. 기본 요소가 앱·API·라우터를 가져오지 않는다. 업무 규칙을 공통 Button/Grid 안에 넣지 않는다.
+### 단계별 구성
+
+기존 컴포넌트를 재분류하고, 화면에 필요한 신규 컴포넌트(＋)를 더한다.
+
+| 단계        | 기존                                                                                                                                                                                                | 신규                                                                                                                                                                                                                                                                                                                                    |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Foundations | tokens.css, UgaLogo·UgaIcon·UgaAvatar·UgaMascot·UgaIllustration                                                                                                                                     | —                                                                                                                                                                                                                                                                                                                                       |
+| Atoms       | Button, IconButton, Input, Textarea, Checkbox, Radio, TagBadge(→ `Tag`), Tooltip, Popover, Stack, Inline, Grid, Surface                                                                             | Amount(금액 표시), CountBadge(새 내역 수), Bar(통계 막대)                                                                                                                                                                                                                                                                               |
+| Molecules   | Field·TextField, SelectField, DateField, MonthField, ColorField, FileField, SegmentedControl, Tabs, Stat, Empty, Panel, Toolbar, SummaryGrid, TableScroll, FormBody·FormFooter·FormGrid·FormSection | AmountInput(큰 금액 입력), ChipSelect(단일·다중 선택과 옵션 즉석 추가), SearchField, FilterChip, ListRow(아이콘·제목·보조 줄·끝 정보), StatBar(라벨·막대·금액·비율)                                                                                                                                                                     |
+| Organisms   | —                                                                                                                                                                                                   | 방: RoomListItem, RoomHeader, SummaryStrip · 내역: RecordRow, RecordDayGroup, RecordList, RecordTable, RecordFilterBar · 캘린더: PeriodCalendar, DayRecords · 통계: StatsBreakdown · 입력: DynamicField(필드 정의 → 입력 위젯), RecordForm · 설정: FieldSchemaEditor, TagOptionEditor · 묶음: LedgerCardList, GroupPicker, LedgerPicker |
+| Templates   | Dialog(FullScreenSheet의 바탕)                                                                                                                                                                      | ListScreen(방 목록 틀), RoomScreen(고정 헤더·보기 전환·본문·하단 고정 버튼), FullScreenSheet(입력·설정), BottomSheet(날짜별 내역 등)                                                                                                                                                                                                    |
+| Views       | —                                                                                                                                                                                                   | RoomListView, CreateLedgerView, LedgerRoomView(표·캘린더·통계), RecordEntryView(추가·수정), GroupRoomView, LedgerSettingsView, GroupSettingsView, LoginView                                                                                                                                                                             |
+
+FileField·MonthField는 지금 쓸 화면이 없지만 남기고 catalog에 미사용으로 표시한다.
+
+### 폴더와 경계
+
+```
+src/client/
+  brand/       01 Foundations
+  ui/          02 Atoms · 03 Molecules   (가계부를 모름)
+  ledger/      04 Organisms              (가계부 도메인)
+  templates/   05 Templates
+  views/       06 Views
+src/stories/<단계>/                       스토리도 같은 단계로
+```
+
+`src/client/` 바로 아래의 SelectField·DateFields 등은 `ui/`로 옮긴다. `check:ui-spec`에 아래 단계가 위 단계를 import하면 실패하는 규칙을 추가한다. 합성 데이터는 Organisms가 받는 타입(가계부·필드 정의·태그 옵션·내역·묶음)과 같은 모양으로 둔다.
+
+### 조립 순서
+
+각 단계마다 `check:ui`를 통과한 뒤 다음 단계로 넘어간다.
+
+1. 기존 컴포넌트를 새 폴더·스토리 제목으로 옮긴다(동작 변화 없음).
+2. 신규 Atoms
+3. 신규 Molecules
+4. 도메인 타입과 합성 데이터
+5. Organisms
+6. Templates
+7. Views
+
+### 현재 상태
+
+계위 재구성 전이다. Storybook 제목은 `01 Foundations`·`02 Components`·`03 Layout`이고, 컴포넌트는 `src/client/` 바로 아래와 `ui/`에 있다. [컴포넌트 목록](../src/stories/catalog.json)은 14개 항목이 모두 `ready`(조립 준비)이며 [화면 목록](../src/stories/screens.json)은 비어 있다.
 
 ### 조립 규칙
 
