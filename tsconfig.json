@@ -11,7 +11,7 @@
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "types": ["node", "vite/client"]
+    "types": ["@cloudflare/workers-types", "node", "vite/client"]
   },
-  "include": ["src", ".storybook"]
+  "include": ["src", ".storybook", "vite.config.ts"]
 }

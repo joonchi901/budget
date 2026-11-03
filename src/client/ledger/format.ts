@@ -26,15 +26,17 @@ export const dayLabel = (date: IsoDate) => {
 /** "10/23 – 11/22" */
 export const periodLabel = (period: { start: IsoDate; end: IsoDate }) =>
   `${shortDate(period.start)} – ${shortDate(period.end)}`;
-/** "오후 8:12" for today, otherwise "10월 29일". Reads the recorded local time as written. */
+/** The date of `at` in this device's time zone. */
+export const localDate = (at: Date): IsoDate =>
+  [at.getFullYear(), at.getMonth() + 1, at.getDate()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join('-');
+/** "오후 8:12" for today, otherwise "10월 29일", in this device's time zone (the server stores UTC). */
 export const whenLabel = (timestamp: string, today: IsoDate) => {
-  const date = timestamp.slice(0, 10);
-  if (date !== today) {
-    const [, month, day] = parts(date);
-    return `${month}월 ${day}일`;
-  }
-  const [hour, minute] = timestamp.slice(11, 16).split(':').map(Number);
-  return `${hour < 12 ? '오전' : '오후'} ${hour % 12 || 12}:${String(minute).padStart(2, '0')}`;
+  const at = new Date(timestamp);
+  if (localDate(at) !== today) return `${at.getMonth() + 1}월 ${at.getDate()}일`;
+  const hour = at.getHours();
+  return `${hour < 12 ? '오전' : '오후'} ${hour % 12 || 12}:${String(at.getMinutes()).padStart(2, '0')}`;
 };
 /** Calendar cells: "9,550", "6.4만", "274만". */
 export const compactWon = (value: number) => {

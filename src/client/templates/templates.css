@@ -72,3 +72,16 @@
 .dialog.ui-sheet-full .form-footer > .ui-button {
   flex: 1;
 }
+
+/* StatusScreen: loading or a failed load, centered on the page. */
+.ui-status-screen {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: var(--brand-space-6) var(--brand-space-4);
+  text-align: center;
+}
+.ui-status-screen-busy,
+.ui-status-screen-failed {
+  align-items: center;
+}

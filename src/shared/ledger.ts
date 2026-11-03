@@ -64,6 +64,13 @@ export type LedgerRecord = {
 
 export type Member = { id: Id; name: string };
 
+/** What the API returns after every read or change: the user and only what they may see. */
+export type AppData = {
+  user: Member & { handle: string };
+  ledgers: Ledger[];
+  records: LedgerRecord[];
+};
+
 export type Totals = { income: number; expense: number; balance: number };
 
 /** Reasons a record is invalid for its ledger; empty when valid. */

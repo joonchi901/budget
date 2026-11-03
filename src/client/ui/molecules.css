@@ -246,3 +246,24 @@
   font-weight: var(--brand-font-weight-regular);
   font-variant-numeric: tabular-nums;
 }
+
+/* Notice: floating message at the top of the page. */
+.ui-notice {
+  position: fixed;
+  inset: var(--brand-space-3) var(--brand-space-3) auto;
+  z-index: 100;
+  display: flex;
+  gap: var(--brand-space-2);
+  align-items: center;
+  justify-content: space-between;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--brand-space-2) var(--brand-space-2) var(--brand-space-2) var(--brand-space-4);
+  border-radius: var(--brand-radius-card);
+  background: var(--brand-surface);
+  box-shadow: var(--brand-shadow-popover);
+  color: var(--brand-danger);
+}
+.ui-notice[data-tone='success'] {
+  color: var(--brand-success);
+}

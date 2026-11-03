@@ -48,6 +48,8 @@ const allowedImports = {
   ledger: ['brand', 'ui', 'ledger', 'shared'],
   templates: ['brand', 'ui', 'templates'],
   views: ['brand', 'ui', 'ledger', 'templates', 'views', 'shared'],
+  // The app layer: data, API and which view is open.
+  app: ['brand', 'ui', 'ledger', 'templates', 'views', 'shared', 'app'],
 };
 const sources = new Map(screens.map((screen) => [screen.source, screen]));
 for (const screen of screens) {

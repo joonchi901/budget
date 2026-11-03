@@ -1,0 +1,15 @@
+// Local development only: the API Worker and a local D1. Production config comes with Google login.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "our-budget",
+  "main": "src/server/index.ts",
+  "compatibility_date": "2026-09-16",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "budget-dev",
+      "database_id": "00000000-0000-0000-0000-000000000002",
+      "migrations_dir": "migrations",
+    },
+  ],
+}

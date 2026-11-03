@@ -33,6 +33,7 @@ export { DateField, MonthField, type DateFieldProps } from './DateFields';
 export { ColorField, TAG_PALETTE, pickTagColor } from './ColorField';
 export { FileField } from './FileField';
 export { Empty } from './Empty';
+export { Notice } from './Notice';
 export { Stat } from './Stat';
 export { Amount, won, type AmountProps } from './Amount';
 export { CountBadge, type CountBadgeProps } from './CountBadge';

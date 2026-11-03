@@ -1,25 +1,11 @@
 /** Assets from the reviewed Uga board. These images never alter stored ledger values. */
+import { UGA_ICON_NAMES, UGA_MOODS } from './icon-names';
+
 type AssetProps = { size?: number; className?: string; alt?: string };
 
-export const UGA_ICON_NAMES = [
-  'home',
-  'ledger',
-  'assets',
-  'payments',
-  'analytics',
-  'planning',
-  'tags',
-  'data',
-  'bone',
-  'bones',
-  'heart',
-  'star',
-  'sprout',
-  'meat',
-  'moneybag',
-] as const;
+export { UGA_ICON_NAMES, UGA_MOODS };
+export type UgaMood = (typeof UGA_MOODS)[number];
 export type UgaIconName = (typeof UGA_ICON_NAMES)[number];
-const UGA_MOODS = ['happy', 'calm', 'surprise', 'sleep'] as const;
 // Icons and moods are stored per ledger or profile and may come from another member; only a
 // known name becomes an image path, so a stored "/../../api/..." cannot redirect the request.
 const known = <T extends string>(names: readonly T[], value: string, fallback: T): T =>
@@ -84,7 +70,7 @@ export function UgaAvatar({
   size = 36,
   className = '',
   alt = '',
-}: AssetProps & { mood?: (typeof UGA_MOODS)[number] }) {
+}: AssetProps & { mood?: UgaMood | string }) {
   return (
     <img
       className={`uga-avatar ${className}`.trim()}

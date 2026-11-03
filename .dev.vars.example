@@ -1,0 +1,3 @@
+# Local development only. The Worker also refuses this off loopback (localhost, 127.0.0.1).
+# Requests then act as the fixed dev account without signing in. Never deploy it.
+DEV_AUTH=true

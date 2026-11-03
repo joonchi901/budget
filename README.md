@@ -1,21 +1,23 @@
-# 우리의 가계부 · 우가 디자인 시스템
+# 우리의 가계부
 
-핵심 UX부터 앱을 다시 설계하기 위해 이전 앱(서버·DB·화면·테스트·문서)을 모두 제거했습니다. 지금 저장소에는 디자인 시스템만 남아 있습니다. 이전 앱은 Git 기록 `d3509d5`에서 확인할 수 있습니다.
+핵심 UX부터 앱을 다시 설계하고 있습니다. 디자인 시스템과 Storybook 화면을 먼저 만들었고, 지금은 그 화면을 로컬 API·DB에 연결한 개발용 앱이 있습니다. 로그인은 아직 없고, 로컬에서는 개발 계정으로 바로 들어갑니다. 이전 앱은 Git 기록 `d3509d5`에서 확인할 수 있습니다.
 
 재설계의 제품·데이터·화면 기준은 [가계부 재설계 기준](./docs/ledger-baseline.md), 컴포넌트 계위는 [UI 컴포넌트 체계](./docs/ui-component-system.md)에 있습니다.
 
 ## 구성
 
-| 위치                        | 내용                                                                                           |
-| --------------------------- | ---------------------------------------------------------------------------------------------- |
-| `design/uga/`               | 브랜드 원본: 로고, 대표 캐릭터, 브랜드·UI 보드와 생성 스크립트                                 |
-| `public/brand/`             | 앱용 SVG 38종과 HTML 브랜드 보드                                                               |
-| `src/client/brand/`         | 디자인 토큰 `tokens.css`, 로고·캐릭터·아이콘 컴포넌트 `Uga.tsx`                                |
-| `src/client/ui/`            | Atoms·Molecules: 버튼, 입력, 태그, 툴팁, 레이아웃, 자체 선택·날짜·색상·파일 입력, 폼·화면 패턴 |
-| `src/client/templates/`     | Templates: 다이얼로그와 미저장 이동 방지                                                       |
-| `src/shared/`               | 도메인 타입과 검증·합계 함수(가계부·필드·태그 옵션·내역·묶음)                                  |
-| `src/client/app-styles.css` | 공통 스타일 진입점. 토큰 → 기본 요소 → 컨트롤 순서로 불러옵니다                                |
-| `src/stories/`              | Storybook 명세: 단계별 폴더와 합성 데이터 `fixtures.ts`                                        |
+| 위치                         | 내용                                                                                           |
+| ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `design/uga/`                | 브랜드 원본: 로고, 대표 캐릭터, 브랜드·UI 보드와 생성 스크립트                                 |
+| `public/brand/`              | 앱용 SVG 38종과 HTML 브랜드 보드                                                               |
+| `src/client/brand/`          | 디자인 토큰 `tokens.css`, 로고·캐릭터·아이콘 컴포넌트 `Uga.tsx`                                |
+| `src/client/ui/`             | Atoms·Molecules: 버튼, 입력, 태그, 툴팁, 레이아웃, 자체 선택·날짜·색상·파일 입력, 폼·화면 패턴 |
+| `src/client/templates/`      | Templates: 다이얼로그와 미저장 이동 방지                                                       |
+| `src/shared/`                | 도메인 타입과 검증·합계 함수(가계부·필드·태그 옵션·내역·묶음)                                  |
+| `src/client/app/`            | 앱 층: 데이터를 불러오고, 화면을 열고, API로 저장합니다                                        |
+| `src/server/`, `migrations/` | API Worker와 D1 스키마. 모든 요청에서 멤버십을 확인합니다                                      |
+| `src/client/app-styles.css`  | 공통 스타일 진입점. 토큰 → 기본 요소 → 컨트롤 순서로 불러옵니다                                |
+| `src/stories/`               | Storybook 명세: 단계별 폴더와 합성 데이터 `fixtures.ts`                                        |
 
 ## 실행
 
@@ -23,13 +25,17 @@ Node.js 24와 npm을 준비합니다.
 
 ```sh
 npm ci
-npm run storybook
+npm run dev
 ```
 
-[http://127.0.0.1:6006](http://127.0.0.1:6006)에서 명세를 확인합니다.
+[http://127.0.0.1:5173](http://127.0.0.1:5173)에서 앱을 엽니다. `npm run dev`는 로컬 D1(`budget-dev`)에 스키마를 적용하고 API Worker(:8787)와 Vite(:5173)를 함께 띄웁니다. 처음이면 `.dev.vars.example`을 `.dev.vars`로 복사합니다. `DEV_AUTH=true`이면 localhost 요청이 로그인 없이 개발 계정으로 동작하고, 그 밖의 주소에서는 401로 막습니다. Storybook 샘플 데이터로 시작하려면 `npm run db:seed`를 실행합니다(로컬 DB 내용을 바꿉니다).
+
+Storybook 명세는 `npm run storybook`으로 띄우고 [http://127.0.0.1:6006](http://127.0.0.1:6006)에서 확인합니다.
 
 | 명령                | 역할                                                             |
 | ------------------- | ---------------------------------------------------------------- |
+| `npm run dev`       | 로컬 앱 실행: D1 스키마 적용 → API Worker + Vite                 |
+| `npm run db:seed`   | 로컬 DB를 Storybook 샘플 데이터로 바꾸기                         |
 | `npm run storybook` | 로컬 Storybook 실행                                              |
 | `npm run check:ui`  | 타입 → 명세 목록 검사 → 정적 빌드 → Chromium 320/390/1440px 검사 |
 | `npm run typecheck` | TypeScript 검사                                                  |
