@@ -1,3 +1,13 @@
+/* 와구리체 © 구리시, https://www.guri.go.kr/www/contents.do?key=6397
+ * 공공누리 제1유형(출처표시): free for any use, including commercial; the font itself may not be sold.
+ * fonts/Waguri.woff2 is the official TTF converted to WOFF2 without other changes. */
+@font-face {
+  font-family: 'Waguri';
+  src: url('./fonts/Waguri.woff2') format('woff2');
+  font-weight: normal;
+  font-display: swap;
+}
+
 /* Uga foundations. Shared by the design-system board and, after review, the app.
  * Keep palette/semantic values here. Do not use brand colors to rewrite saved
  * tag, payment-method, ledger, or user color data.
@@ -73,9 +83,9 @@
   --brand-shadow-popover: 0 4px 14px #5b463612, 0 16px 48px #5b463624;
   --brand-shadow-button: 0 2px 3px #5b463614;
 
-  /* Existing OS fonts support Korean without a new font dependency. */
+  /* OS Korean fonts take over until Waguri loads. */
   --brand-font-body:
-    -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Segoe UI',
+    'Waguri', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Segoe UI',
     sans-serif;
   --brand-font-size-xs: 0.75rem;
   --brand-font-size-caption: 0.8125rem;
