@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
-import { LedgerRoomView, RecordEntryView, RoomListView } from '../../client/views';
+import {
+  LedgerRoomView,
+  LedgerSettingsView,
+  RecordEntryView,
+  RoomListView,
+} from '../../client/views';
 import { leafLedgers, type IsoDate, type Ledger, type LedgerRecord } from '../../shared/ledger';
 import { FIXTURE_TODAY, ledgers as initialLedgers, records as initialRecords } from '../fixtures';
 
@@ -23,7 +28,6 @@ function Flow() {
       room && setEntry({ ledgers: leafLedgers(ledgers, room), date }),
     onOpenRecord: (record: LedgerRecord) =>
       setEntry({ ledgers: ledgers.filter((item) => item.id === record.ledgerId), record }),
-    onOpenSettings: () => {},
   };
   return (
     <>
@@ -44,6 +48,16 @@ function Flow() {
           records={records}
           onCopy={() => {}}
           onOpenLedger={setRoom}
+          settings={
+            <LedgerSettingsView
+              ledger={ledgers.find((item) => item.id === room.id)!}
+              ledgers={ledgers}
+              onSave={({ ledger }) =>
+                setLedgers((all) => all.map((item) => (item.id === ledger.id ? ledger : item)))
+              }
+              onArchive={() => setRoom(undefined)}
+            />
+          }
         />
       )}
       {entry && (
@@ -92,7 +106,7 @@ export const AddRecordAppearsEverywhere: StoryObj<typeof meta> = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
-    await userEvent.click(c.getByRole('button', { name: /^11월/ }));
+    await userEvent.click(c.getByRole('button', { name: /^하위 가계부 11월/ }));
     await userEvent.click(c.getByRole('button', { name: '내역 추가' }));
     await expect(page.getByRole('textbox', { name: '금액' })).toHaveFocus();
     await userEvent.type(page.getByRole('textbox', { name: '금액' }), '9550');
@@ -111,7 +125,7 @@ export const AddRecordAppearsEverywhere: StoryObj<typeof meta> = {
     await expect(c.getByRole('button', { name: /^장보기/ })).toHaveTextContent('209,930원');
 
     await userEvent.click(c.getByRole('button', { name: '방 목록으로' }));
-    await expect(c.getByRole('button', { name: /^11월/ })).toHaveTextContent(
+    await expect(c.getByRole('button', { name: /^하위 가계부 11월/ })).toHaveTextContent(
       '장보기_쿠팡 · 9,550원',
     );
   },

@@ -40,8 +40,18 @@
     "story": "src/stories/views/Sharing.stories.tsx"
   },
   {
-    "name": "내 계정·탈퇴",
+    "name": "프로필·탈퇴",
     "source": "src/client/views/AccountViews.tsx",
     "story": "src/stories/views/Account.stories.tsx"
+  },
+  {
+    "name": "앱 설정",
+    "source": "src/client/views/AppSettingsView.tsx",
+    "story": "src/stories/views/AppSettings.stories.tsx"
+  },
+  {
+    "name": "자산·자산 추가",
+    "source": "src/client/views/AssetsView.tsx",
+    "story": "src/stories/views/Assets.stories.tsx"
   }
 ]

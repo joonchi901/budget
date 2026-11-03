@@ -1,16 +1,21 @@
-import { useState } from 'react';
-import { Plus, Users } from 'lucide-react';
-import { UgaAvatar, UgaLogo } from '../brand/Uga';
+import { useState, type ReactNode } from 'react';
+import { Plus } from 'lucide-react';
+import { UgaLogo } from '../brand/Uga';
 import { RoomListItem } from '../ledger';
 import { Screen } from '../templates';
-import { Button, CountBadge, Empty, IconButton, Inline, List, SearchField } from '../ui';
-import { roomRecords, type IsoDate, type Ledger, type LedgerRecord } from '../../shared/ledger';
-import type { Profile } from '../../shared/people';
+import { Button, Empty, Inline, List, SearchField } from '../ui';
+import {
+  roomRecords,
+  type Id,
+  type IsoDate,
+  type Ledger,
+  type LedgerRecord,
+} from '../../shared/ledger';
 
 /**
- * Home: every ledger as a room, most recent activity first, like a messenger. A parent's
- * activity includes its children's records. Search narrows by name; 새 가계부 creates one.
- * The top right opens friends (with requests and invitations waiting) and my account.
+ * Home's 가계부 tab: every ledger as a room, most recent activity first, like a messenger. A
+ * 하위 가계부 sits indented under each 상위 that holds it; a parent's activity includes its
+ * children's. Searching lists matching rooms flat. 새 가계부 sits right of the logo.
  */
 export function RoomListView({
   ledgers,
@@ -19,10 +24,7 @@ export function RoomListView({
   today,
   onOpenRoom,
   onCreate,
-  profile,
-  pending = 0,
-  onOpenFriends,
-  onOpenAccount,
+  tabBar,
 }: {
   ledgers: Ledger[];
   records: LedgerRecord[];
@@ -31,24 +33,43 @@ export function RoomListView({
   today: IsoDate;
   onOpenRoom(room: Ledger): void;
   onCreate(): void;
-  profile?: Profile;
-  /** Friend requests and ledger invitations waiting for an answer. */
-  pending?: number;
-  onOpenFriends?(): void;
-  onOpenAccount?(): void;
+  /** The app's bottom tabs. */
+  tabBar?: ReactNode;
 }) {
   const [query, setQuery] = useState('');
-  const rooms = ledgers
-    .filter((room) => !room.archived)
-    .filter((room) => room.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
-    .map((room) => ({
-      room,
-      latest: roomRecords(ledgers, room, records).reduce<LedgerRecord | undefined>(
+  const open = ledgers.filter((room) => !room.archived);
+  const latest = new Map(
+    open.map((room) => [
+      room.id,
+      roomRecords(ledgers, room, records).reduce<LedgerRecord | undefined>(
         (last, record) => (!last || record.createdAt > last.createdAt ? record : last),
         undefined,
       ),
-    }))
-    .sort((a, b) => (b.latest?.createdAt ?? '').localeCompare(a.latest?.createdAt ?? ''));
+    ]),
+  );
+  const byActivity = (a: Ledger, b: Ledger) =>
+    (latest.get(b.id)?.createdAt ?? '').localeCompare(latest.get(a.id)?.createdAt ?? '');
+  const search = query.trim().toLocaleLowerCase();
+  const rows: { key: string; room: Ledger; depth: number }[] = [];
+  if (search)
+    for (const room of open
+      .filter((item) => item.name.toLocaleLowerCase().includes(search))
+      .sort(byActivity))
+      rows.push({ key: room.id, room, depth: 0 });
+  else {
+    // A 하위 가계부 held by two 상위 shows under each; `path` guards against a cycle in bad data.
+    const visit = (room: Ledger, path: Id[]) => {
+      rows.push({ key: [...path, room.id].join('/'), room, depth: path.length });
+      open
+        .filter((child) => room.childIds.includes(child.id) && !path.includes(child.id))
+        .sort(byActivity)
+        .forEach((child) => visit(child, [...path, room.id]));
+    };
+    open
+      .filter((room) => !open.some((parent) => parent.childIds.includes(room.id)))
+      .sort(byActivity)
+      .forEach((room) => visit(room, []));
+  }
   return (
     <Screen
       top={
@@ -57,22 +78,9 @@ export function RoomListView({
             <h1 className="view-home-title">
               <UgaLogo size={112} alt="우리의 가계부" />
             </h1>
-            <Inline gap={1} align="center" wrap={false} className="view-home-actions">
-              {onOpenFriends && (
-                <IconButton
-                  aria-label={pending ? `친구, 답할 요청·초대 ${pending}건` : '친구'}
-                  onClick={onOpenFriends}
-                >
-                  <Users size={22} />
-                  <CountBadge count={pending} label={`답할 요청·초대 ${pending}건`} />
-                </IconButton>
-              )}
-              {onOpenAccount && profile && (
-                <IconButton aria-label="내 계정" onClick={onOpenAccount}>
-                  <UgaAvatar mood={profile.avatar} size={32} />
-                </IconButton>
-              )}
-            </Inline>
+            <Button variant="primary" onClick={onCreate}>
+              <Plus size={18} />새 가계부
+            </Button>
           </Inline>
           <SearchField
             aria-label="가계부 검색"
@@ -82,21 +90,18 @@ export function RoomListView({
           />
         </>
       }
-      bottom={
-        <Button variant="primary" onClick={onCreate}>
-          <Plus size={18} />새 가계부
-        </Button>
-      }
+      bottom={tabBar}
     >
-      {rooms.length ? (
+      {rows.length ? (
         <List aria-label="방 목록">
-          {rooms.map(({ room, latest }) => (
+          {rows.map(({ key, room, depth }) => (
             <RoomListItem
-              key={room.id}
+              key={key}
               room={room}
-              latest={latest}
+              latest={latest.get(room.id)}
               unseen={unseen[room.id]}
               today={today}
+              depth={depth}
               onOpen={() => onOpenRoom(room)}
             />
           ))}

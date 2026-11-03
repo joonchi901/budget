@@ -6,12 +6,13 @@ export function Empty({
   illustration = 'empty',
 }: {
   children: ReactNode;
-  illustration?: 'empty' | 'search';
+  /** 'search' for no results, 'work' while something needs fixing, such as a failed load. */
+  illustration?: 'empty' | 'search' | 'work';
 }) {
   return (
     <div className="empty uga-empty">
-      {illustration === 'search' ? (
-        <UgaMascot pose="search" size={92} />
+      {illustration !== 'empty' ? (
+        <UgaMascot pose={illustration} size={92} />
       ) : (
         <UgaIllustration name="empty-state" size={120} />
       )}

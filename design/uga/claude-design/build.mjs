@@ -428,7 +428,7 @@ const bundle = await build({
   globalName: NAMESPACE,
   outdir: 'out',
   jsx: 'automatic',
-  loader: { '.woff2': 'empty' },
+  loader: { '.woff2': 'empty', '.png': 'dataurl' },
   plugins: [
     globals,
     {
@@ -545,7 +545,9 @@ const tall = {
   SummaryStrip: 140,
   RecordFilterBar: 160,
   PersonRow: 200,
-  AvatarPicker: 140,
+  AvatarPicker: 220,
+  ProfilePicture: 120,
+  KindOptionEditor: 420,
   RoomInviteRow: 140,
   FriendPicker: 280,
   MemberList: 300,
@@ -627,6 +629,21 @@ const svgs = readdirSync(brand)
   .sort();
 mkdirSync(join(project, 'brand'), { recursive: true });
 for (const file of svgs) copyFileSync(join(brand, file), join(project, 'brand', file));
+// Reaction stickers (256px originals and the 96px copies reactions draw) and decorations, as PNG.
+const pngsIn = (dir) =>
+  readdirSync(join(brand, dir))
+    .filter((file) => file.endsWith('.png'))
+    .sort()
+    .map((file) => `${dir}/${file}`);
+const reactionPngs = [
+  'reactions/stickers',
+  'reactions/stickers-96',
+  'reactions/decorations',
+].flatMap(pngsIn);
+for (const file of reactionPngs) {
+  mkdirSync(dirname(join(project, 'brand', file)), { recursive: true });
+  copyFileSync(join(brand, file), join(project, 'brand', file));
+}
 const groupOf = (file) =>
   /^uga-(logo|wordmark|monochrome|app-icon)/.test(file)
     ? 'Logos'
@@ -648,7 +665,7 @@ const assetGroups = {
   },
   Avatars: {
     tile: 's',
-    note: '프로필 그림 4종(happy, calm, surprise, sleep). 사용자는 이 중에서만 고르고 파일을 올리지 않아요. 다른 사람이 저장한 값도 이 이름만 받아요.',
+    note: '기본 프로필 그림 4종(happy, calm, surprise, sleep). 사진을 올리지 않았거나 지웠을 때 이 중 고른 것을 써요. 저장된 이름도 이 넷만 받아요.',
   },
   Icons: {
     tile: 'xs',
@@ -658,12 +675,23 @@ const assetGroups = {
     tile: 'm',
     note: '빈 상태(`uga-empty-state.svg`), 카드 머리 장식, 선택 배지 그림.',
   },
+  Reactions: {
+    tile: 'm',
+    note: '내역에 다는 반응 스티커 30종(대화 12·감정 18, 256px PNG). 반응에는 `reactions/stickers-96/`의 96px 사본을 칩 22px·고르기 44px로 써요. 문구가 없어 같은 표정에 상황에 맞는 말을 붙일 수 있어요. 저장된 반응 이름도 이 30종만 받아요.',
+    files: pngsIn('reactions/stickers'),
+  },
+  Decorations: {
+    tile: 'xs',
+    note: '작은 장식 23종(128px PNG, 24px로 써요). 스티커 옆이나 빈 상태에 곁들이는 그림이고, 혼자서 뜻을 전하지 않아요.',
+    files: pngsIn('reactions/decorations'),
+  },
 };
+const filesOf = (group) =>
+  assetGroups[group].files ?? svgs.filter((file) => groupOf(file) === group);
 for (const [group, info] of Object.entries(assetGroups))
   write(
     `assets/${group}/README.md`,
-    `# ${group}\n\n${info.note}\n\n${svgs
-      .filter((file) => groupOf(file) === group)
+    `# ${group}\n\n${info.note}\n\n${filesOf(group)
       .map((file) => `- \`${file}\``)
       .join('\n')}\n`,
   );
@@ -690,7 +718,7 @@ if (uploads) {
     groups: Object.keys(assetGroups),
     assetGroups: Object.fromEntries(
       Object.entries(assetGroups).map(([group, info]) => {
-        const files = svgs.filter((file) => groupOf(file) === group);
+        const files = filesOf(group);
         return [
           group,
           {
@@ -706,7 +734,7 @@ if (uploads) {
                     name: file,
                     blob: uploads[file],
                     size: statSync(join(brand, file)).size,
-                    type: 'image/svg+xml',
+                    type: file.endsWith('.png') ? 'image/png' : 'image/svg+xml',
                   },
                 ];
               }),
@@ -727,5 +755,5 @@ if (uploads) {
   write('design-system.json', JSON.stringify(index, null, 2) + '\n');
 }
 console.log(
-  `${cards.length} components · ${families.color.length} colors · ${svgs.length} images → ${project}`,
+  `${cards.length} components · ${families.color.length} colors · ${svgs.length + reactionPngs.length} images → ${project}`,
 );

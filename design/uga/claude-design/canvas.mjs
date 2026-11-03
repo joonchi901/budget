@@ -3,7 +3,7 @@
 // element is its own layer on the canvas. Pages follow the Storybook levels.
 // Usage: npm run build:storybook && node design/uga/claude-design/canvas.mjs <canvas-root>
 import { createServer } from 'node:http';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { extname, join, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
 
@@ -105,6 +105,7 @@ class Component extends DCLogic {
 
 const browser = await chromium.launch();
 const captured = [];
+const images = new Set();
 for (const entry of stories) {
   const view = entry.title.startsWith('06');
   const width = view ? 390 : 600;
@@ -128,7 +129,9 @@ for (const entry of stories) {
     const rootEl = document.querySelector('#storybook-root');
     // Live values only exist as properties; write them back as attributes so the markup keeps them.
     for (const input of rootEl.querySelectorAll('input')) {
-      if (input.type === 'checkbox' || input.type === 'radio')
+      // A file input's value can only be set to empty, so the runtime throws on any other.
+      if (input.type === 'file') input.removeAttribute('value');
+      else if (input.type === 'checkbox' || input.type === 'radio')
         input.toggleAttribute('checked', input.checked);
       else input.setAttribute('value', input.value);
     }
@@ -141,7 +144,12 @@ for (const entry of stories) {
     };
   });
   await page.close();
+  // Images Storybook bundles (such as the sample profile photo) go beside the artboards.
   const html = result.html
+    .replace(/src="(?:https?:\/\/127\.0\.0\.1:\d+\/)?(?:\.?\/)?assets\/([^"]+\.(?:png|jpe?g|webp))"/g, (_, file) => {
+      images.add(file);
+      return `src="assets/${file}"`;
+    })
     .replace(/src="\/brand\//g, 'src="ds/uga/brand/')
     .replace(/\{\{/g, '&#123;&#123;')
     .replace(
@@ -161,7 +169,10 @@ server.close();
 
 // Layout: one canvas page per level, one row per story file, its stories left to right.
 const project = join(out, 'project');
-mkdirSync(project, { recursive: true });
+mkdirSync(join(project, 'assets'), { recursive: true });
+for (const file of images) copyFileSync(join(staticDir, 'assets', file), join(project, 'assets', file));
+const stray = captured.filter((item) => item.html.includes('src="blob:')).map((item) => item.file);
+if (stray.length) throw new Error(`blob: images only exist in the capturing page: ${stray.join(', ')}`);
 const boards = {};
 const order = [];
 const notes = {};
@@ -217,7 +228,7 @@ for (const page of pages) {
 writeFileSync(
   join(out, 'layout.json'),
   JSON.stringify(
-    { pages: pages.map(({ id, name }) => ({ id, name })), boards, order, notes },
+    { pages: pages.map(({ id, name }) => ({ id, name })), boards, order, notes, images: [...images] },
     null,
     2,
   ),

@@ -1,12 +1,17 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import {
-  CalendarDays,
+  BookOpen,
   ChartPie,
   ChevronLeft,
+  CornerDownRight,
   Layers,
   List,
+  MessageCircle,
   MoreHorizontal,
-  Plus,
+  Settings,
+  Settings2,
+  Users,
+  Wallet,
 } from 'lucide-react';
 import { UgaIcon, type UgaIconName } from '../brand/Uga';
 import {
@@ -24,12 +29,13 @@ import type { IsoDate, Ledger, LedgerRecord, Totals } from '../../shared/ledger'
 import { whenLabel } from './format';
 import { ledgerMeta } from './Hierarchy';
 
-/** One room in the room list: icon, name, latest record or period/children, time and unseen count. */
+/** One room in the room list: icon, name, latest record or period/children, time and unseen count. `depth` indents a 하위 가계부 under its 상위. */
 export function RoomListItem({
   room,
   latest,
   unseen = 0,
   today,
+  depth = 0,
   onOpen,
 }: {
   room: Ledger;
@@ -37,12 +43,23 @@ export function RoomListItem({
   latest?: LedgerRecord;
   unseen?: number;
   today: IsoDate;
+  depth?: number;
   onOpen(): void;
 }) {
   return (
     <ListRow
-      leading={<UgaIcon name={room.icon as UgaIconName} size={36} />}
-      title={room.name}
+      leading={
+        <span className="ledger-room-leading" style={{ '--depth': depth } as CSSProperties}>
+          {depth > 0 && <CornerDownRight size={16} aria-hidden="true" />}
+          <UgaIcon name={room.icon as UgaIconName} size={36} />
+        </span>
+      }
+      title={
+        <>
+          {depth > 0 && <span className="sr-only">하위 가계부 </span>}
+          {room.name}
+        </>
+      }
       description={latest ? `${latest.title} · ${won(latest.amount)}원` : ledgerMeta(room)}
       trailing={
         <>
@@ -55,12 +72,13 @@ export function RoomListItem({
   );
 }
 
-export type RoomView = 'table' | 'calendar' | 'stats' | 'ledgers';
+export type RoomView = 'records' | 'stats' | 'ledgers' | 'chat' | 'settings';
 const viewLabels: Record<RoomView, string> = {
-  table: '표',
-  calendar: '캘린더',
+  records: '내역',
   stats: '통계',
   ledgers: '하위',
+  chat: '대화',
+  settings: '설정',
 };
 
 /** Room title bar: back to the room list, name and period, ⋯ menu. The title is the page heading. */
@@ -98,26 +116,26 @@ export function RoomHeader({
 }
 
 const viewIcons: Record<RoomView, ReactNode> = {
-  table: <List size={20} />,
-  calendar: <CalendarDays size={20} />,
+  records: <List size={20} />,
   stats: <ChartPie size={20} />,
   ledgers: <Layers size={20} />,
+  chat: <MessageCircle size={20} />,
+  settings: <Settings2 size={20} />,
 };
 
 /**
- * Bottom bar of a room, within thumb reach: the view switch and the round 내역 추가 button.
- * The views keep the segmented keyboard contract (arrow keys, Home, End).
+ * Bottom bar of a room, within thumb reach: 내역, 통계, 하위 for a parent, 대화 for a ledger that
+ * holds records, and 설정. The views
+ * keep the segmented keyboard contract (arrow keys, Home, End).
  */
 export function RoomTabBar({
   views,
   view,
   onViewChange,
-  onAdd,
 }: {
   views: RoomView[];
   view: RoomView;
   onViewChange(view: RoomView): void;
-  onAdd(): void;
 }) {
   return (
     <div className="ledger-tab-bar">
@@ -136,22 +154,61 @@ export function RoomTabBar({
           ),
         }))}
       />
-      <Button
-        variant="primary"
-        className="ledger-add-button"
-        aria-label="내역 추가"
-        onClick={onAdd}
-      >
-        <Plus size={26} />
-      </Button>
     </div>
   );
 }
 
-/** 수입 · 지출 · 남은 금액 for the room's current scope. */
-export function SummaryStrip({ totals }: { totals: Totals }) {
+export type HomeTab = 'friends' | 'ledgers' | 'assets' | 'settings';
+const homeTabs: { value: HomeTab; label: string; icon: ReactNode }[] = [
+  { value: 'friends', label: '친구', icon: <Users size={20} /> },
+  { value: 'ledgers', label: '가계부', icon: <BookOpen size={20} /> },
+  { value: 'assets', label: '자산', icon: <Wallet size={20} /> },
+  { value: 'settings', label: '설정', icon: <Settings size={20} /> },
+];
+
+/** Bottom bar of the app's home: 친구 (with requests and invitations waiting), 가계부, 자산, 설정. */
+export function HomeTabBar({
+  tab,
+  onTabChange,
+  pending = 0,
+}: {
+  tab: HomeTab;
+  onTabChange(tab: HomeTab): void;
+  /** Friend requests and ledger invitations waiting for an answer. */
+  pending?: number;
+}) {
   return (
-    <dl className="ledger-summary">
+    <div className="ledger-tab-bar">
+      <SegmentedControl
+        aria-label="메뉴"
+        appearance="plain"
+        value={tab}
+        onValueChange={onTabChange}
+        options={homeTabs.map(({ value, label, icon }) => ({
+          value,
+          label: (
+            <>
+              {icon}
+              <span>{label}</span>
+              {value === 'friends' && (
+                <CountBadge count={pending} label={`답할 요청·초대 ${pending}건`} />
+              )}
+            </>
+          ),
+        }))}
+      />
+    </div>
+  );
+}
+
+/**
+ * 수입 · 지출 · 남은 금액 for the room's current scope, in full. Three columns fit amounts below
+ * 1억; from 1억 the amounts stack into rows so the whole number stays on one line.
+ */
+export function SummaryStrip({ totals }: { totals: Totals }) {
+  const large = Math.max(totals.income, totals.expense, Math.abs(totals.balance)) >= 100_000_000;
+  return (
+    <dl className="ledger-summary" data-layout={large ? 'rows' : undefined}>
       <div>
         <dt>수입</dt>
         <dd>

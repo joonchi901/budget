@@ -11,28 +11,20 @@ const meta = {
     docs: {
       description: {
         component:
-          '방 화면 하단 막대. 엄지가 닿는 곳에 보기 전환(표·캘린더·통계, 묶음은 가계부별 추가)과 둥근 내역 추가 버튼을 둡니다. 보기 전환은 방향키·Home·End로도 움직입니다.',
+          '방 화면 하단 막대. 엄지가 닿는 곳에 내역·통계·설정 탭을 두고, 상위 가계부는 하위 탭을 더합니다. 표/캘린더 전환은 내역 보기 위쪽 조회 도구 옆에, 내역 추가는 탭 막대 바로 위 가로 전체 버튼으로 있습니다. 탭은 방향키·Home·End로도 움직입니다.',
       },
     },
   },
   args: {
-    views: ['table', 'calendar', 'stats'],
-    view: 'table',
+    views: ['records', 'stats', 'settings'],
+    view: 'records',
     onViewChange: () => {},
-    onAdd: () => {},
   },
   render: function Controlled(args) {
     const [view, setView] = useState<RoomView>(args.view);
-    const [added, setAdded] = useState(0);
     return (
       <div style={{ maxWidth: 390 }}>
-        <RoomTabBar
-          {...args}
-          view={view}
-          onViewChange={setView}
-          onAdd={() => setAdded(added + 1)}
-        />
-        <p role="status">{added > 0 && `추가 ${added}번`}</p>
+        <RoomTabBar {...args} view={view} onViewChange={setView} />
       </div>
     );
   },
@@ -43,12 +35,11 @@ type Story = StoryObj<typeof meta>;
 export const Ledger: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);
-    await userEvent.click(c.getByRole('button', { name: '캘린더' }));
-    await expect(c.getByRole('button', { name: '캘린더' })).toHaveAttribute('aria-pressed', 'true');
-    await userEvent.keyboard('{ArrowRight}');
+    await userEvent.click(c.getByRole('button', { name: '통계' }));
     await expect(c.getByRole('button', { name: '통계' })).toHaveAttribute('aria-pressed', 'true');
-    await userEvent.click(c.getByRole('button', { name: '내역 추가' }));
-    await expect(c.getByRole('status')).toHaveTextContent('추가 1번');
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(c.getByRole('button', { name: '설정' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(c.queryByRole('button', { name: '내역 추가' })).toBeNull();
   },
 };
-export const Group: Story = { args: { views: ['table', 'calendar', 'stats', 'ledgers'] } };
+export const Group: Story = { args: { views: ['records', 'stats', 'ledgers', 'settings'] } };

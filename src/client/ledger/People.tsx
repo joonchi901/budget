@@ -1,26 +1,31 @@
-import type { ReactNode } from 'react';
-import { MoreHorizontal } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { MoreHorizontal, Trash2 } from 'lucide-react';
 import { UGA_MOODS, UgaAvatar, UgaIcon, type UgaIconName, type UgaMood } from '../brand/Uga';
 import {
   Button,
   Checkbox,
   Field,
+  FileField,
   IconButton,
   Inline,
   List,
   ListRow,
   Menu,
   SegmentedControl,
+  Stack,
   type MenuItem,
 } from '../ui';
 import type { Id, IsoDate } from '../../shared/ledger';
-import type {
-  Friend,
-  InviteRole,
-  LedgerMember,
-  MemberRole,
-  Profile,
-  RoomInvite,
+import {
+  PHOTO_TYPES,
+  isProfilePhotoUrl,
+  photoProblem,
+  type Friend,
+  type InviteRole,
+  type LedgerMember,
+  type MemberRole,
+  type Profile,
+  type RoomInvite,
 } from '../../shared/people';
 import { whenLabel } from './format';
 
@@ -30,7 +35,29 @@ export const roleLabel: Record<MemberRole, string> = {
   viewer: '보기',
 };
 
-/** One person: avatar, display name and @ID. */
+/** A person's picture: their uploaded photo, else their Uga avatar. Decorative beside the name. */
+export function ProfilePicture({
+  profile,
+  size,
+}: {
+  profile: Pick<Profile, 'avatar' | 'photo'>;
+  size: number;
+}) {
+  return isProfilePhotoUrl(profile.photo) ? (
+    <img
+      className="ledger-profile-photo"
+      src={profile.photo}
+      alt=""
+      width={size}
+      height={size}
+      draggable={false}
+    />
+  ) : (
+    <UgaAvatar mood={profile.avatar} size={size} />
+  );
+}
+
+/** One person: picture, display name and @ID. */
 export function PersonRow({
   profile,
   description = `@${profile.handle}`,
@@ -44,7 +71,7 @@ export function PersonRow({
 }) {
   return (
     <ListRow
-      leading={<UgaAvatar mood={profile.avatar} size={40} />}
+      leading={<ProfilePicture profile={profile} size={40} />}
       title={profile.name}
       description={description}
       trailing={trailing}
@@ -60,30 +87,90 @@ const moodLabels: Record<UgaMood, string> = {
   sleep: '조는 우가',
 };
 
-/** The profile picture: one of the Uga avatars, so nothing uploaded reaches other people. */
+export type PhotoChoice = { file: File; url: string };
+
+/**
+ * The profile picture: an uploaded photo (JPG, PNG or WebP up to 5MB; the server re-encodes it
+ * and strips its metadata) or one of the four Uga pictures, which are also the default.
+ * Without `onPhotoChange` only the Uga pictures are offered.
+ */
 export function AvatarPicker({
   value,
   onValueChange,
+  photo,
+  onPhotoChange,
 }: {
   value: string;
   onValueChange(value: UgaMood): void;
+  /** The current photo or its local preview, shown instead of the Uga picture. */
+  photo?: string;
+  /** A checked photo with its preview URL, or null to use the Uga picture again. */
+  onPhotoChange?(photo: PhotoChoice | null): void;
 }) {
+  const [error, setError] = useState<string>();
+  const mood = (UGA_MOODS as readonly string[]).includes(value) ? (value as UgaMood) : 'happy';
+  const shownPhoto = isProfilePhotoUrl(photo) ? photo : undefined;
   return (
-    <SegmentedControl<UgaMood>
-      aria-label="프로필 그림"
-      className="ledger-avatar-picker"
-      value={(UGA_MOODS as readonly string[]).includes(value) ? (value as UgaMood) : 'happy'}
-      onValueChange={onValueChange}
-      options={UGA_MOODS.map((mood) => ({
-        value: mood,
-        label: (
-          <>
-            <UgaAvatar mood={mood} size={44} />
-            <span className="sr-only">{moodLabels[mood]}</span>
-          </>
-        ),
-      }))}
-    />
+    <Stack gap={3} className="ledger-avatar-picker">
+      {onPhotoChange && (
+        <Inline gap={4} align="center" wrap={false}>
+          <ProfilePicture profile={{ avatar: mood, photo: shownPhoto }} size={64} />
+          <Stack gap={2} className="ledger-photo-actions">
+            <Inline gap={2} align="center" wrap={false}>
+              <FileField
+                aria-label="프로필 사진 올리기"
+                className="ledger-photo-upload"
+                accept={PHOTO_TYPES.join(',')}
+                buttonText="사진 올리기"
+                emptyText=""
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (!file) return;
+                  const problem = photoProblem(file);
+                  setError(problem);
+                  if (!problem) onPhotoChange({ file, url: URL.createObjectURL(file) });
+                }}
+              />
+              {shownPhoto && (
+                <IconButton
+                  aria-label="사진 지우기"
+                  onClick={() => {
+                    setError(undefined);
+                    onPhotoChange(null);
+                  }}
+                >
+                  <Trash2 size={20} />
+                </IconButton>
+              )}
+            </Inline>
+            {error && (
+              <p className="ledger-photo-error" role="alert">
+                {error}
+              </p>
+            )}
+          </Stack>
+        </Inline>
+      )}
+      <SegmentedControl<UgaMood>
+        aria-label={onPhotoChange ? '기본 그림' : '프로필 그림'}
+        // While a photo is shown, no Uga picture is the selected one.
+        value={shownPhoto ? ('' as UgaMood) : mood}
+        onValueChange={(next) => {
+          onValueChange(next);
+          if (shownPhoto) onPhotoChange?.(null);
+        }}
+        options={UGA_MOODS.map((item) => ({
+          value: item,
+          label: (
+            <>
+              <UgaAvatar mood={item} size={44} />
+              <span className="sr-only">{moodLabels[item]}</span>
+            </>
+          ),
+        }))}
+      />
+    </Stack>
   );
 }
 
@@ -289,7 +376,7 @@ export function FriendPicker({
                   )
                 }
               />
-              <UgaAvatar mood={profile.avatar} size={36} />
+              <ProfilePicture profile={profile} size={36} />
               <span>
                 {profile.name} <small>@{profile.handle}</small>
               </span>

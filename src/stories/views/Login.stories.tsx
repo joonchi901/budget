@@ -36,6 +36,14 @@ export const Ready: Story = {
 };
 export const Failed: Story = {
   args: { error: 'Google 로그인을 마치지 못했어요. 다시 시도해 주세요.' },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    // The error sits below the button, so the button keeps the place it has on every login screen.
+    const button = c.getByRole('button', { name: 'Google로 계속하기' });
+    await expect(c.getByRole('alert').getBoundingClientRect().top).toBeGreaterThan(
+      button.getBoundingClientRect().bottom - 1,
+    );
+  },
 };
 export const Invited: Story = {
   args: { invitedBy: yedi },

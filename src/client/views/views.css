@@ -1,8 +1,10 @@
 /* Views: page-level arrangement only; components keep their own styles. */
 
+/* Anchored from the top, not centered, so Google로 계속하기 stays put when an error shows below it. */
 .view-login {
   display: grid;
-  place-items: center;
+  place-items: start center;
+  padding-top: clamp(48px, 16dvh, 160px);
   min-height: 100dvh;
   padding: var(--brand-space-6) var(--brand-space-4);
   text-align: center;
@@ -14,6 +16,10 @@
 }
 .view-login-card > .ui-button {
   width: 100%;
+}
+/* Two lines either way, so the invited message does not move the button either. */
+.view-login-card > .muted {
+  min-height: calc(2 * 1.5em);
 }
 .view-login h1 {
   line-height: 0;
@@ -77,17 +83,40 @@
 .view-page-header h1 {
   font-size: var(--brand-font-size-section);
 }
+/* A text action (자산 추가) sits at the right; a back button stays before the title. */
+.view-page-header > .ui-button:not(.ui-icon-button) {
+  margin-inline-start: auto;
+}
 .view-find > .ui-text-field {
   flex: 1;
 }
 .view-actions > .ui-button {
   flex: 1;
 }
-.view-home-actions .ui-icon-button {
-  position: relative;
+
+/* The room's 내역 추가: full width, kept just above the tab bar while the records scroll. */
+.view-add-record.ui-button {
+  position: sticky;
+  bottom: calc(52px + var(--brand-space-3) * 3 + env(safe-area-inset-bottom));
+  z-index: 4;
+  width: 100%;
+  box-shadow: var(--brand-shadow-raised);
 }
-.view-home-actions .ui-count-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
+.view-section-title {
+  font-size: var(--brand-font-size-md);
+}
+
+/* 대화: the composer sits at the bottom even with few messages (the room's top and tab bar take
+   about 260px), and stays just above the tab bar while the messages scroll. */
+.view-chat > .ledger-chat {
+  min-height: calc(100dvh - 260px);
+}
+.view-chat .ledger-chat-composer {
+  position: sticky;
+  bottom: calc(52px + var(--brand-space-3) * 3 + env(safe-area-inset-bottom));
+  z-index: 4;
+  padding: var(--brand-space-2);
+  border-radius: var(--brand-radius-control);
+  background: var(--brand-surface-glass);
+  box-shadow: var(--brand-shadow-raised);
 }

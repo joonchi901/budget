@@ -1,8 +1,18 @@
 import { useState } from 'react';
+import { ChevronLeft } from 'lucide-react';
 import { UgaIcon, type UgaIconName } from '../brand/Uga';
 import { AvatarPicker } from '../ledger';
-import { FullScreenSheet } from '../templates';
-import { Button, List, ListRow, SelectField, SelectOption, Stack, TextField } from '../ui';
+import { FullScreenSheet, Screen } from '../templates';
+import {
+  Button,
+  IconButton,
+  List,
+  ListRow,
+  SelectField,
+  SelectOption,
+  Stack,
+  TextField,
+} from '../ui';
 import type { Id, IsoDate, Ledger } from '../../shared/ledger';
 import { HANDLE_RULE, handleProblem, type Profile } from '../../shared/people';
 
@@ -12,8 +22,8 @@ const shortDay = (date: IsoDate) => {
 };
 
 /**
- * My profile (picture, display name, ID) and account actions. The ID changes at most once
- * every 30 days; until then it shows when it can change.
+ * 프로필, opened from the 설정 tab's menu: my photo or Uga picture, display name and ID, then account actions. The ID
+ * changes at most once every 30 days; until then it shows when it can change.
  */
 export function AccountView({
   profile,
@@ -24,7 +34,7 @@ export function AccountView({
   onSave,
   onLogout,
   onLeave,
-  onClose,
+  onBack,
 }: {
   profile: Profile;
   /** The Google account this profile signs in with. */
@@ -34,12 +44,15 @@ export function AccountView({
   handleChangeableFrom?: IsoDate;
   /** The server's answer when the new ID is already used. */
   takenHandle?: string;
-  onSave(profile: Profile): void;
+  /** `photo`: a new file for the server to re-encode, null to remove the photo, omitted to keep it. */
+  onSave(profile: Profile, photo?: File | null): void;
   onLogout(): void;
   onLeave(): void;
-  onClose(): void;
+  /** Back to 설정. */
+  onBack(): void;
 }) {
   const [draft, setDraft] = useState(profile);
+  const [photoFile, setPhotoFile] = useState<File | null>();
   const locked = handleChangeableFrom !== undefined && handleChangeableFrom > today;
   const handleError =
     draft.handle === profile.handle
@@ -49,24 +62,25 @@ export function AccountView({
   const nameError = draft.name.trim() ? undefined : '표시 이름을 입력해 주세요.';
   const dirty = JSON.stringify(draft) !== JSON.stringify(profile);
   return (
-    <FullScreenSheet
-      title="내 계정"
-      dirty={dirty}
-      onClose={onClose}
-      footer={
-        <Button
-          variant="primary"
-          disabled={!dirty || Boolean(handleError || nameError)}
-          onClick={() => onSave({ ...draft, name: draft.name.trim() })}
-        >
-          저장
-        </Button>
+    <Screen
+      top={
+        <div className="view-page-header">
+          <IconButton aria-label="설정으로" onClick={onBack}>
+            <ChevronLeft size={22} />
+          </IconButton>
+          <h1>프로필</h1>
+        </div>
       }
     >
       <Stack gap={6}>
         <AvatarPicker
           value={draft.avatar}
           onValueChange={(avatar) => setDraft({ ...draft, avatar })}
+          photo={draft.photo}
+          onPhotoChange={(next) => {
+            setDraft({ ...draft, photo: next?.url });
+            setPhotoFile(next ? next.file : null);
+          }}
         />
         <TextField
           label="표시 이름"
@@ -90,6 +104,13 @@ export function AccountView({
             setDraft({ ...draft, handle: event.target.value.trim().toLowerCase() })
           }
         />
+        <Button
+          variant="primary"
+          disabled={!dirty || Boolean(handleError || nameError)}
+          onClick={() => onSave({ ...draft, name: draft.name.trim() }, photoFile)}
+        >
+          저장
+        </Button>
         <Stack gap={3}>
           <p className="view-meta">{email} Google 계정으로 로그인했어요.</p>
           <Button onClick={onLogout}>로그아웃</Button>
@@ -98,7 +119,7 @@ export function AccountView({
           </Button>
         </Stack>
       </Stack>
-    </FullScreenSheet>
+    </Screen>
   );
 }
 

@@ -229,7 +229,7 @@
     "source": "src/client/ledger/Room.tsx",
     "story": "src/stories/organisms/RoomListItem.stories.tsx",
     "status": "ready",
-    "usage": "방 목록 한 줄: 마지막 내역(하위 포함) 또는 기간·하위 수, 시간, 새 내역 수"
+    "usage": "방 목록 한 줄: 하위는 상위 아래 들여쓰기, 마지막 내역(하위 포함)·시간·새 내역 수"
   },
   {
     "name": "RoomHeader",
@@ -245,7 +245,15 @@
     "source": "src/client/ledger/Room.tsx",
     "story": "src/stories/organisms/RoomTabBar.stories.tsx",
     "status": "ready",
-    "usage": "방 하단 막대: 표·캘린더·통계(·하위) 전환과 둥근 내역 추가 버튼"
+    "usage": "방 하단 탭: 내역·통계·(하위)·대화·설정"
+  },
+  {
+    "name": "HomeTabBar",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Room.tsx",
+    "story": "src/stories/organisms/HomeTabBar.stories.tsx",
+    "status": "ready",
+    "usage": "앱 첫 화면 하단 탭: 친구(답할 요청·초대 배지)·가계부·프로필·설정"
   },
   {
     "name": "SummaryStrip",
@@ -253,7 +261,15 @@
     "source": "src/client/ledger/Room.tsx",
     "story": "src/stories/organisms/SummaryStrip.stories.tsx",
     "status": "ready",
-    "usage": "수입·지출·남은 금액"
+    "usage": "수입·지출·남은 금액 · 1억 이상이면 세 줄"
+  },
+  {
+    "name": "AssetRow / NetWorthSummary",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Assets.tsx",
+    "story": "src/stories/views/Assets.stories.tsx",
+    "status": "ready",
+    "usage": "자산 한 줄(종류 아이콘·이름·연동 가계부·현재 잔액)과 순자산·자산·부채 요약"
   },
   {
     "name": "RecordRow / RecordDayGroup / RecordList",
@@ -277,7 +293,23 @@
     "source": "src/client/ledger/Records.tsx",
     "story": "src/stories/organisms/RecordFilterBar.stories.tsx",
     "status": "ready",
-    "usage": "검색·수입/지출·태그 조건"
+    "usage": "검색·태그 조건(유형으로 수입/지출) · 방에서는 표/캘린더 아이콘 전환"
+  },
+  {
+    "name": "RecordReactions",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Reactions.tsx",
+    "story": "src/stories/organisms/RecordReactions.stories.tsx",
+    "status": "ready",
+    "usage": "내역 아래 우가 스티커 반응: 스티커별 칩(누른 수·내 반응 강조), 고르기(대화 12·감정 18)"
+  },
+  {
+    "name": "ChatThread",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Chat.tsx",
+    "story": "src/stories/organisms/ChatThread.stories.tsx",
+    "status": "ready",
+    "usage": "가계부 방 대화: 날짜별 말풍선(내 글 오른쪽), 글 또는 우가 스티커 보내기"
   },
   {
     "name": "PeriodCalendar / DayRecords",
@@ -312,6 +344,14 @@
     "usage": "가계부 필드 구성과 태그 옵션 관리"
   },
   {
+    "name": "KindOptionEditor",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Settings.tsx",
+    "story": "src/stories/organisms/TagOptionEditor.stories.tsx",
+    "status": "ready",
+    "usage": "유형 태그 관리: 옵션마다 수입·지출, 기본 수입·지출은 이름만 바꾸고 보관 불가"
+  },
+  {
     "name": "ChildLedgerList / ChildPicker / ParentPicker / LedgerPicker",
     "layer": "04 Organisms",
     "source": "src/client/ledger/Hierarchy.tsx",
@@ -328,12 +368,20 @@
     "usage": "사람 한 줄: 우가 그림, 표시 이름, @아이디"
   },
   {
+    "name": "ProfilePicture",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "프로필 사진, 없으면 우가 그림. 이 앱 경로의 사진만 그림"
+  },
+  {
     "name": "AvatarPicker",
     "layer": "04 Organisms",
     "source": "src/client/ledger/People.tsx",
     "story": "src/stories/organisms/People.stories.tsx",
     "status": "ready",
-    "usage": "프로필 그림 고르기. 우가 그림 4종만, 올린 파일은 받지 않음"
+    "usage": "프로필 사진 올리기(JPG·PNG·WebP, 5MB 이하)와 기본 우가 그림 4종"
   },
   {
     "name": "FriendList",

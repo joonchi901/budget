@@ -7,10 +7,17 @@ import {
   type FieldValue,
   type Ledger,
   type LedgerRecord,
+  type ChatMessage,
   type Member,
+  type Reactions,
   type TagOption,
 } from '../shared/ledger';
+import type { Asset } from '../shared/assets';
 import type { Friend, LedgerMember, Profile, RoomInvite, SignupLink } from '../shared/people';
+// Over 4KB on purpose: Vite inlines smaller images as data: URLs, which profile photos never are.
+import samplePhoto from './assets/sample-photo.png';
+
+export { samplePhoto };
 
 export const FIXTURE_TODAY = '2026-11-02';
 
@@ -32,9 +39,9 @@ const monthLedger = (id: string, name: string, start: string, end: string): Ledg
   icon: 'ledger',
   period: { start, end },
   kinds: [
-    { id: `${id}-k-in`, name: '수입', color: '#38735B', nature: 'income' },
+    { id: `${id}-k-in`, name: '수입', color: '#38735B', nature: 'income', base: true },
     { id: `${id}-k-fixed`, name: '고정지출', color: '#9176A6', nature: 'expense' },
-    { id: `${id}-k-out`, name: '지출', color: '#AE393B', nature: 'expense' },
+    { id: `${id}-k-out`, name: '지출', color: '#AE393B', nature: 'expense', base: true },
   ],
   fields: [
     {
@@ -86,7 +93,7 @@ export const japanTrip: Ledger = {
   name: '일본여행',
   icon: 'sprout',
   period: { start: '2026-10-09', end: '2026-10-12' },
-  kinds: [{ id: 'trip-k-out', name: '지출', color: '#AE393B', nature: 'expense' }],
+  kinds: [{ id: 'trip-k-out', name: '지출', color: '#AE393B', nature: 'expense', base: true }],
   fields: [
     {
       id: 'trip-f-cat',
@@ -293,9 +300,102 @@ for (const item of records) {
   if (problems.length) throw new Error(`fixture ${item.id} ${item.title}: ${problems.join(', ')}`);
 }
 
+// Reactions: 준상 burst out laughing at 예디's pizza order and both said thanks; 예디 is proud of
+// 준상's savings.
+const reactTo = (title: string, createdBy: string, reactions: Reactions) => {
+  records.find(
+    (item) => item.ledgerId === 'nov' && item.title === title && item.createdBy === createdBy,
+  )!.reactions = reactions;
+};
+reactTo('프레드피자_쿠팡이츠', 'u2', { 'cracking-up': ['u1'], thanks: ['u2', 'u1'] });
+reactTo('청약저축', 'u1', { proud: ['u2'] });
+
+// Assets. 생활비 통장 follows 하반기 (11월·12월); the others are kept by hand. The second 청약저축
+// (예디's) went to her own account, so it stays out.
+export const assets: Asset[] = [
+  {
+    id: 'living',
+    name: '생활비 통장',
+    kind: 'cash',
+    balance: 2000000,
+    since: '2026-10-23',
+    ledgerIds: ['h2'],
+  },
+  {
+    id: 'housing',
+    name: '주택청약',
+    kind: 'savings',
+    balance: 3400000,
+    since: '2026-11-01',
+    ledgerIds: [],
+  },
+  {
+    id: 'stocks',
+    name: '주식 계좌',
+    kind: 'investment',
+    balance: 5000000,
+    since: '2026-10-01',
+    ledgerIds: [],
+  },
+  {
+    id: 'jeonse',
+    name: '전세대출',
+    kind: 'debt',
+    balance: 50000000,
+    since: '2026-01-01',
+    ledgerIds: [],
+  },
+];
+records.filter((item) => item.ledgerId === 'nov' && item.title === '청약저축')[1].notInAsset = true;
+
+// 대화 in 11월 between 준상 (u1) and 예디 (u2); times are UTC (09:05 KST = 00:05Z).
+export const messages: ChatMessage[] = [
+  {
+    id: 'm1',
+    ledgerId: 'nov',
+    authorId: 'u2',
+    text: '11월 고정지출 다 넣었어',
+    createdAt: '2026-11-01T00:05:00.000Z',
+  },
+  {
+    id: 'm2',
+    ledgerId: 'nov',
+    authorId: 'u1',
+    sticker: 'thanks',
+    createdAt: '2026-11-01T00:07:00.000Z',
+  },
+  {
+    id: 'm3',
+    ledgerId: 'nov',
+    authorId: 'u1',
+    text: '피자는 내가 낼게',
+    createdAt: '2026-11-01T11:10:00.000Z',
+  },
+  {
+    id: 'm4',
+    ledgerId: 'nov',
+    authorId: 'u2',
+    sticker: 'cracking-up',
+    createdAt: '2026-11-01T11:11:00.000Z',
+  },
+  {
+    id: 'm5',
+    ledgerId: 'nov',
+    authorId: 'u2',
+    text: '코스트코 영수증은 내일 올릴게',
+    createdAt: '2026-11-01T23:30:00.000Z',
+  },
+];
+
 // People. `me` is 준상; 일본여행 is shared with 예디, and 예미 has invited me to her ledger.
 export const me: Profile = { id: 'u1', handle: 'junsang', name: '준상', avatar: 'happy' };
-export const yedi: Profile = { id: 'u2', handle: 'yedi_kim', name: '예디', avatar: 'calm' };
+export const yedi: Profile = {
+  id: 'u2',
+  handle: 'yedi_kim',
+  name: '예디',
+  avatar: 'calm',
+  photo: samplePhoto,
+};
 export const yemi: Profile = { id: 'u3', handle: 'yemi22', name: '예미', avatar: 'surprise' };
 export const minho: Profile = { id: 'u4', handle: 'minho_park', name: '민호', avatar: 'sleep' };
 export const seoyeon: Profile = { id: 'u5', handle: 'seoyeon', name: '서연', avatar: 'happy' };

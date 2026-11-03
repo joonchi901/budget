@@ -10,7 +10,16 @@ import {
 } from '../../client/ledger';
 import { List } from '../../client/ui';
 import type { LedgerMember } from '../../shared/people';
-import { FIXTURE_TODAY, friends, invites, me, minho, tripMembers, yedi } from '../fixtures';
+import {
+  FIXTURE_TODAY,
+  friends,
+  invites,
+  me,
+  minho,
+  samplePhoto,
+  tripMembers,
+  yedi,
+} from '../fixtures';
 
 const meta = {
   title: '04 Organisms · 유기체/People',
@@ -20,7 +29,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '사람 블록. FriendList는 받은 요청·친구·보낸 요청·차단을 나눠 보여주고, MemberList는 가계부 멤버와 권한(소유자만 바꿈), FriendPicker는 초대할 친구, AvatarPicker는 우가 프로필 그림, RoomInviteRow는 받은 가계부 초대입니다. 친구라는 사실만으로는 어떤 가계부도 보이지 않습니다.',
+          '사람 블록. FriendList는 받은 요청·친구·보낸 요청·차단을 나눠 보여주고, MemberList는 가계부 멤버와 권한(소유자만 바꿈), FriendPicker는 초대할 친구, AvatarPicker는 프로필 사진 올리기와 기본 우가 그림 4종(ProfilePicture가 사진이 있으면 사진, 없으면 우가 그림을 그림), RoomInviteRow는 받은 가계부 초대입니다. 친구라는 사실만으로는 어떤 가계부도 보이지 않습니다.',
       },
     },
   },
@@ -151,20 +160,45 @@ export const PickFriends: Story = {
 export const Avatar: Story = {
   render: function Controlled() {
     const [value, setValue] = useState('happy');
+    const [photo, setPhoto] = useState<string>();
     return (
-      <>
-        <AvatarPicker value={value} onValueChange={setValue} />
-        <p role="status">{value}</p>
-      </>
+      <div style={{ maxWidth: 390 }}>
+        <AvatarPicker
+          value={value}
+          onValueChange={setValue}
+          photo={photo}
+          onPhotoChange={(next) => setPhoto(next?.url)}
+        />
+        <p role="status">{photo ? '사진' : value}</p>
+      </div>
     );
   },
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);
+    const input = c.getByLabelText('프로필 사진 올리기');
+    await userEvent.upload(
+      input,
+      new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'big.png', { type: 'image/png' }),
+    );
+    await expect(c.getByRole('alert')).toHaveTextContent('5MB 이하 사진만 올릴 수 있어요.');
+    const bytes = await (await fetch(samplePhoto)).blob();
+    await userEvent.upload(input, new File([bytes], 'me.png', { type: 'image/png' }));
+    await expect(c.getByRole('status')).toHaveTextContent('사진');
+    await expect(c.getByRole('button', { name: '사진 지우기' })).toBeVisible();
     await userEvent.click(c.getByRole('button', { name: '조는 우가' }));
     await expect(c.getByRole('status')).toHaveTextContent('sleep');
+    await expect(c.queryByRole('button', { name: '사진 지우기' })).toBeNull();
   },
 };
-
+export const UgaOnly: Story = {
+  render: function Controlled() {
+    const [value, setValue] = useState('calm');
+    return <AvatarPicker value={value} onValueChange={setValue} />;
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).queryByLabelText('프로필 사진 올리기')).toBeNull();
+  },
+};
 export const Invite: Story = {
   render: () => (
     <div style={{ maxWidth: 390 }}>

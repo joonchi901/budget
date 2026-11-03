@@ -25,14 +25,14 @@ export function LoginView({
             ? `${invitedBy.name}님이 우가에 초대했어요. 가입하면 바로 친구가 돼요.`
             : '혼자 써도, 함께 써도 좋은 가계부예요.'}
         </p>
+        <Button variant="primary" busy={busy} onClick={onLogin}>
+          {busy ? '확인하고 있어요' : 'Google로 계속하기'}
+        </Button>
         {error && (
           <p className="view-error" role="alert">
             {error}
           </p>
         )}
-        <Button variant="primary" busy={busy} onClick={onLogin}>
-          {busy ? '확인하고 있어요' : 'Google로 계속하기'}
-        </Button>
       </Stack>
     </main>
   );

@@ -14,7 +14,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '내역 추가·수정 전체 화면. 구분 → 금액 → 내용 → 날짜 → 가계부 필드 순서로 입력하고, 없는 태그는 그 자리에서 만듭니다. 저장 전 규칙(recordProblems)을 확인합니다. 묶음 방에서 열면 저장할 가계부를 먼저 고르며 날짜가 맞는 가계부를 제안합니다. 수정은 삭제를 한 번 더 확인합니다.',
+          '내역 추가·수정 전체 화면. 유형 → 금액 → 내용 → 날짜 → 가계부 필드 순서로 입력하고, 없는 태그는 그 자리에서 만듭니다. 저장 전 규칙(recordProblems)을 확인합니다. 묶음 방에서 열면 저장할 가계부를 먼저 고르며 날짜가 맞는 가계부를 제안합니다. 수정은 삭제를 한 번 더 확인합니다. 자산이 연동된 가계부에서는 "자산에 반영" 스위치가 기본으로 켜져 있습니다.',
       },
     },
   },
@@ -35,7 +35,9 @@ const meta = {
           <RecordEntryView
             {...args}
             onSave={(record: LedgerRecord, keepOpen) => {
-              setLog(`저장: ${record.title} ${record.amount} ${keepOpen ? '계속' : '닫기'}`);
+              setLog(
+                `저장: ${record.title} ${record.amount} ${keepOpen ? '계속' : '닫기'}${record.notInAsset ? ' 자산 제외' : ''}`,
+              );
               if (!keepOpen) setOpen(false);
             }}
             onDelete={args.record ? (record) => setLog(`삭제: ${record.title}`) : undefined}
@@ -83,5 +85,21 @@ export const Edit: Story = {
     await userEvent.click(page.getByRole('button', { name: '삭제' }));
     await userEvent.click(page.getByRole('button', { name: '한 번 더 누르면 삭제' }));
     await expect(page.getByRole('status')).toHaveTextContent('삭제: 코스트코');
+  },
+};
+export const InAsset: Story = {
+  args: { assetNameFor: (ledgerId: string) => (ledgerId === 'nov' ? '생활비 통장' : undefined) },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const inAsset = page.getByRole('switch', { name: '자산에 반영 · 생활비 통장' });
+    await expect(inAsset).toBeChecked();
+    await userEvent.click(inAsset);
+    await userEvent.type(page.getByRole('textbox', { name: '금액' }), '50000');
+    await userEvent.type(page.getByRole('textbox', { name: /내용/ }), '현금 인출');
+    await userEvent.click(page.getByRole('button', { name: '장보기' }));
+    await userEvent.click(page.getByRole('button', { name: '저장' }));
+    await expect(page.getByRole('status')).toHaveTextContent(
+      '저장: 현금 인출 50000 닫기 자산 제외',
+    );
   },
 };

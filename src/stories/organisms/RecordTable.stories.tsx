@@ -12,7 +12,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Notion처럼 모든 열을 보는 넓게 보기. 날짜·구분·내용·금액 다음에 가계부 필드를 이름별로 이어 붙이고, 가로로 길면 이름 있는 스크롤 영역에서 넘깁니다.',
+          'Notion처럼 모든 열을 보는 넓게 보기. 날짜·유형·내용·금액 다음에 가계부 필드를 이름별로 이어 붙이고, 가로로 길면 이름 있는 스크롤 영역에서 넘깁니다.',
       },
     },
   },
@@ -27,7 +27,7 @@ export const November: Story = {
     const headers = c.getAllByRole('columnheader').map((cell) => cell.textContent);
     await expect(headers).toEqual([
       '날짜',
-      '구분',
+      '유형',
       '내용',
       '금액',
       '결제방식',

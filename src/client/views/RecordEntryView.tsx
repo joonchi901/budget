@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { LedgerPicker, RecordForm, type RecordDraft } from '../ledger';
 import { FullScreenSheet } from '../templates';
-import { Button, Stack } from '../ui';
+import { Button, Field, Stack, Switch } from '../ui';
 import {
   ledgerForDate,
   recordProblems,
@@ -42,6 +42,7 @@ export function RecordEntryView({
   onSave,
   onDelete,
   onLedgerChange,
+  assetNameFor,
   onClose,
 }: {
   /** Ledgers the record may go to: one in a ledger room, the group's in a group room. */
@@ -52,10 +53,12 @@ export function RecordEntryView({
   today: IsoDate;
   memberId: Id;
   suggestions?: string[];
-  /** keepOpen: 저장하고 계속, which keeps 구분·날짜·태그 for the next record. */
+  /** keepOpen: 저장하고 계속, which keeps 유형·날짜·태그 for the next record. */
   onSave(record: LedgerRecord, keepOpen: boolean): void;
   onDelete?(record: LedgerRecord): void;
   onLedgerChange?(ledger: Ledger): void;
+  /** The asset a ledger's records go to, if one follows it; shows 자산에 반영. */
+  assetNameFor?(ledgerId: Id): string | undefined;
   onClose(): void;
 }) {
   const [options, setOptions] = useState(ledgers);
@@ -81,9 +84,12 @@ export function RecordEntryView({
       }
     : draftFor(ledger, startDate);
   const [draft, setDraft] = useState(initial);
+  const [inAsset, setInAsset] = useState(!record?.notInAsset);
+  const assetName = assetNameFor?.(ledgerId);
   const [problems, setProblems] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+  const dirty =
+    JSON.stringify(draft) !== JSON.stringify(initial) || inAsset === Boolean(record?.notInAsset);
 
   const save = (keepOpen: boolean) => {
     const candidate: LedgerRecord = {
@@ -96,6 +102,8 @@ export function RecordEntryView({
       values: draft.values,
       createdBy: record?.createdBy ?? memberId,
       createdAt: record?.createdAt ?? new Date().toISOString(),
+      ...(record?.reactions ? { reactions: record.reactions } : {}),
+      ...(assetName && !inAsset ? { notInAsset: true as const } : {}),
     };
     const found = recordProblems(ledger, candidate);
     setProblems(found);
@@ -179,6 +187,12 @@ export function RecordEntryView({
           suggestions={suggestions}
           autoFocusAmount={!record}
         />
+        {assetName && (
+          <Field>
+            <Switch checked={inAsset} onChange={(event) => setInAsset(event.target.checked)} />
+            자산에 반영 · {assetName}
+          </Field>
+        )}
       </Stack>
     </FullScreenSheet>
   );

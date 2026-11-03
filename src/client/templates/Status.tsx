@@ -21,7 +21,7 @@ export function StatusScreen({
         </Stack>
       ) : (
         <Stack gap={4} className="ui-status-screen-failed">
-          <Empty>{children}</Empty>
+          <Empty illustration="work">{children}</Empty>
           {action}
         </Stack>
       )}

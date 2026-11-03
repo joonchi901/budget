@@ -1,15 +1,40 @@
 /** Assets from the reviewed Uga board. These images never alter stored ledger values. */
-import { UGA_ICON_NAMES, UGA_MOODS } from './icon-names';
+import { UGA_ICON_NAMES, UGA_MOODS, UGA_REACTIONS } from './icon-names';
 
 type AssetProps = { size?: number; className?: string; alt?: string };
 
-export { UGA_ICON_NAMES, UGA_MOODS };
+export { UGA_ICON_NAMES, UGA_MOODS, UGA_REACTIONS };
 export type UgaMood = (typeof UGA_MOODS)[number];
 export type UgaIconName = (typeof UGA_ICON_NAMES)[number];
+export type UgaReactionId = (typeof UGA_REACTIONS)[number]['id'];
 // Icons and moods are stored per ledger or profile and may come from another member; only a
 // known name becomes an image path, so a stored "/../../api/..." cannot redirect the request.
 const known = <T extends string>(names: readonly T[], value: string, fallback: T): T =>
   names.includes(value as T) ? (value as T) : fallback;
+
+const reactionIds: readonly string[] = UGA_REACTIONS.map((item) => item.id);
+
+/** A reaction sticker from the 96px copies; an unknown stored id draws nothing. */
+export function UgaReaction({
+  id,
+  size = 20,
+  className = '',
+  alt = '',
+}: AssetProps & { id: string }) {
+  if (!reactionIds.includes(id)) return null;
+  return (
+    <img
+      className={`uga-reaction ${className}`.trim()}
+      src={`/brand/reactions/stickers-96/uga-sticker-${id}.png`}
+      width={size}
+      height={size}
+      alt={alt}
+      loading="eager"
+      decoding="async"
+      draggable={false}
+    />
+  );
+}
 
 export type UgaPose =
   | 'representative'

@@ -1,29 +1,31 @@
 import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { MonthField, type DateFieldProps } from '../../client/ui';
+import { Button, MonthField, Stack, type DateFieldProps } from '../../client/ui';
 
 function ControlledMonth(args: DateFieldProps) {
   const [value, setValue] = useState(args.value);
   useEffect(() => setValue(args.value), [args.value]);
   return (
     <form className="form-body" onSubmit={(event) => event.preventDefault()}>
-      <label>
-        조회 월
-        <MonthField
-          {...args}
-          value={value}
-          onValueChange={(next) => {
-            setValue(next);
-            args.onValueChange(next);
-          }}
-        />
-      </label>
-      {args.required && (
-        <button className="primary" type="submit">
-          월 확인
-        </button>
-      )}
+      <Stack gap={4}>
+        <label>
+          조회 월
+          <MonthField
+            {...args}
+            value={value}
+            onValueChange={(next) => {
+              setValue(next);
+              args.onValueChange(next);
+            }}
+          />
+        </label>
+        {args.required && (
+          <Button variant="primary" type="submit">
+            월 확인
+          </Button>
+        )}
+      </Stack>
     </form>
   );
 }

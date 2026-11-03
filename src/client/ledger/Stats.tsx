@@ -18,7 +18,7 @@ import {
 } from '../../shared/ledger';
 
 /**
- * Totals per tag for one axis (구분 or a select field) and one nature. Choosing a row asks the
+ * Totals per tag for one axis (유형 or a select field) and one nature. Choosing a row asks the
  * room to show those records. Same-named options merge across ledgers.
  */
 export function StatsBreakdown({

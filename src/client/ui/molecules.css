@@ -205,6 +205,10 @@
   gap: 2px;
   min-width: 0;
 }
+.ui-list-row-footer {
+  margin-top: calc(-1 * var(--brand-space-2));
+  padding: 0 var(--brand-space-4) var(--brand-space-3);
+}
 .ui-list-row-title {
   font-weight: var(--brand-font-weight-semibold);
   overflow-wrap: anywhere;

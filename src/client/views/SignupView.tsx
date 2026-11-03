@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { AvatarPicker } from '../ledger';
+import { AvatarPicker, type PhotoChoice } from '../ledger';
 import { Button, Checkbox, Field, Stack, TextField } from '../ui';
 import { HANDLE_RULE, handleProblem, type Profile } from '../../shared/people';
 
 /**
- * First sign-in: an ID, a display name and an Uga picture, then the terms. Only these three
- * are shown to others. Opened from a signup link, it says who invited.
+ * First sign-in: an ID, a display name and a picture (a photo, or an Uga picture by default),
+ * then the terms. Only these three are shown to others. Opened from a signup link, it says who invited.
  */
 export function SignupView({
   email,
@@ -22,11 +22,13 @@ export function SignupView({
   /** The server's answer when this ID is already used. */
   takenHandle?: string;
   busy?: boolean;
-  onSubmit(profile: Pick<Profile, 'handle' | 'name' | 'avatar'>): void;
+  /** `photo` is the chosen file for the server to re-encode; without it the Uga picture is used. */
+  onSubmit(profile: Pick<Profile, 'handle' | 'name' | 'avatar'> & { photo?: File }): void;
 }) {
   const [handle, setHandle] = useState('');
   const [name, setName] = useState(suggestedName);
   const [avatar, setAvatar] = useState('happy');
+  const [photo, setPhoto] = useState<PhotoChoice | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [tried, setTried] = useState(false);
   const handleError =
@@ -42,7 +44,12 @@ export function SignupView({
         {invitedBy && (
           <p className="view-note">{invitedBy.name}님의 초대예요. 가입하면 바로 친구가 돼요.</p>
         )}
-        <AvatarPicker value={avatar} onValueChange={setAvatar} />
+        <AvatarPicker
+          value={avatar}
+          onValueChange={setAvatar}
+          photo={photo?.url}
+          onPhotoChange={setPhoto}
+        />
         <TextField
           label="아이디"
           value={handle}
@@ -77,7 +84,7 @@ export function SignupView({
           onClick={() => {
             setTried(true);
             if (!handleError && !nameError && agreed)
-              onSubmit({ handle, name: name.trim(), avatar });
+              onSubmit({ handle, name: name.trim(), avatar, photo: photo?.file });
           }}
         >
           시작하기

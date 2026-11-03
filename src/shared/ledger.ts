@@ -3,16 +3,23 @@
  * Product rules live in docs/ledger-baseline.md.
  */
 
+import type { Asset } from './assets';
+import type { Friend, LedgerMember, RoomInvite, SignupLink } from './people';
+
 /** Globally unique id. */
 export type Id = string;
 /** Calendar date `YYYY-MM-DD` in the household's local time. */
 export type IsoDate = string;
 
 export type TagOption = { id: Id; name: string; color: string; archived?: boolean };
-/** A 구분 option. Its nature decides which total the amount joins. */
-export type KindOption = TagOption & { nature: 'income' | 'expense' };
+/** A 유형 option, managed like a tag. Its nature decides which total the amount joins. */
+export type KindOption = TagOption & {
+  nature: 'income' | 'expense';
+  /** 수입 and 지출 every ledger starts with: renamable, never archived. */
+  base?: boolean;
+};
 
-/** A ledger's own fields; array order is display order. 날짜·구분·내용·금액 are fixed. */
+/** A ledger's own fields; array order is display order. 유형·금액·내용·날짜 are fixed. */
 export type FieldDef =
   | { id: Id; name: string; type: 'text'; hidden?: boolean }
   | {
@@ -48,6 +55,9 @@ export type Ledger = {
 /** Text fields hold a string; select fields hold option ids (at most one for `select`). */
 export type FieldValue = string | Id[];
 
+/** Uga sticker reactions: sticker id to the members who reacted, oldest first. */
+export type Reactions = { [reaction: string]: Id[] };
+
 export type LedgerRecord = {
   id: Id;
   ledgerId: Id;
@@ -60,15 +70,52 @@ export type LedgerRecord = {
   createdBy: Id;
   /** ISO timestamp. */
   createdAt: string;
+  reactions?: Reactions;
+  /** Kept out of the linked asset's balance (자산에 반영 off). */
+  notInAsset?: true;
 };
 
 export type Member = { id: Id; name: string };
 
+/** A line in a ledger's 대화: text or one Uga sticker, from a member. */
+export type ChatMessage = {
+  id: Id;
+  ledgerId: Id;
+  authorId: Id;
+  text?: string;
+  sticker?: string;
+  /** ISO timestamp. */
+  createdAt: string;
+};
+
 /** What the API returns after every read or change: the user and only what they may see. */
 export type AppData = {
-  user: Member & { handle: string };
+  user: Member & {
+    handle: string;
+    avatar?: string;
+    /** This app's URL of the user's photo, when there is one. */
+    photo?: string;
+    /** The signed-in account's email, shown on 프로필. */
+    email?: string;
+    /** The first day the handle may change again (30 days after the last change). */
+    handleChangeableFrom?: IsoDate;
+  };
   ledgers: Ledger[];
   records: LedgerRecord[];
+  /** Everyone who wrote or reacted to a visible record, for showing who reacted. */
+  members?: Member[];
+  /** The user's own assets (자산 tab). */
+  assets?: Asset[];
+  /** Recent 대화 of the ledgers the user can see, oldest first. */
+  messages?: ChatMessage[];
+  friends?: Friend[];
+  /** Ledger invitations waiting for this user's answer. */
+  invites?: RoomInvite[];
+  signupLink?: SignupLink;
+  /** Members (and pending invitees) of each ledger that holds records the user belongs to. */
+  ledgerMembers?: { [ledgerId: Id]: LedgerMember[] };
+  /** Records others added since the user last opened each room. */
+  unseen?: { [ledgerId: Id]: number };
 };
 
 export type Totals = { income: number; expense: number; balance: number };
@@ -79,7 +126,7 @@ export function recordProblems(ledger: Ledger, record: LedgerRecord): string[] {
   if (record.ledgerId !== ledger.id) problems.push('다른 가계부의 내역');
   if (isParent(ledger)) problems.push('상위 가계부에는 내역을 둘 수 없음');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(record.date)) problems.push('날짜');
-  if (!ledger.kinds.some((kind) => kind.id === record.kindId)) problems.push('구분');
+  if (!ledger.kinds.some((kind) => kind.id === record.kindId)) problems.push('유형');
   if (!record.title.trim()) problems.push('내용');
   if (!Number.isSafeInteger(record.amount) || record.amount <= 0) problems.push('금액');
   for (const [fieldId, value] of Object.entries(record.values)) {
@@ -161,14 +208,14 @@ export function ledgerForDate(ledgers: Ledger[], date: IsoDate): Ledger | undefi
   );
 }
 
-/** Stats axis name for the fixed 구분 field. */
-export const KIND_AXIS = '구분';
+/** Stats and filter axis name for the fixed 유형 field. */
+export const KIND_AXIS = '유형';
 
 /** Stats axis comparing the ledgers of a group, e.g. 11월 vs 12월. */
 export const LEDGER_AXIS = '가계부';
 const LEDGER_COLORS = ['#D28C70', '#64866F', '#6C89A4', '#9176A6', '#E8AD3F', '#B9A27A'];
 
-/** Axes a stats view can group by: 구분, 가계부 for several ledgers, then select fields by name. */
+/** Axes a stats view can group by: 유형, 가계부 for several ledgers, then select fields by name. */
 export function statAxes(ledgers: Ledger[]): string[] {
   const names = ledgers.flatMap((ledger) =>
     ledger.fields
@@ -178,7 +225,7 @@ export function statAxes(ledgers: Ledger[]): string[] {
   return [KIND_AXIS, ...(ledgers.length > 1 ? [LEDGER_AXIS] : []), ...new Set(names)];
 }
 
-/** The most detailed single-select field (most options), such as 카테고리; else 구분. */
+/** The most detailed single-select field (most options), such as 카테고리; else 유형. */
 export function defaultStatAxis(ledgers: Ledger[]): string {
   let best: { name: string; options: number } | undefined;
   for (const ledger of ledgers)
@@ -236,8 +283,10 @@ export function breakdown(
 export type RecordFilter = {
   /** Matches 내용 and text field values, ignoring case. */
   query?: string;
-  nature?: KindOption['nature'];
-  /** Every condition must match: an option name on an axis, as produced by breakdown(). */
+  /**
+   * Tag conditions: an option name on an axis (유형, 가계부 or a select field). Names on the same
+   * axis match if any of them does; different axes must all match.
+   */
   options?: { axis: string; name: string }[];
 };
 
@@ -252,7 +301,6 @@ export function filterRecords(
     const ledger = ledgers.find((item) => item.id === record.ledgerId);
     const kind = ledger?.kinds.find((item) => item.id === record.kindId);
     if (!ledger || !kind) return false;
-    if (filter.nature && kind.nature !== filter.nature) return false;
     if (query) {
       const texts = [
         record.title,
@@ -265,16 +313,56 @@ export function filterRecords(
       )
         return false;
     }
-    return (filter.options ?? []).every(({ axis, name }) => {
-      if (axis === KIND_AXIS) return kind.name === name;
-      if (axis === LEDGER_AXIS) return ledger.name === name;
-      const field = ledger.fields.find((item) => item.name === axis);
-      if (!field || field.type === 'text') return false;
-      const value = record.values[field.id];
-      const chosen = Array.isArray(value)
-        ? field.options.filter((option) => value.includes(option.id)).map((option) => option.name)
-        : [];
-      return chosen.length ? chosen.includes(name) : (field.emptyLabel ?? '미지정') === name;
-    });
+    const byAxis = new Map<string, string[]>();
+    for (const { axis, name } of filter.options ?? [])
+      byAxis.set(axis, [...(byAxis.get(axis) ?? []), name]);
+    return [...byAxis].every(([axis, names]) =>
+      names.some((name) => {
+        if (axis === KIND_AXIS) return kind.name === name;
+        if (axis === LEDGER_AXIS) return ledger.name === name;
+        const field = ledger.fields.find((item) => item.name === axis);
+        if (!field || field.type === 'text') return false;
+        const value = record.values[field.id];
+        const chosen = Array.isArray(value)
+          ? field.options.filter((option) => value.includes(option.id)).map((option) => option.name)
+          : [];
+        return chosen.length ? chosen.includes(name) : (field.emptyLabel ?? '미지정') === name;
+      }),
+    );
   });
+}
+
+export type TagAxis = { axis: string; options: { name: string; color: string }[] };
+
+/**
+ * The tags a room's records can be filtered by: 유형, 가계부 for several ledgers, then each
+ * shown select field, with options merged by name across ledgers (archived ones left out).
+ */
+export function tagAxes(ledgers: Ledger[]): TagAxis[] {
+  const merge = (options: TagOption[]) =>
+    [
+      ...new Map(
+        options.filter((option) => !option.archived).map((option) => [option.name, option]),
+      ).values(),
+    ].map(({ name, color }) => ({ name, color }));
+  const fields = new Map<string, TagOption[]>();
+  for (const ledger of ledgers)
+    for (const field of ledger.fields)
+      if (field.type !== 'text' && !field.hidden)
+        fields.set(field.name, [...(fields.get(field.name) ?? []), ...field.options]);
+  return [
+    { axis: KIND_AXIS, options: merge(ledgers.flatMap((ledger) => ledger.kinds)) },
+    ...(ledgers.length > 1
+      ? [
+          {
+            axis: LEDGER_AXIS,
+            options: ledgers.map((ledger, index) => ({
+              name: ledger.name,
+              color: LEDGER_COLORS[index % LEDGER_COLORS.length],
+            })),
+          },
+        ]
+      : []),
+    ...[...fields].map(([axis, options]) => ({ axis, options: merge(options) })),
+  ].filter((item) => item.options.length > 0);
 }

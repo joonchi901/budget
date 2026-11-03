@@ -1,8 +1,19 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
-import { LedgerRoomView } from '../../client/views';
-import { FIXTURE_TODAY, december, ledgers, november, records, travel, year2026 } from '../fixtures';
+import { ChatThread } from '../../client/ledger';
+import { LedgerRoomView, LedgerSettingsView } from '../../client/views';
+import {
+  FIXTURE_TODAY,
+  december,
+  ledgers,
+  members,
+  messages,
+  november,
+  records,
+  travel,
+  year2026,
+} from '../fixtures';
 
 const meta = {
   title: '06 Views · 화면/가계부 방',
@@ -14,7 +25,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '가계부 하나의 방. 상단에 방 이름·기간·요약, 하단에 표·캘린더·통계 전환과 내역 추가가 있습니다. 하위 가계부가 있으면(상위 가계부) 아래 모든 내역을 한 번씩 모아 원본 가계부를 표시하고, 캘린더는 월 단위로 넘기며, 하위 보기에서 각 하위 방으로 들어갑니다. 통계 항목을 누르면 그 조건의 표로 이동합니다.',
+          '가계부 하나의 방. 상단에 방 이름·기간·요약, 하단에 내역·통계·설정 탭이 있습니다. 내역 탭은 위쪽 조회 도구 옆에서 표/캘린더를 바꾸고, 탭 막대 바로 위에 가로 전체 내역 추가 버튼이 늘 보입니다. 설정은 탭 안에서 바로 고칩니다. 하위 가계부가 있으면(상위 가계부) 아래 모든 내역을 한 번씩 모아 원본 가계부를 표시하고, 캘린더는 월 단위로 넘기며, 하위 보기에서 각 하위 방으로 들어갑니다. 통계 항목을 누르면 그 조건의 표로 이동합니다. 내역마다 우가 스티커로 반응할 수 있습니다. 내역을 적는 가계부에는 설정 왼쪽에 대화 탭이 있습니다.',
       },
     },
   },
@@ -26,7 +37,7 @@ const meta = {
     onBack: () => {},
     onAddRecord: () => {},
     onOpenRecord: () => {},
-    onOpenSettings: () => {},
+    settings: null,
     onCopy: () => {},
     onOpenLedger: () => {},
   },
@@ -38,7 +49,29 @@ const meta = {
           {...args}
           onAddRecord={(date) => setLog(`추가: ${date ?? '오늘'}`)}
           onOpenRecord={(record) => setLog(`열기: ${record.title}`)}
-          onOpenSettings={() => setLog('설정')}
+          reacting={{
+            memberId: 'u1',
+            members,
+            onToggleReaction: (record, reaction) => setLog(`반응: ${record.title} ${reaction}`),
+          }}
+          settings={
+            <LedgerSettingsView
+              ledger={args.ledger}
+              ledgers={args.ledgers}
+              onSave={({ ledger }) => setLog(`설정 저장: ${ledger.name}`)}
+              onArchive={() => setLog('보관')}
+            />
+          }
+          chat={
+            <ChatThread
+              messages={messages.filter((message) => message.ledgerId === args.ledger.id)}
+              memberId="u1"
+              members={members}
+              onSend={(content) =>
+                setLog(`대화: ${'text' in content ? content.text : content.sticker}`)
+              }
+            />
+          }
           onCopy={() => setLog('복사')}
           onOpenLedger={(ledger) => setLog(`하위: ${ledger.name}`)}
           onOpenMembers={() => setLog('멤버')}
@@ -63,6 +96,21 @@ export const Table: Story = {
     await userEvent.click(c.getByRole('button', { name: '조회 조건' }));
     await userEvent.click(c.getByRole('switch', { name: '넓게 보기' }));
     await expect(c.getByRole('region', { name: '내역 표' })).toBeVisible();
+    await expect(c.getByRole('button', { name: '표' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(c.getByRole('button', { name: '내역 추가' })).toBeVisible();
+  },
+};
+export const Settings: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await userEvent.click(c.getByRole('button', { name: '설정' }));
+    await expect(c.queryByRole('button', { name: '내역 추가' })).toBeNull();
+    await expect(c.getByRole('button', { name: '저장' })).toBeDisabled();
+    const name = c.getByRole('textbox', { name: /^이름/ });
+    await userEvent.clear(name);
+    await userEvent.type(name, '11월 생활비');
+    await userEvent.click(c.getByRole('button', { name: '저장' }));
+    await expect(c.getByRole('status')).toHaveTextContent('설정 저장: 11월 생활비');
   },
 };
 export const CalendarDay: Story = {
@@ -82,8 +130,31 @@ export const StatsToTable: Story = {
     await userEvent.click(c.getByRole('button', { name: '통계' }));
     await userEvent.click(c.getByRole('button', { name: /^용돈/ }));
     await expect(c.getByRole('button', { name: '카테고리: 용돈 필터 해제' })).toBeVisible();
-    await expect(c.getByRole('button', { name: '지출만 필터 해제' })).toBeVisible();
+    // 통계의 지출 쪽에서 골랐으니 지출 유형 태그가 함께 걸려요.
+    await expect(c.getByRole('button', { name: '유형: 지출 필터 해제' })).toBeVisible();
     await expect(c.getAllByRole('heading', { level: 2 })[0]).toHaveTextContent('11월 1일');
+    // The 유형 tag beside 내용 is a little shorter than the title line.
+    const title = canvasElement.querySelector('.ui-list-row-title')!;
+    const tag = title.querySelector('.tag-badge')!;
+    await expect(tag.getBoundingClientRect().height).toBeLessThan(
+      parseFloat(getComputedStyle(title).lineHeight),
+    );
+  },
+};
+export const Reactions: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await userEvent.click(c.getByRole('button', { name: '빵 터짐 1명' }));
+    await expect(c.getByRole('status')).toHaveTextContent('반응: 프레드피자_쿠팡이츠 cracking-up');
+  },
+};
+export const Chat: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await userEvent.click(c.getByRole('button', { name: '대화' }));
+    await expect(c.getByText('11월 고정지출 다 넣었어')).toBeVisible();
+    await userEvent.type(c.getByRole('textbox', { name: '메시지' }), '확인했어{Enter}');
+    await expect(c.getByRole('status')).toHaveTextContent('대화: 확인했어');
   },
 };
 export const Empty: Story = { args: { ledger: december } };

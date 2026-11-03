@@ -1,8 +1,9 @@
 import { useId, useState } from 'react';
-import { SlidersHorizontal } from 'lucide-react';
+import { CalendarDays, List as ListIcon, SlidersHorizontal } from 'lucide-react';
 import {
   Amount,
   Button,
+  ChipSelect,
   Empty,
   Field,
   FilterChip,
@@ -17,10 +18,17 @@ import {
   TableScroll,
   Tag,
 } from '../ui';
-import { totals, type Ledger, type LedgerRecord, type TagOption } from '../../shared/ledger';
+import {
+  totals,
+  type Ledger,
+  type LedgerRecord,
+  type TagAxis,
+  type TagOption,
+} from '../../shared/ledger';
 import { dayLabel, shortDate } from './format';
+import { RecordReactions, type ReactionContext } from './Reactions';
 
-// The amount's sign and color already say 수입/지출; only other kind names, like 고정지출, add meaning.
+// The amount's sign and color already say 수입/지출; only other 유형 tags, like 고정지출, add meaning.
 const natureName = { income: '수입', expense: '지출' };
 
 type RecordContext = {
@@ -28,6 +36,8 @@ type RecordContext = {
   /** Show the source ledger name, for group rooms. */
   showLedger?: boolean;
   onOpenRecord?(record: LedgerRecord): void;
+  /** Lets members react to records with Uga stickers. */
+  reacting?: ReactionContext;
 };
 
 function describe(record: LedgerRecord, ledgers: Ledger[]) {
@@ -46,21 +56,26 @@ function describe(record: LedgerRecord, ledgers: Ledger[]) {
   return { ledger, kind, tags, texts };
 }
 
-/** One record: 내용, 구분 and tags, memo, and the signed amount. */
+/** One record: 내용 with its 유형 tag beside it, then tags and memo, and the signed amount. */
 export function RecordRow({
   record,
   ledgers,
   showLedger,
   onOpenRecord,
+  reacting,
 }: RecordContext & { record: LedgerRecord }) {
   const { ledger, kind, tags, texts } = describe(record, ledgers);
   return (
     <ListRow
-      title={record.title}
+      title={
+        <span className="ledger-record-title">
+          {record.title}
+          {kind.name !== natureName[kind.nature] && <Tag name={kind.name} color={kind.color} />}
+        </span>
+      }
       description={
         <span className="ledger-record-meta">
           {showLedger && <span className="ledger-record-source">{ledger.name}</span>}
-          {kind.name !== natureName[kind.nature] && <span>{kind.name}</span>}
           {tags.map((tag) => (
             <Tag key={tag.id} name={tag.name} color={tag.color} archived={tag.archived} />
           ))}
@@ -73,6 +88,16 @@ export function RecordRow({
       }
       trailing={<Amount value={record.amount} tone={kind.nature} signed />}
       onClick={onOpenRecord && (() => onOpenRecord(record))}
+      footer={
+        reacting && (
+          <RecordReactions
+            reactions={record.reactions}
+            memberId={reacting.memberId}
+            members={reacting.members}
+            onToggle={(reaction) => reacting.onToggleReaction(record, reaction)}
+          />
+        )
+      }
     />
   );
 }
@@ -160,7 +185,7 @@ export function RecordTable({
           <tr>
             <th scope="col">날짜</th>
             {showLedger && <th scope="col">가계부</th>}
-            <th scope="col">구분</th>
+            <th scope="col">유형</th>
             <th scope="col">내용</th>
             <th scope="col">금액</th>
             {columns.map((name) => (
@@ -177,7 +202,9 @@ export function RecordTable({
               <tr key={record.id}>
                 <td>{shortDate(record.date)}</td>
                 {showLedger && <td>{ledger.name}</td>}
-                <td>{kind.name}</td>
+                <td>
+                  <Tag name={kind.name} color={kind.color} />
+                </td>
                 <th scope="row">
                   {onOpenRecord ? (
                     <Button variant="plain" onClick={() => onOpenRecord(record)}>
@@ -217,32 +244,40 @@ export function RecordTable({
   );
 }
 
-export type NatureFilter = 'all' | 'income' | 'expense';
-
 /**
- * One row above the records: search and a 조회 조건 button. The panel holds 수입/지출 and the
- * wide table switch; applied conditions stay visible as removable chips.
+ * One row above the records: search, a 조회 조건 button and, in a room, the 표/캘린더 icons. The
+ * panel holds tag filters (유형 covers 수입/지출) and the wide table switch; applied conditions
+ * stay visible as removable chips.
  */
+export type RecordDisplay = 'list' | 'calendar';
+export type TagCondition = { axis: string; name: string };
+
 export function RecordFilterBar({
   query,
   onQueryChange,
-  nature,
-  onNatureChange,
   wide,
   onWideChange,
   conditions = [],
   onRemoveCondition,
+  tagAxes = [],
+  onConditionsChange,
+  display = 'list',
+  onDisplayChange,
 }: {
   query: string;
   onQueryChange(query: string): void;
-  nature: NatureFilter;
-  onNatureChange(nature: NatureFilter): void;
   /** Wide table instead of the day list. */
   wide: boolean;
   onWideChange(wide: boolean): void;
-  /** Applied option conditions shown as "카테고리: 장보기". */
-  conditions?: string[];
-  onRemoveCondition?(condition: string): void;
+  /** Applied tag conditions, shown as "카테고리: 장보기" chips. */
+  conditions?: TagCondition[];
+  onRemoveCondition?(condition: TagCondition): void;
+  /** Tags offered in the panel; picking several on one axis shows records with any of them. */
+  tagAxes?: TagAxis[];
+  onConditionsChange?(axis: string, names: string[]): void;
+  /** 표 or 캘린더; with `onDisplayChange` the toggle sits beside the filter button. */
+  display?: RecordDisplay;
+  onDisplayChange?(display: RecordDisplay): void;
 }) {
   const [open, setOpen] = useState(false);
   const panel = useId();
@@ -259,42 +294,65 @@ export function RecordFilterBar({
           aria-label="조회 조건"
           aria-expanded={open}
           aria-controls={panel}
-          data-active={nature !== 'all' || wide || undefined}
+          data-active={wide || conditions.length > 0 || undefined}
           onClick={() => setOpen(!open)}
         >
           <SlidersHorizontal size={20} />
         </IconButton>
+        {onDisplayChange && (
+          <SegmentedControl<RecordDisplay>
+            aria-label="내역 보기 방식"
+            className="ledger-display-toggle"
+            value={display}
+            onValueChange={onDisplayChange}
+            options={[
+              {
+                value: 'list',
+                label: (
+                  <>
+                    <ListIcon size={20} />
+                    <span className="sr-only">표</span>
+                  </>
+                ),
+              },
+              {
+                value: 'calendar',
+                label: (
+                  <>
+                    <CalendarDays size={20} />
+                    <span className="sr-only">캘린더</span>
+                  </>
+                ),
+              },
+            ]}
+          />
+        )}
       </div>
       {open && (
         <Stack id={panel} gap={3} className="ledger-filter-panel">
-          <SegmentedControl
-            aria-label="수입·지출 보기"
-            value={nature}
-            onValueChange={onNatureChange}
-            options={[
-              { value: 'all', label: '전체' },
-              { value: 'income', label: '수입' },
-              { value: 'expense', label: '지출' },
-            ]}
-          />
+          {onConditionsChange &&
+            tagAxes.map(({ axis, options }) => (
+              <ChipSelect
+                key={axis}
+                label={axis}
+                multiple
+                options={options.map((option) => ({ id: option.name, ...option }))}
+                value={conditions.filter((item) => item.axis === axis).map((item) => item.name)}
+                onValueChange={(names) => onConditionsChange(axis, names)}
+              />
+            ))}
           <Field>
             <Switch checked={wide} onChange={(event) => onWideChange(event.target.checked)} />
             넓게 보기
           </Field>
         </Stack>
       )}
-      {(nature !== 'all' || conditions.length > 0) && (
+      {conditions.length > 0 && (
         <Inline gap={2}>
-          {nature !== 'all' && (
-            <FilterChip
-              label={nature === 'income' ? '수입만' : '지출만'}
-              onRemove={() => onNatureChange('all')}
-            />
-          )}
           {conditions.map((condition) => (
             <FilterChip
-              key={condition}
-              label={condition}
+              key={`${condition.axis}:${condition.name}`}
+              label={`${condition.axis}: ${condition.name}`}
               onRemove={() => onRemoveCondition?.(condition)}
             />
           ))}

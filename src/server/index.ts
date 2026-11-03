@@ -3,7 +3,8 @@
  * their current memberships first; the client never decides what may be seen or changed.
  * Each change answers with the user's whole data so the client simply replaces its state.
  */
-import { UGA_ICON_NAMES } from '../client/brand/icon-names';
+import { UGA_ICON_NAMES, UGA_REACTIONS } from '../client/brand/icon-names';
+import { ASSET_KINDS, assetProblems, type Asset, type AssetKind } from '../shared/assets';
 import {
   canNest,
   recordProblems,
@@ -15,46 +16,42 @@ import {
   type LedgerRecord,
   type TagOption,
 } from '../shared/ledger';
-
-interface Env {
-  DB: D1Database;
-  /** "true" only in .dev.vars: loopback requests act as the dev account without signing in. */
-  DEV_AUTH?: string;
-}
-
-type Role = 'owner' | 'editor' | 'viewer';
-type Loaded = AppData & { roles: Map<Id, Role> };
-
-class ApiError extends Error {
-  constructor(
-    public status: number,
-    public code: string,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-function fail(status: number, code: string, message: string): never {
-  throw new ApiError(status, code, message);
-}
-
-function invalid(what: string): never {
-  fail(400, 'INVALID_INPUT', `${what} 값이 올바르지 않아요.`);
-}
-
-const json = (data: unknown, status = 200) =>
-  new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff',
-    },
-  });
+import {
+  ApiError,
+  fail,
+  invalid,
+  isDate,
+  isFlag,
+  isId,
+  isText,
+  json,
+  list,
+  raw,
+  unique,
+  type Env,
+  type Loaded,
+  type Role,
+} from './common';
+import {
+  acceptInvite,
+  declineInvite,
+  deletePhoto,
+  findPerson,
+  friendAction,
+  getPhoto,
+  inviteMembers,
+  loadPeople,
+  loadUser,
+  markSeen,
+  putPhoto,
+  putProfile,
+  removeMember,
+  renewSignupLink,
+  setMemberRole,
+} from './people';
 
 const LOOPBACK = ['localhost', '127.0.0.1', '[::1]'];
-const DEV_USER = { id: 'dev', handle: 'dev', name: '개발자' };
+const DEV_USER = { id: 'dev', handle: 'dev', name: '개발자', email: 'dev@localhost' };
 const devAuth = (request: Request, env: Env) =>
   env.DEV_AUTH === 'true' && LOOPBACK.includes(new URL(request.url).hostname);
 
@@ -62,11 +59,14 @@ const devAuth = (request: Request, env: Env) =>
 async function signedIn(request: Request, env: Env): Promise<AppData['user']> {
   if (!devAuth(request, env)) fail(401, 'LOGIN_REQUIRED', '로그인이 필요해요.');
   await env.DB.prepare(
-    'INSERT OR IGNORE INTO users (id, handle, name, created_at) VALUES (?, ?, ?, ?)',
+    'INSERT OR IGNORE INTO users (id, handle, name, created_at, email) VALUES (?, ?, ?, ?, ?)',
   )
-    .bind(DEV_USER.id, DEV_USER.handle, DEV_USER.name, new Date().toISOString())
+    .bind(DEV_USER.id, DEV_USER.handle, DEV_USER.name, new Date().toISOString(), DEV_USER.email)
     .run();
-  return DEV_USER;
+  await env.DB.prepare('UPDATE users SET email = ? WHERE id = ? AND email IS NULL')
+    .bind(DEV_USER.email, DEV_USER.id)
+    .run();
+  return loadUser(env.DB, DEV_USER.id);
 }
 
 /** Changes must come from this app's page (§8.7); the dev client runs on another loopback port. */
@@ -98,33 +98,86 @@ type RecordRow = {
   field_values: string;
   created_by: Id;
   created_at: string;
+  not_in_asset: number;
+};
+type MessageRow = {
+  id: Id;
+  ledger_id: Id;
+  author_id: Id;
+  text: string | null;
+  sticker: string | null;
+  created_at: string;
+};
+type AssetRow = {
+  id: Id;
+  name: string;
+  kind: AssetKind;
+  balance: number;
+  since: string;
+  ledger_ids: string;
 };
 
 // shortcut: loads every visible ledger and record at once; page records by period once data grows.
 async function load(db: D1Database, user: AppData['user']): Promise<Loaded> {
-  const [ledgerRows, edgeRows, recordRows] = await Promise.all([
-    db
-      .prepare(
-        'SELECT l.*, m.role FROM ledgers l JOIN ledger_members m ON m.ledger_id = l.id WHERE m.user_id = ?',
-      )
-      .bind(user.id)
-      .all<LedgerRow>(),
-    // A parent belongs to its owner alone, so only the owner sees its links (§8.1).
-    db
-      .prepare(
-        "SELECT c.parent_id, c.child_id FROM ledger_children c JOIN ledger_members m ON m.ledger_id = c.parent_id AND m.role = 'owner' WHERE m.user_id = ? ORDER BY c.position",
-      )
-      .bind(user.id)
-      .all<{ parent_id: Id; child_id: Id }>(),
-    db
-      .prepare(
-        'SELECT r.* FROM records r JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ? ORDER BY r.date, r.created_at',
-      )
-      .bind(user.id)
-      .all<RecordRow>(),
-  ]);
+  const [ledgerRows, edgeRows, recordRows, reactionRows, memberRows, assetRows, messageRows] =
+    await Promise.all([
+      db
+        .prepare(
+          'SELECT l.*, m.role FROM ledgers l JOIN ledger_members m ON m.ledger_id = l.id WHERE m.user_id = ?',
+        )
+        .bind(user.id)
+        .all<LedgerRow>(),
+      // A parent belongs to its owner alone, so only the owner sees its links (§8.1).
+      db
+        .prepare(
+          "SELECT c.parent_id, c.child_id FROM ledger_children c JOIN ledger_members m ON m.ledger_id = c.parent_id AND m.role = 'owner' WHERE m.user_id = ? ORDER BY c.position",
+        )
+        .bind(user.id)
+        .all<{ parent_id: Id; child_id: Id }>(),
+      db
+        .prepare(
+          'SELECT r.* FROM records r JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ? ORDER BY r.date, r.created_at',
+        )
+        .bind(user.id)
+        .all<RecordRow>(),
+      db
+        .prepare(
+          'SELECT x.record_id, x.reaction, x.user_id FROM record_reactions x JOIN records r ON r.id = x.record_id JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ? ORDER BY x.created_at',
+        )
+        .bind(user.id)
+        .all<{ record_id: Id; reaction: string; user_id: Id }>(),
+      // People who share a ledger with the user, or wrote or reacted to a visible record.
+      db
+        .prepare(
+          `SELECT id, name FROM users WHERE id IN (
+           SELECT o.user_id FROM ledger_members o JOIN ledger_members m ON m.ledger_id = o.ledger_id WHERE m.user_id = ?1
+           UNION SELECT r.created_by FROM records r JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ?1
+           UNION SELECT x.user_id FROM record_reactions x JOIN records r ON r.id = x.record_id
+             JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ?1)`,
+        )
+        .bind(user.id)
+        .all<{ id: Id; name: string }>(),
+      db
+        .prepare('SELECT * FROM assets WHERE owner_id = ? ORDER BY created_at')
+        .bind(user.id)
+        .all<AssetRow>(),
+      // shortcut: the latest 500 messages across rooms; page per room once 대화 grows.
+      db
+        .prepare(
+          `SELECT * FROM (SELECT x.* FROM messages x JOIN ledger_members m ON m.ledger_id = x.ledger_id
+             WHERE m.user_id = ? ORDER BY x.created_at DESC LIMIT 500) ORDER BY created_at`,
+        )
+        .bind(user.id)
+        .all<MessageRow>(),
+    ]);
+  const reactions = new Map<Id, Record<string, Id[]>>();
+  for (const row of reactionRows.results) {
+    const byReaction = reactions.get(row.record_id) ?? {};
+    byReaction[row.reaction] = [...(byReaction[row.reaction] ?? []), row.user_id];
+    reactions.set(row.record_id, byReaction);
+  }
   const visible = new Set(ledgerRows.results.map((row) => row.id));
-  return {
+  const loaded: Loaded = {
     user,
     roles: new Map(ledgerRows.results.map((row) => [row.id, row.role])),
     ledgers: ledgerRows.results.map((row) => ({
@@ -150,24 +203,29 @@ async function load(db: D1Database, user: AppData['user']): Promise<Loaded> {
       values: JSON.parse(row.field_values),
       createdBy: row.created_by,
       createdAt: row.created_at,
+      ...(reactions.has(row.id) ? { reactions: reactions.get(row.id) } : {}),
+      ...(row.not_in_asset ? { notInAsset: true as const } : {}),
+    })),
+    members: memberRows.results,
+    assets: assetRows.results.map((row) => ({
+      id: row.id,
+      name: row.name,
+      kind: row.kind,
+      balance: row.balance,
+      since: row.since,
+      ledgerIds: JSON.parse(row.ledger_ids),
+    })),
+    messages: messageRows.results.map((row) => ({
+      id: row.id,
+      ledgerId: row.ledger_id,
+      authorId: row.author_id,
+      ...(row.text ? { text: row.text } : {}),
+      ...(row.sticker ? { sticker: row.sticker } : {}),
+      createdAt: row.created_at,
     })),
   };
+  return { ...loaded, ...(await loadPeople(db, loaded)) };
 }
-
-type Raw = Record<string, unknown>;
-const raw = (value: unknown): Raw =>
-  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Raw) : {};
-const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : invalid('목록'));
-const isId = (value: unknown): value is Id =>
-  typeof value === 'string' && /^[\w-]{1,64}$/.test(value);
-const isText = (value: unknown, max: number): value is string =>
-  typeof value === 'string' && value.trim() !== '' && value.length <= max;
-const isDate = (value: unknown): value is string =>
-  typeof value === 'string' &&
-  /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-  !Number.isNaN(Date.parse(value));
-const isFlag = (value: unknown) => value === undefined || typeof value === 'boolean';
-const unique = (ids: Id[]) => new Set(ids).size === ids.length;
 
 function cleanOption(input: unknown): TagOption {
   const value = raw(input);
@@ -202,9 +260,13 @@ function cleanLedger(input: unknown): Ledger {
   )
     invalid('가계부');
   const kinds = list(value.kinds).map((item): KindOption => {
-    const nature = raw(item).nature;
-    if (nature !== 'income' && nature !== 'expense') invalid('구분');
-    return { ...cleanOption(item), nature };
+    const { nature, base } = raw(item);
+    if (nature !== 'income' && nature !== 'expense') invalid('유형');
+    if (!isFlag(base)) invalid('유형');
+    const kind: KindOption = { ...cleanOption(item), nature, ...(base ? { base: true } : {}) };
+    // 수입 and 지출 are always there to choose; they can be renamed but never archived.
+    if (kind.base && kind.archived) invalid('기본 유형');
+    return kind;
   });
   const fields = list(value.fields).map((item): FieldDef => {
     const field = raw(item);
@@ -253,6 +315,7 @@ function cleanRecord(input: unknown, ledger: Ledger): LedgerRecord {
     !isDate(value.date) ||
     typeof value.amount !== 'number' ||
     value.amount > 1e12 ||
+    !isFlag(value.notInAsset) ||
     Object.values(values).some((item) => typeof item === 'string' && item.length > 500)
   )
     invalid('내역');
@@ -266,6 +329,7 @@ function cleanRecord(input: unknown, ledger: Ledger): LedgerRecord {
     values: values as LedgerRecord['values'],
     createdBy: '',
     createdAt: '',
+    ...(value.notInAsset ? { notInAsset: true } : {}),
   } as LedgerRecord;
   const problems = recordProblems(ledger, record);
   if (problems.length) fail(400, 'INVALID_RECORD', `확인해 주세요: ${problems.join(', ')}`);
@@ -278,10 +342,10 @@ const writable = (data: Loaded, ledgerId: Id) =>
 const insertRecord = (db: D1Database, record: LedgerRecord, userId: Id, now: string) =>
   db
     .prepare(
-      `INSERT INTO records (id, ledger_id, date, kind_id, title, amount, field_values, created_by, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
+      `INSERT INTO records (id, ledger_id, date, kind_id, title, amount, field_values, created_by, created_at, updated_at, not_in_asset)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10)
        ON CONFLICT (id) DO UPDATE SET ledger_id = ?2, date = ?3, kind_id = ?4, title = ?5, amount = ?6,
-         field_values = ?7, updated_at = ?9`,
+         field_values = ?7, updated_at = ?9, not_in_asset = ?10`,
     )
     .bind(
       record.id,
@@ -293,6 +357,7 @@ const insertRecord = (db: D1Database, record: LedgerRecord, userId: Id, now: str
       JSON.stringify(record.values),
       userId,
       now,
+      record.notInAsset ? 1 : 0,
     );
 
 /** Creates or changes a ledger, its links, and optionally the records copied into a new one. */
@@ -315,7 +380,7 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
   if (
     data.records.some((record) => record.ledgerId === id && recordProblems(ledger, record).length)
   )
-    fail(400, 'IN_USE', '쓰고 있는 구분·필드·옵션은 지울 수 없어요. 보관해 주세요.');
+    fail(400, 'IN_USE', '쓰고 있는 유형·필드·옵션은 지울 수 없어요. 보관해 주세요.');
   const copied = (input.records === undefined ? [] : list(input.records)).map((item) =>
     cleanRecord(item, ledger),
   );
@@ -423,17 +488,136 @@ async function deleteRecord(db: D1Database, data: Loaded, id: Id) {
   const before = data.records.find((item) => item.id === id);
   if (!before) fail(404, 'NOT_FOUND', '없는 내역이에요.');
   if (!writable(data, before.ledgerId)) fail(403, 'FORBIDDEN', '이 내역을 지울 권한이 없어요.');
-  await db.prepare('DELETE FROM records WHERE id = ?').bind(id).run();
+  await db.batch([
+    db.prepare('DELETE FROM record_reactions WHERE record_id = ?').bind(id),
+    db.prepare('DELETE FROM records WHERE id = ?').bind(id),
+  ]);
+}
+
+const reactionIds: readonly string[] = UGA_REACTIONS.map((item) => item.id);
+const assetKinds: readonly string[] = ASSET_KINDS.map((item) => item.value);
+
+/** Creates or changes one of the user's own assets; it may follow any ledger the user can see. */
+async function putAsset(db: D1Database, data: Loaded, id: Id, body: unknown) {
+  const value = raw(body);
+  if (
+    value.id !== id ||
+    !isText(value.name, 40) ||
+    !assetKinds.includes(value.kind as string) ||
+    typeof value.balance !== 'number' ||
+    !Number.isSafeInteger(value.balance) ||
+    Math.abs(value.balance) > 1e13 ||
+    !isDate(value.since)
+  )
+    invalid('자산');
+  const ledgerIds = list(value.ledgerIds);
+  if (!ledgerIds.every(isId) || !unique(ledgerIds) || ledgerIds.length > 100)
+    invalid('연동 가계부');
+  if (!ledgerIds.every((ledgerId) => data.roles.has(ledgerId)))
+    fail(403, 'FORBIDDEN', '볼 수 없는 가계부는 연동할 수 없어요.');
+  const asset: Asset = {
+    id,
+    name: value.name.trim(),
+    kind: value.kind as AssetKind,
+    balance: value.balance,
+    since: value.since,
+    ledgerIds,
+  };
+  const problems = assetProblems(asset, data.assets ?? [], data.ledgers);
+  if (problems.length) fail(400, 'INVALID_ASSET', `확인해 주세요: ${problems.join(', ')}`);
+  const owner = await db
+    .prepare('SELECT owner_id FROM assets WHERE id = ?')
+    .bind(id)
+    .first<{ owner_id: Id }>();
+  if (owner && owner.owner_id !== data.user.id) fail(409, 'ID_TAKEN', '이미 있는 자산이에요.');
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO assets (id, owner_id, name, kind, balance, since, ledger_ids, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+       ON CONFLICT (id) DO UPDATE SET name = ?3, kind = ?4, balance = ?5, since = ?6, ledger_ids = ?7, updated_at = ?8`,
+    )
+    .bind(
+      id,
+      data.user.id,
+      asset.name,
+      asset.kind,
+      asset.balance,
+      asset.since,
+      JSON.stringify(ledgerIds),
+      now,
+    )
+    .run();
+}
+
+/** Sends a 대화 line to a ledger the user belongs to: a text of up to 1,000 characters or one sticker. */
+async function putMessage(db: D1Database, data: Loaded, id: Id, body: unknown) {
+  const value = raw(body);
+  const ledgerId = value.ledgerId;
+  const text = typeof value.text === 'string' ? value.text.trim() : undefined;
+  const sticker = value.sticker;
+  if (
+    !isId(ledgerId) ||
+    (text === undefined) === (sticker === undefined) ||
+    (text !== undefined && !isText(text, 1000)) ||
+    (sticker !== undefined && !reactionIds.includes(sticker as string))
+  )
+    invalid('대화');
+  if (!data.roles.has(ledgerId)) fail(403, 'FORBIDDEN', '이 가계부의 대화에 쓸 수 없어요.');
+  if (await db.prepare('SELECT 1 FROM messages WHERE id = ?').bind(id).first())
+    fail(409, 'ID_TAKEN', '이미 보낸 글이에요.');
+  await db
+    .prepare(
+      'INSERT INTO messages (id, ledger_id, author_id, text, sticker, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    )
+    .bind(
+      id,
+      ledgerId,
+      data.user.id,
+      text ?? null,
+      (sticker as string | undefined) ?? null,
+      new Date().toISOString(),
+    )
+    .run();
+}
+
+async function deleteAsset(db: D1Database, data: Loaded, id: Id) {
+  if (!data.assets?.some((asset) => asset.id === id)) fail(404, 'NOT_FOUND', '없는 자산이에요.');
+  await db.prepare('DELETE FROM assets WHERE id = ? AND owner_id = ?').bind(id, data.user.id).run();
+}
+
+/** Adds or removes the user's own reaction; any member who can see the record may react. */
+async function setReaction(db: D1Database, data: Loaded, id: Id, reaction: string, on: boolean) {
+  if (!data.records.some((item) => item.id === id)) fail(404, 'NOT_FOUND', '없는 내역이에요.');
+  if (!reactionIds.includes(reaction)) invalid('반응');
+  await (
+    on
+      ? db
+          .prepare(
+            'INSERT OR IGNORE INTO record_reactions (record_id, reaction, user_id, created_at) VALUES (?, ?, ?, ?)',
+          )
+          .bind(id, reaction, data.user.id, new Date().toISOString())
+      : db
+          .prepare(
+            'DELETE FROM record_reactions WHERE record_id = ? AND reaction = ? AND user_id = ?',
+          )
+          .bind(id, reaction, data.user.id)
+  ).run();
 }
 
 export default {
   async fetch(request, env) {
     try {
       const url = new URL(request.url);
-      const [, api, resource, id, extra] = url.pathname.split('/');
+      const [, api, resource, id, extra, reaction, rest] = url.pathname.split('/');
       if (api !== 'api') fail(404, 'NOT_FOUND', '없는 주소예요.');
       const user = await signedIn(request, env);
       if (request.method !== 'GET') checkOrigin(request, env);
+      // Answers that are not the whole data: a photo, and an exact ID lookup.
+      if (request.method === 'GET' && resource === 'photos' && isId(id) && extra && !reaction)
+        return getPhoto(env.DB, id);
+      if (request.method === 'GET' && resource === 'people' && id === undefined)
+        return findPerson(env.DB, { user } as Loaded, url.searchParams.get('handle') ?? '');
       const data = await load(env.DB, user);
       const target = isId(id) && extra === undefined ? id : undefined;
       if (request.method === 'GET' && resource === 'data' && id === undefined) {
@@ -444,8 +628,76 @@ export default {
         await putRecord(env.DB, data, target, await request.json());
       else if (resource === 'records' && request.method === 'DELETE' && target)
         await deleteRecord(env.DB, data, target);
+      else if (resource === 'assets' && request.method === 'PUT' && target)
+        await putAsset(env.DB, data, target, await request.json());
+      else if (resource === 'assets' && request.method === 'DELETE' && target)
+        await deleteAsset(env.DB, data, target);
+      else if (resource === 'messages' && request.method === 'PUT' && target)
+        await putMessage(env.DB, data, target, await request.json());
+      else if (
+        resource === 'records' &&
+        isId(id) &&
+        extra === 'reactions' &&
+        reaction &&
+        rest === undefined &&
+        (request.method === 'PUT' || request.method === 'DELETE')
+      )
+        await setReaction(env.DB, data, id, reaction, request.method === 'PUT');
+      else if (resource === 'profile' && id === undefined && request.method === 'PUT')
+        await putProfile(env.DB, data, await request.json());
+      else if (
+        resource === 'profile' &&
+        id === 'photo' &&
+        extra === undefined &&
+        request.method === 'PUT'
+      )
+        await putPhoto(env.DB, data, request);
+      else if (
+        resource === 'profile' &&
+        id === 'photo' &&
+        extra === undefined &&
+        request.method === 'DELETE'
+      )
+        await deletePhoto(env.DB, data);
+      else if (resource === 'friends' && request.method === 'PUT' && target)
+        await friendAction(env.DB, data, target, await request.json());
+      else if (
+        resource === 'ledgers' &&
+        isId(id) &&
+        extra === 'invites' &&
+        !reaction &&
+        request.method === 'PUT'
+      )
+        await inviteMembers(env.DB, data, id, await request.json());
+      else if (
+        resource === 'ledgers' &&
+        isId(id) &&
+        extra === 'seen' &&
+        !reaction &&
+        request.method === 'PUT'
+      )
+        await markSeen(env.DB, data, id);
+      else if (
+        resource === 'ledgers' &&
+        isId(id) &&
+        extra === 'members' &&
+        isId(reaction) &&
+        rest === undefined
+      )
+        await (request.method === 'PUT'
+          ? setMemberRole(env.DB, data, id, reaction, await request.json())
+          : request.method === 'DELETE'
+            ? removeMember(env.DB, data, id, reaction)
+            : fail(404, 'NOT_FOUND', '없는 주소예요.'));
+      else if (resource === 'invites' && request.method === 'PUT' && target)
+        await acceptInvite(env.DB, data, target, await request.json());
+      else if (resource === 'invites' && request.method === 'DELETE' && target)
+        await declineInvite(env.DB, data, target);
+      else if (resource === 'signup-link' && id === undefined && request.method === 'PUT')
+        await renewSignupLink(env.DB, user.id);
       else fail(404, 'NOT_FOUND', '없는 주소예요.');
-      const { roles, ...answer } = request.method === 'GET' ? data : await load(env.DB, user);
+      const { roles, ...answer } =
+        request.method === 'GET' ? data : await load(env.DB, await loadUser(env.DB, user.id));
       return json(answer satisfies AppData);
     } catch (error) {
       if (error instanceof ApiError)

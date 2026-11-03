@@ -15,6 +15,8 @@ export type ListRowProps = {
   trailing?: ReactNode;
   /** Makes the whole row one button. */
   onClick?(): void;
+  /** Controls under the row, outside its button, such as reactions. */
+  footer?: ReactNode;
   current?: boolean;
   className?: string;
 };
@@ -27,6 +29,7 @@ export function ListRow({
   trailing,
   onClick,
   current,
+  footer,
   className = '',
 }: ListRowProps) {
   const content = (
@@ -53,6 +56,7 @@ export function ListRow({
       ) : (
         <div className="ui-list-row">{content}</div>
       )}
+      {footer && <div className="ui-list-row-footer">{footer}</div>}
     </li>
   );
 }

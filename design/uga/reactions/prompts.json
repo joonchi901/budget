@@ -1,0 +1,341 @@
+{
+  "generator": "Built-in imagegen",
+  "transparentBackground": true,
+  "referenceImages": {
+    "sticker": [
+      "design/uga/representative/uga-character-v1.png",
+      "design/uga/system/source/assets-contact-sheet.png"
+    ],
+    "decoration": [
+      "design/uga/system/source/assets-contact-sheet.png"
+    ]
+  },
+  "sharedPrompts": {
+    "sticker": "Use case: illustration-story. Create ONE new individual transparent reaction sticker for the Korean Uga family budget app. Image 1 is the official Uga character identity reference, image 2 is the existing asset range and finish reference. Reproduce the exact same small chibi prehistoric adult man: same shaggy dark brown hairstyle and forelock, scalloped full brown beard, round peach cheeks, dot/oval eyes and thick brows, yellow ochre tunic with dark irregular spots. Match the incumbent bold near-black chocolate contours, thick rounded hand-drawn line, warm flat color fills and spare cel shading. Square framing, large centered isolated silhouette with a modest even breathing margin; entire silhouette inside frame; typically upper body unless pose demands seated/full body. Legible at 92 px. Preserve recognizable face and proportions while changing emotion and posture. No caption, letters, logo, badge background, white sticker border, drop shadow, floor, frame, or extra character. Real transparent background. Pose and expression:",
+    "decoration": "Use case: illustration-story. Create ONE new individual decorative motif for the Korean Uga family budget app. Input image is the existing asset sheet for style only; match the bold, rounded dark chocolate outlines and minimal flat-color icon rendering of the bone, heart, star and sprout row. Small friendly hand-drawn shape with slight irregularity and one flat highlight at most, in warm tan, coral, muted mint green, yellow ochre, soft sky blue, or ivory as appropriate. Center one compact group with all edges visible, on a truly transparent square canvas with modest even padding. Must read at 24 px. No typography, label, background plate, ground shadow, sticker halo, or mascot. Subject:"
+  },
+  "items": [
+    {
+      "kind": "sticker",
+      "id": "furious",
+      "label": "버럭",
+      "prompt": "Uga bursts into emphatic comic anger: leans forward aggressively, squeezes both fists at his sides, V-shaped sharply downward brows, eyes narrowed, mouth opens wide in an indignant shout. Arms visibly tense. No props or floating decoration."
+    },
+    {
+      "kind": "sticker",
+      "id": "holding-anger",
+      "label": "꾹 참는 화",
+      "prompt": "Uga in restrained anger: drawn tightly shut straight mouth with pressed lips, furrowed brows, controlled narrowed eyes, shoulders held still, one hand grasping his opposite clenched fist in front of his chest. No yelling or steam."
+    },
+    {
+      "kind": "sticker",
+      "id": "annoyed",
+      "label": "짜증",
+      "prompt": "Mildly irritated Uga has one eyebrow pinched down and the other relaxed, heavy half-lidded eyes and a small crooked scowl. His elbow is up with two fingers pressing his temple. Exasperated, visibly softer and less intense than rage."
+    },
+    {
+      "kind": "sticker",
+      "id": "wronged",
+      "label": "억울함",
+      "prompt": "Uga feels unfairly blamed. Inner brows high and sad; eyes pleading and mouth parted in protest. One hand pressed against his own chest and his other palm open toward the viewer, like asking to be heard."
+    },
+    {
+      "kind": "sticker",
+      "id": "pouting",
+      "label": "입 삐죽",
+      "prompt": "Uga is playfully sulking. Turn his torso about 25 degrees away, arms visibly crossed across his chest, cheeks puffed out and lips pushed into an exaggerated side pout. He peeks back from the corner of his eyes. No tears."
+    },
+    {
+      "kind": "sticker",
+      "id": "turned-away",
+      "label": "토라져서 등 돌림",
+      "prompt": "Back three-quarter full body view, compact rounded silhouette. Uga crouches on the ground and hugs his bent knees, turns his back on the viewer, his head angled just enough that the familiar beard in profile and little protruding pout show past a shoulder. Show yellow spotted tunic from the back. No floor or props."
+    },
+    {
+      "kind": "sticker",
+      "id": "disappointed",
+      "label": "서운함",
+      "prompt": "Uga quietly disappointed and hurt, seated with hunched shoulders and head lowered, eyes pointed at the ground. A familiar ivory bone rests across his lap, held loosely, almost forgotten. No crying and no steam."
+    },
+    {
+      "kind": "sticker",
+      "id": "teary",
+      "label": "울먹울먹",
+      "prompt": "Upper body Uga on the brink of crying: large watery eyes with tiny drops at the lower eyelids, worried curved eyebrows, trembling small mouth, hands nervously folded together below beard. No streams of tears, restrained sadness."
+    },
+    {
+      "kind": "sticker",
+      "id": "sobbing",
+      "label": "엉엉",
+      "prompt": "Uga sits down crying hard. Shoulders hunched, both hands cover most of his face while his shaggy hair and beard remain visible, two short clean blue tear streams peeking from between hands and cheeks. Compact seated chibi silhouette."
+    },
+    {
+      "kind": "sticker",
+      "id": "startled-guilty",
+      "label": "뜨끔",
+      "prompt": "Uga startled because someone mentioned his own mistake. Shoulders suddenly up to his ears, eyes dart distinctly to one side, stiff arms close to sides, eyes wide and small mouth slightly open. A sheepish guilty flash, without scratching head, no accessory."
+    },
+    {
+      "kind": "sticker",
+      "id": "sheepish",
+      "label": "머쓱",
+      "prompt": "Uga awkwardly scratches the BACK of his hair with one hand, head slightly tilted and uneven sheepish little grin with one eye squinted. Loose shoulders, friendly embarrassment."
+    },
+    {
+      "kind": "sticker",
+      "id": "skeptical",
+      "label": "갸우뚱",
+      "prompt": "Skeptical Uga tilts entire head visibly to one side, shoots a sideways glance with one raised brow, one squinting eye, closed asymmetrical unimpressed mouth. Arms down, no question mark or hand under chin."
+    },
+    {
+      "kind": "sticker",
+      "id": "exhausted",
+      "label": "기진맥진",
+      "prompt": "Exhausted Uga slumped across a simple small tan stone slab, one peach cheek flattened on the edge, eyes half shut with fatigue, both arms dangling down, ivory bone droops loosely from one hand. Include stone only directly supporting him and no ground."
+    },
+    {
+      "kind": "sticker",
+      "id": "relieved",
+      "label": "휴, 다행이다",
+      "prompt": "Relieved Uga exhales softly, one palm on his chest, eyes gently closed, brows relaxed, shoulders visibly dropped, little pursed smiling exhale. One tiny cream puff by mouth if needed. No other elements."
+    },
+    {
+      "kind": "sticker",
+      "id": "cracking-up",
+      "label": "빵 터짐",
+      "prompt": "Full-body Uga cracking up with laughter, off-balance as he tips backward, hands clutching his belly, eyes squeezed shut into happy crescent shapes, open laugh, one foot kicks slightly forward. No props."
+    },
+    {
+      "kind": "sticker",
+      "id": "proud",
+      "label": "혼자 뿌듯",
+      "prompt": "Quietly pleased Uga stands tall, chin slightly raised, both hands resting at his hips, chest forward, eyes soft and mouth a small self-satisfied closed smile. Understated personal pride, not wild cheering."
+    },
+    {
+      "kind": "sticker",
+      "id": "make-up",
+      "label": "슬쩍 화해",
+      "prompt": "Uga turns his torso halfway back toward us, eyebrows slightly raised with cautious hope, eyes look up, shy small smile, gently offers one SMALL ivory bone held horizontally in both palms at arm's length, peace offering."
+    },
+    {
+      "kind": "sticker",
+      "id": "party-popper",
+      "label": "축하해요",
+      "prompt": "Use case: illustration-story. Create ONE new individual transparent reaction sticker for the Korean Uga family budget app. The input image is the official reference for the exact mascot identity, style, proportions, and sticker finish. Preserve the shaggy dark brown hair and forelock, scalloped full brown beard, peach cheeks, thick brows, yellow ochre tunic with dark irregular spots, bold near-black chocolate contours, and warm flat color fills. Square framing, large centered isolated silhouette with modest even margins. No letters, logo, badge background, white sticker border, drop shadow, floor, frame, other character, or reference prop. Real transparent background. Pose and expression: Uga celebrates with a handheld party popper. Show him beaming with a big open smile and happy crescent eyes, cheeks lifted. In one hand he holds a clearly visible small coral-and-ochre striped cone-shaped party popper tilted diagonally upward beside his head. A compact burst of 5–7 bold coral, gold and muted mint paper confetti shapes erupts directly from the open tip, positioned above and beside his head without hiding his face. His free hand is raised in delight. Keep both the cone and burst clearly inside the square and legible at 92px. Waist-up, simple uncluttered silhouette.\n",
+      "usesSharedPrompt": false,
+      "referenceImages": [
+        "public/brand/reactions/stickers/uga-sticker-all-done.png"
+      ]
+    },
+    {
+      "kind": "sticker",
+      "id": "nodding",
+      "label": "끄덕끄덕",
+      "prompt": "Attentive Uga nods his head forward, kind eyes open looking at the speaker, small calm smile, hands at rest. Two short restrained brown motion accents near top of head make the nod readable, no props."
+    },
+    {
+      "kind": "sticker",
+      "id": "aha",
+      "label": "아하",
+      "prompt": "Uga has just understood: oval eyes slightly widened, mouth small smiling O, one index finger raised beside his head, one tiny yellow four-point glint, upright lively pose."
+    },
+    {
+      "kind": "sticker",
+      "id": "agree",
+      "label": "좋아요",
+      "prompt": "Agreeable Uga smiles with soft confident eyes, offering one relaxed open palm out for a friendly agreement, other hand down. Do not use thumbs-up, fist, or handshake partner."
+    },
+    {
+      "kind": "sticker",
+      "id": "pass",
+      "label": "이번엔 패스",
+      "prompt": "Uga politely declines with a gentle slightly apologetic smile. One open hand waves very slightly side to side in front of chest, head leans away. A friendly small 'no thanks' gesture, hands simple."
+    },
+    {
+      "kind": "sticker",
+      "id": "clarify",
+      "label": "어느 쪽이에요?",
+      "prompt": "Uga looks inquisitive and puzzled, holds both palms open and raised, left and right at different heights as if weighing two choices, head tilted, mouth gently open. No question mark, no props."
+    },
+    {
+      "kind": "sticker",
+      "id": "one-moment",
+      "label": "잠깐만요",
+      "prompt": "Focused Uga asks the viewer to wait. Holds up one hand at shoulder level, palm distinctly forward in a gentle pause gesture, mouth small and neutral, other hand held close to body."
+    },
+    {
+      "kind": "sticker",
+      "id": "try-again",
+      "label": "앗, 다시",
+      "prompt": "Uga realizes an error and tries again. One hand scratches the back of his head with sheepish smile, the other holds up a compact parchment with a single curved undo arrow symbol. No text."
+    },
+    {
+      "kind": "sticker",
+      "id": "empathy",
+      "label": "그럴 때도 있죠",
+      "prompt": "Uga listens with tender empathy, eyebrows lifting softly in the middle, tilts head downward in sympathy, one open hand touches his own heart, small caring closed smile, eyes looking toward the viewer."
+    },
+    {
+      "kind": "sticker",
+      "id": "encourage",
+      "label": "같이 해봐요",
+      "prompt": "Uga encourages the viewer, reaching one small clenched fist forward at chest level for a friendly fist bump, optimistic determined smile with relaxed eyebrows, other hand low, open welcoming stance."
+    },
+    {
+      "kind": "sticker",
+      "id": "thanks",
+      "label": "고마워요",
+      "prompt": "Uga expresses gratitude, palms joined in front of chest with gentle little bow, eyes closed in an appreciative smile, tips of fingers visible below beard."
+    },
+    {
+      "kind": "sticker",
+      "id": "all-done",
+      "label": "다 됐어요",
+      "prompt": "Uga smiles with bright relaxed eyes and holds up one small rounded ivory stone tablet with a single prominent muted mint check mark. Friendly completion, without jumping or confetti, no other marks or text."
+    },
+    {
+      "kind": "sticker",
+      "id": "see-you",
+      "label": "다음에 봐요",
+      "prompt": "Uga turning away to leave, seen in three-quarter back view, waves with a raised open hand and smiles kindly over his shoulder. Show spotted golden tunic and clear familiar hair and beard in profile. No bone."
+    },
+    {
+      "kind": "decoration",
+      "id": "pebbles",
+      "label": "조약돌 세 알",
+      "prompt": "An isolated small group of exactly three softly rounded pebble stones, sizes clearly different. Warm gray brown, sandstone beige and pale cream stone, thick brown strokes, touches at bases, no surrounding objects."
+    },
+    {
+      "kind": "decoration",
+      "id": "acorn",
+      "label": "도토리",
+      "prompt": "A single rounded golden tan acorn tilted diagonally, broad dark toasted brown cap with just two large marks and a tiny bent stem. Silhouette clean and simple."
+    },
+    {
+      "kind": "decoration",
+      "id": "flower",
+      "label": "작은 꽃",
+      "prompt": "A single small five rounded petal coral-pink flower with mustard yellow center, one short green stalk and one leaf. Compact and clear silhouette."
+    },
+    {
+      "kind": "decoration",
+      "id": "cloud",
+      "label": "둥근 구름",
+      "prompt": "One ivory puff cloud with three broad softly rounded upper lobes, small pale sky-blue inner shadow along underside, no drops, moon, sun, or face."
+    },
+    {
+      "kind": "decoration",
+      "id": "campfire",
+      "label": "작은 모닥불",
+      "prompt": "Tiny friendly campfire, one coral and golden ochre flame over two short crossed brown logs, three rounded sandstone stones at base. Simple isolated silhouette, no flying sparks."
+    },
+    {
+      "kind": "decoration",
+      "id": "leaf-bundle",
+      "label": "나뭇잎 꾸러미",
+      "prompt": "Small rounded parcel made from overlapping broad muted mint green leaves, tied with simple warm tan cord. Slight angled view, only one simple leaf vein, easily readable silhouette."
+    },
+    {
+      "kind": "decoration",
+      "id": "stone-coins",
+      "label": "돌 동전 두 닢",
+      "prompt": "Exactly two small pale sand and warm gray-brown rounded chipped stone coins, one offset behind the other, an indented simple short mark on the face, no currency characters. Thick chocolate outline."
+    },
+    {
+      "kind": "decoration",
+      "id": "steaming-mug",
+      "label": "김 나는 머그잔",
+      "prompt": "Small rounded cream ceramic mug with a simple coral band, handle on the right, a single rounded ribbon of pale warm steam above. No saucer, no logo, no face."
+    },
+    {
+      "kind": "decoration",
+      "id": "cookie",
+      "label": "쿠키 한 조각",
+      "prompt": "One chunky golden ochre irregular round cookie with a small semicircle bite at the top right and just three chocolate chips. Thick warm dark outline, no crumbs or plate."
+    },
+    {
+      "kind": "decoration",
+      "id": "blanket",
+      "label": "작은 담요",
+      "prompt": "A single compact folded quilt blanket, soft muted mint fabric with a sand-colored trim and two simple stitched accent marks. Slightly irregular warm rounded shape, easy to read small."
+    },
+    {
+      "kind": "decoration",
+      "id": "confetti",
+      "label": "색종이 조각",
+      "prompt": "Small compact burst of five paper-confetti shapes with clear negative space between pieces: coral and gold curved lozenges, mint diamonds and a small sky strip. A tiny grouped accent, thick dark brown line on shapes."
+    },
+    {
+      "kind": "decoration",
+      "id": "ribbon",
+      "label": "작은 리본",
+      "prompt": "Single coral fabric bow ribbon, broad rounded loops and two short tapered tails; center knot, spare coral highlight, no gift box."
+    },
+    {
+      "kind": "decoration",
+      "id": "sun-rays",
+      "label": "햇살 세 줄",
+      "prompt": "Exactly three short plump ochre and golden-yellow rays fanned from lower left to upper right with open space below, darkest brown rounded edges. No sun disc, no face."
+    },
+    {
+      "kind": "decoration",
+      "id": "steam-puff",
+      "label": "뿜는 콧김",
+      "prompt": "Stylized single sideways puff of comic angry cream steam, directed from left to right, with two short horizontal speed strokes to its left, dark chocolate outline. No face, no nose, no grey ground shadow."
+    },
+    {
+      "kind": "decoration",
+      "id": "storm-cloud",
+      "label": "울퉁불퉁한 먹구름",
+      "prompt": "Isolated unanimated meteorological raincloud silhouette, one single asymmetrical scalloped body made of 5 chunky lobes, charcoal taupe fill with one continuous lighter mauve highlight hugging the TOP left rim, dark chocolate border. The entire broad center and bottom are completely empty flat-colored areas. Plain cloud, zero eyes, no face, no eyebrows, no mouth, no internal marks or lines, no cartoon expressions, no droplets, no lightning. Use the stone shape language of the incumbent motif row."
+    },
+    {
+      "kind": "decoration",
+      "id": "zigzag",
+      "label": "삐죽 지그재그",
+      "prompt": "A single small bent zigzag annoyance mark with three sharp turns, coral fill and thick rounded dark chocolate outline. Horizontal and compact; shape reads as a comic irritation accent, not a long vertical lightning bolt."
+    },
+    {
+      "kind": "decoration",
+      "id": "tear-drop",
+      "label": "눈물 한 방울",
+      "prompt": "One clean pale sky blue tear drop, nearly vertical, full rounded bottom and tapered top, small warm white reflection, chocolate outline. No extra droplets."
+    },
+    {
+      "kind": "decoration",
+      "id": "sweat-drop",
+      "label": "작은 땀방울",
+      "prompt": "One small squat mint blue sweat drop leaning visibly right diagonally with two tiny warm brown motion dashes beside its upper tip. Bold chocolate outline. Cartoon embarrassment, distinct from a tall tear."
+    },
+    {
+      "kind": "decoration",
+      "id": "swirl",
+      "label": "빙글 소용돌이",
+      "prompt": "One simple clearly open two-turn hand-drawn confusion spiral in subdued lavender brown with thick rounded near-black brown outer contour. Generous negative space between turns. No additional symbols."
+    },
+    {
+      "kind": "decoration",
+      "id": "typing-bubble",
+      "label": "점 세 개 말풍선",
+      "prompt": "One wide little warm ivory organic speech balloon with one rounded tail, exactly three bold dark brown circular dots in a horizontal row and no other marks. No text."
+    },
+    {
+      "kind": "decoration",
+      "id": "stone-question",
+      "label": "돌조각 물음표",
+      "prompt": "Small warm tan rounded irregular stone chip with a single clearly carved bold dark chocolate question mark centered. Rounded warm silhouette and one simple carved shadow plane. No other glyph."
+    },
+    {
+      "kind": "decoration",
+      "id": "stone-check",
+      "label": "돌판 체크",
+      "prompt": "Small rounded sand-color stone tablet, slightly irregular edges, with a single bold mint green check mark with chocolate outline centered across the stone. No writing or extra icon."
+    },
+    {
+      "kind": "decoration",
+      "id": "pointing-hand",
+      "label": "콕 가리키는 손",
+      "prompt": "One isolated little peach cartoon hand of Uga, side view, with clearly extended index finger pointing toward the right and compact curled other fingers, thick chocolate outline. A friendly visual pointer, no extra finger or button."
+    }
+  ]
+}

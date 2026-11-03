@@ -5,18 +5,24 @@ import { useControlLabel } from './Popover';
 export function FileField({
   onChange,
   className = '',
+  buttonText = '파일 선택',
+  emptyText = '선택한 파일이 없어요',
   ...props
-}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & {
+  buttonText?: string;
+  /** Shown until a file is chosen, such as what may be chosen. */
+  emptyText?: string;
+}) {
   const [fileName, setFileName] = useState('');
   const { ref, label } = useControlLabel(props['aria-label']);
   return (
     <span className={`file-field ${className}`} ref={ref}>
       <span className="file-field-button" aria-hidden="true">
         <Upload size={17} />
-        파일 선택
+        {buttonText}
       </span>
       <span className="file-field-name" aria-hidden="true">
-        {fileName || '선택한 파일이 없어요'}
+        {fileName || emptyText}
       </span>
       <input
         {...props}

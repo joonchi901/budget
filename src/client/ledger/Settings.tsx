@@ -15,9 +15,9 @@ import {
   TextField,
   pickTagColor,
 } from '../ui';
-import type { FieldDef, TagOption } from '../../shared/ledger';
+import type { FieldDef, KindOption, TagOption } from '../../shared/ledger';
 
-const FIXED_FIELDS = ['날짜', '구분', '내용', '금액'];
+const FIXED_FIELDS = ['유형', '금액', '내용', '날짜'];
 const typeLabel: Record<FieldDef['type'], string> = {
   text: '텍스트',
   select: '단일 선택',
@@ -67,7 +67,9 @@ export function FieldSchemaEditor({
           <ListRow
             key={fixed}
             title={fixed}
-            description="모든 가계부 공통"
+            description={
+              fixed === '유형' ? '모든 가계부 공통 · 태그 옵션에서 관리' : '모든 가계부 공통'
+            }
             trailing={<Lock size={16} aria-hidden="true" />}
           />
         ))}
@@ -212,6 +214,107 @@ export function TagOptionEditor({
         />
         <Button onClick={add}>추가</Button>
       </Inline>
+    </Stack>
+  );
+}
+
+/**
+ * 유형 options, managed like tags, each counted as 수입 or 지출. The base 수입 and 지출 can be
+ * renamed and recolored but never archived; others (고정지출 and so on) are added here.
+ */
+export function KindOptionEditor({
+  kinds,
+  onChange,
+}: {
+  kinds: KindOption[];
+  onChange(kinds: KindOption[]): void;
+}) {
+  const [name, setName] = useState('');
+  const [nature, setNature] = useState<KindOption['nature']>('expense');
+  const [picked, setPicked] = useState<string>();
+  const color = picked ?? pickTagColor(kinds.map((kind) => kind.color));
+  const update = (id: string, patch: Partial<KindOption>) =>
+    onChange(kinds.map((kind) => (kind.id === id ? { ...kind, ...patch } : kind)));
+  const add = () => {
+    const trimmed = name.trim();
+    if (
+      !trimmed ||
+      kinds.some((kind) => kind.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase())
+    )
+      return;
+    onChange([...kinds, { id: crypto.randomUUID(), name: trimmed, color, nature }]);
+    setName('');
+    setPicked(undefined);
+  };
+  return (
+    <Stack gap={3}>
+      <List aria-label="유형 옵션">
+        {kinds.map((kind) => (
+          <li key={kind.id} className="ui-list-item">
+            <Inline gap={2} align="center" className="ledger-option-row">
+              <ColorField
+                compact
+                aria-label={`${kind.name} 색상`}
+                value={kind.color}
+                onValueChange={(next) => update(kind.id, { color: next })}
+                disabled={kind.archived}
+              />
+              <Input
+                aria-label={`${kind.name} 이름`}
+                value={kind.name}
+                disabled={kind.archived}
+                onChange={(event) => update(kind.id, { name: event.target.value })}
+              />
+              <span className="ledger-kind-nature">
+                {kind.nature === 'income' ? '수입' : '지출'}
+              </span>
+              {kind.base ? (
+                <span className="ledger-kind-base">기본</span>
+              ) : (
+                <Button
+                  variant="plain"
+                  className="ledger-option-archive"
+                  onClick={() => update(kind.id, { archived: !kind.archived })}
+                >
+                  {kind.archived ? '보관 해제' : '보관'}
+                </Button>
+              )}
+            </Inline>
+          </li>
+        ))}
+      </List>
+      <Stack gap={2}>
+        <SegmentedControl<KindOption['nature']>
+          aria-label="새 유형이 더해지는 곳"
+          value={nature}
+          onValueChange={setNature}
+          options={[
+            { value: 'income', label: '수입으로' },
+            { value: 'expense', label: '지출로' },
+          ]}
+        />
+        <Inline gap={2} align="center" wrap={false} className="ledger-option-new">
+          <ColorField
+            compact
+            aria-label="유형 새 옵션 색상"
+            value={color}
+            onValueChange={setPicked}
+          />
+          <Input
+            aria-label="유형 새 옵션 이름"
+            placeholder="예: 고정지출"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                add();
+              }
+            }}
+          />
+          <Button onClick={add}>추가</Button>
+        </Inline>
+      </Stack>
     </Stack>
   );
 }

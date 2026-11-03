@@ -13,7 +13,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '가계부 만들기와 설정. 내역을 적는 가계부는 빈 가계부나 복사해서 만들기(기간 한 달 뒤, 고정지출 가져오기)로 시작하고 필드·태그 옵션을 정합니다. 상위 가계부는 하위 가계부만 고릅니다. 둘 다 여러 상위 가계부에 속할 수 있고, 순환이 생기는 선택지는 보이지 않습니다.',
+          '가계부 만들기와 설정(설정은 가계부 방의 설정 탭 안에 그대로 들어갑니다). 내역을 적는 가계부는 빈 가계부나 복사해서 만들기(필드·태그·유형을 이어받고 기간은 한 달 뒤)로 시작하고 필드·태그 옵션을 정합니다. 상위 가계부는 하위 가계부만 고릅니다. 둘 다 여러 상위 가계부에 속할 수 있고, 순환이 생기는 선택지는 보이지 않습니다.',
       },
     },
   },
@@ -30,9 +30,9 @@ export const CopyNextMonth: Story = {
         <CreateLedgerView
           {...args}
           initialSourceId="nov"
-          onCreate={({ ledger, parentIds, copyFixedFrom }) =>
+          onCreate={({ ledger, parentIds }) =>
             setLog(
-              `${ledger.name} ${ledger.period.start}~${ledger.period.end} 필드 ${ledger.fields.map((field) => field.name).join('·')} 상위 ${parentIds.join('·')} 고정지출 ${copyFixedFrom ?? '없음'}`,
+              `${ledger.name} ${ledger.period.start}~${ledger.period.end} 필드 ${ledger.fields.map((field) => field.name).join('·')} 상위 ${parentIds.join('·')}`,
             )
           }
         />
@@ -48,7 +48,7 @@ export const CopyNextMonth: Story = {
     await userEvent.click(page.getByRole('button', { name: '하반기' }));
     await userEvent.click(page.getByRole('button', { name: '만들기' }));
     await expect(page.getByRole('status')).toHaveTextContent(
-      '12월 2026-11-23~2026-12-22 필드 결제방식·카테고리·누가·비고 상위 h2 고정지출 nov',
+      '12월 2026-11-23~2026-12-22 필드 결제방식·카테고리·누가·비고 상위 h2',
     );
   },
 };
@@ -101,7 +101,6 @@ export const LedgerSettings: Story = {
             )
           }
           onArchive={() => setLog('보관')}
-          onClose={() => {}}
         />
         <p role="status">{log}</p>
       </>
@@ -125,7 +124,6 @@ export const ParentSettings: Story = {
           ledgers={ledgers}
           onSave={({ ledger }) => setLog(`${ledger.name} 하위 ${ledger.childIds.join('·')}`)}
           onArchive={() => setLog('보관')}
-          onClose={() => {}}
         />
         <p role="status">{log}</p>
       </>

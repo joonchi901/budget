@@ -16,7 +16,7 @@ const meta = {
   args: { children: '아직 기록한 내역이 없어요. 첫 내역을 추가해 보세요.', illustration: 'empty' },
   argTypes: {
     children: { control: 'text' },
-    illustration: { control: 'radio', options: ['empty', 'search'] },
+    illustration: { control: 'radio', options: ['empty', 'search', 'work'] },
   },
 } satisfies Meta<typeof Empty>;
 export default meta;

@@ -7,3 +7,5 @@ export { SignupView } from './SignupView';
 export { FriendsView, SignupLinkSheet } from './FriendsView';
 export { LedgerMembersView, InviteAcceptView } from './SharingViews';
 export { AccountView, LeaveAccountView } from './AccountViews';
+export { AppSettingsView } from './AppSettingsView';
+export { AssetEditView, AssetsView } from './AssetsView';

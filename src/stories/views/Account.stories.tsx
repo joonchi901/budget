@@ -2,18 +2,19 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { AccountView, LeaveAccountView } from '../../client/views';
-import { FIXTURE_TODAY, december, japanTrip, me, yedi } from '../fixtures';
+import { FIXTURE_TODAY, december, japanTrip, me, samplePhoto, yedi } from '../fixtures';
 
 const meta = {
-  title: '06 Views · 화면/내 계정',
+  title: '06 Views · 화면/프로필',
   component: AccountView,
   tags: ['autodocs'],
   globals: { viewport: { value: 'mobile390', isRotated: false } },
   parameters: {
+    ownsMain: true,
     docs: {
       description: {
         component:
-          '방 목록 오른쪽 위 프로필에서 여는 내 계정. 우가 그림·표시 이름·아이디를 바꾸고(아이디는 30일에 한 번), 로그아웃하거나 탈퇴합니다. 탈퇴할 때 내가 만든 공유 가계부는 고른 편집 멤버가 수락하면 넘어가고, 편집 멤버가 없으면 함께 지워집니다.',
+          '설정 탭의 프로필 메뉴에서 여는 화면(왼쪽 위로 설정에 돌아감). 프로필 사진(또는 기본 우가 그림)·표시 이름·아이디를 바꾸고(아이디는 30일에 한 번), 로그아웃하거나 탈퇴합니다. 탈퇴할 때 내가 만든 공유 가계부는 고른 편집 멤버가 수락하면 넘어가고, 편집 멤버가 없으면 함께 지워집니다.',
       },
     },
   },
@@ -24,7 +25,7 @@ const meta = {
     onSave: () => {},
     onLogout: () => {},
     onLeave: () => {},
-    onClose: () => {},
+    onBack: () => {},
   },
   render: function Logged(args) {
     const [log, setLog] = useState('');
@@ -32,7 +33,11 @@ const meta = {
       <>
         <AccountView
           {...args}
-          onSave={(profile) => setLog(`저장 ${profile.handle} ${profile.name} ${profile.avatar}`)}
+          onSave={(profile, photo) =>
+            setLog(
+              `저장 ${profile.handle} ${profile.name} ${profile.avatar}${photo === null ? ' 사진 없음' : photo ? ' 새 사진' : ''}`,
+            )
+          }
         />
         <p role="status" className="sr-only">
           {log}
@@ -57,6 +62,16 @@ export const Edit: Story = {
     await expect(page.getByRole('status')).toHaveTextContent('저장 js_2026 준상 calm');
   },
 };
+export const WithPhoto: Story = {
+  args: { profile: { ...me, photo: samplePhoto } },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(page.getByRole('button', { name: '사진 지우기' }));
+    await expect(page.queryByRole('button', { name: '사진 지우기' })).toBeNull();
+    await userEvent.click(page.getByRole('button', { name: '저장' }));
+    await expect(page.getByRole('status')).toHaveTextContent('저장 junsang 준상 happy 사진 없음');
+  },
+};
 export const HandleLocked: Story = {
   args: { handleChangeableFrom: '2026-11-20' },
   play: async ({ canvasElement }) => {
@@ -66,6 +81,7 @@ export const HandleLocked: Story = {
   },
 };
 export const Leave: Story = {
+  parameters: { ownsMain: false },
   render: function Logged() {
     const [log, setLog] = useState('');
     return (

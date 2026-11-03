@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
+import { HomeTabBar } from '../../client/ledger';
 import { FriendsView } from '../../client/views';
 import type { Friend, Profile } from '../../shared/people';
 import {
@@ -27,7 +28,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '방 목록 오른쪽 위에서 여는 친구 화면. 받은 가계부 초대를 먼저 보여주고, 아이디가 정확히 같을 때만 사람을 찾아 친구 요청을 보냅니다. 친구는 받은 요청·친구·보낸 요청·차단으로 나뉩니다. 하단 가입 초대 링크는 서비스 가입용이며 가계부 권한은 주지 않습니다.',
+          '하단 탭의 친구 화면(답할 요청·초대 수는 탭 배지). 받은 가계부 초대를 먼저 보여주고, 아이디가 정확히 같을 때만 사람을 찾아 친구 요청을 보냅니다. 친구는 받은 요청·친구·보낸 요청·차단으로 나뉩니다. 맨 아래 가입 초대 링크는 서비스 가입용이며 가계부 권한은 주지 않습니다.',
       },
     },
   },
@@ -36,7 +37,7 @@ const meta = {
     invites,
     today: FIXTURE_TODAY,
     signupLink,
-    onBack: () => {},
+    tabBar: <HomeTabBar tab="friends" pending={2} onTabChange={() => {}} />,
     onFind: async () => null,
     onRequest: () => {},
     onOpenInvite: () => {},
@@ -114,8 +115,7 @@ export const SignupLink: Story = {
     await userEvent.click(dialog.getByRole('button', { name: '복사' }));
     await expect(dialog.getByRole('button', { name: '복사했어요' })).toBeVisible();
     await userEvent.click(dialog.getByRole('button', { name: '새 링크' }));
-    await expect(
-      dialog.getByRole('button', { name: '지금 링크를 끝내고 새로 만들기' }),
-    ).toBeVisible();
+    await expect(dialog.getByRole('status')).toHaveTextContent('지금 링크로는 더 가입할 수 없어요');
+    await expect(dialog.getByRole('button', { name: '새로 만들기' })).toBeVisible();
   },
 };

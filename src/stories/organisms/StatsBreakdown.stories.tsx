@@ -13,7 +13,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '태그 단위 통계. 기준(구분 또는 가계부의 선택형 필드)과 지출·수입을 고르면 항목별 금액·비율을 막대로 보여줍니다. 묶음에서는 이름이 같은 옵션을 합칩니다. 다중 선택(누가)은 사람마다 전체 금액으로 세며 안내를 함께 보여줍니다. 항목을 누르면 그 조건의 내역으로 이동하도록 onSelect를 부릅니다.',
+          '태그 단위 통계. 기준(유형 또는 가계부의 선택형 필드)과 지출·수입을 고르면 항목별 금액·비율을 막대로 보여줍니다. 묶음에서는 이름이 같은 옵션을 합칩니다. 다중 선택(누가)은 사람마다 전체 금액으로 세며 안내를 함께 보여줍니다. 항목을 누르면 그 조건의 내역으로 이동하도록 onSelect를 부릅니다.',
       },
     },
   },
@@ -73,7 +73,7 @@ export const GroupByPayment: Story = {
     for (const text of ['국민카드', '1,083,572원']) await expect(rows[0]).toHaveTextContent(text);
   },
 };
-export const Income: Story = { args: { nature: 'income', axis: '구분' } };
+export const Income: Story = { args: { nature: 'income', axis: '유형' } };
 export const GroupByLedger: Story = {
   args: {
     records: roomRecords(ledgers, year2026, records),

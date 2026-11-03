@@ -1,15 +1,5 @@
 import { useId } from 'react';
-import {
-  AmountInput,
-  Button,
-  ChipSelect,
-  DateField,
-  Field,
-  Inline,
-  SegmentedControl,
-  Stack,
-  TextField,
-} from '../ui';
+import { AmountInput, Button, ChipSelect, DateField, Field, Inline, Stack, TextField } from '../ui';
 import type { FieldDef, FieldValue, Id, IsoDate, Ledger } from '../../shared/ledger';
 
 export type RecordDraft = {
@@ -53,7 +43,10 @@ export function DynamicField({
   );
 }
 
-/** 구분 → 금액 → 내용 → 날짜 → the ledger's own fields, in the order a record is usually told. */
+/**
+ * 유형 → 금액 → 내용 → 날짜 → the ledger's own fields, in the order a record is usually told.
+ * 유형 are chips like other tags; they are added in settings, where each gets 수입 or 지출.
+ */
 export function RecordForm({
   ledger,
   draft,
@@ -84,13 +77,11 @@ export function RecordForm({
     : [];
   return (
     <Stack gap={5}>
-      <SegmentedControl
-        aria-label="구분"
-        value={draft.kindId}
-        onValueChange={(kindId) => set({ kindId })}
-        options={ledger.kinds
-          .filter((kind) => !kind.archived || kind.id === draft.kindId)
-          .map((kind) => ({ value: kind.id, label: kind.name }))}
+      <ChipSelect
+        label="유형"
+        options={ledger.kinds}
+        value={[draft.kindId]}
+        onValueChange={([kindId]) => kindId && set({ kindId })}
       />
       <Stack gap={2}>
         <Field htmlFor={`${id}-amount`}>금액</Field>

@@ -5,12 +5,17 @@ import { resolve } from 'node:path';
 import { runnerImport } from 'vite';
 
 const { module } = await runnerImport(resolve('src/stories/fixtures.ts'));
-const { ledgers, records, members } = module;
+const { ledgers, records, members, assets, messages } = module;
 const text = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const row = (table, values) => `INSERT INTO ${table} VALUES (${values.map(text).join(', ')});`;
 const now = new Date().toISOString();
 
 const sql = [
+  'DELETE FROM friendships;',
+  'DELETE FROM ledger_invites;',
+  'DELETE FROM messages;',
+  'DELETE FROM assets;',
+  'DELETE FROM record_reactions;',
   'DELETE FROM records;',
   'DELETE FROM ledger_children;',
   'DELETE FROM ledger_members;',
@@ -55,8 +60,41 @@ const sql = [
         record.createdAt,
       ]
         .map(text)
+        .join(', ')}, ${record.notInAsset ? 1 : 0});`,
+  ),
+  ...records.flatMap((record) =>
+    Object.entries(record.reactions ?? {}).flatMap(([reaction, userIds]) =>
+      userIds.map((userId) =>
+        row('record_reactions', [record.id, reaction, userId, record.createdAt]),
+      ),
+    ),
+  ),
+  ...assets.map(
+    (asset) =>
+      `INSERT INTO assets VALUES (${[asset.id, 'dev', asset.name, asset.kind].map(text).join(', ')}, ${asset.balance}, ${[
+        asset.since,
+        JSON.stringify(asset.ledgerIds),
+        now,
+        now,
+      ]
+        .map(text)
         .join(', ')});`,
   ),
+  ...messages.map((message) =>
+    row('messages', [
+      message.id,
+      message.ledgerId,
+      message.authorId,
+      message.text ?? '',
+      message.sticker ?? '',
+      message.createdAt,
+    ]).replaceAll(", ''", ', NULL'),
+  ),
+  // People for the 친구 tab: 예디 (u2) is a friend; 준상 (u1) has sent a request to answer.
+  row('friendships', ['dev', 'u2', 'friend', now]),
+  row('friendships', ['u2', 'dev', 'friend', now]),
+  row('friendships', ['u1', 'dev', 'outgoing', now]),
+  row('friendships', ['dev', 'u1', 'incoming', now]),
 ].join('\n');
 
 const file = resolve('.wrangler/seed.sql');

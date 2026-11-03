@@ -50,22 +50,29 @@ import {
   AvatarPicker,
   FriendList,
   FriendPicker,
+  KindOptionEditor,
   MemberList,
   ParentPicker,
   PeriodCalendar,
   PersonRow,
+  ProfilePicture,
+  AssetRow,
+  ChatThread,
+  NetWorthSummary,
   RecordFilterBar,
+  RecordReactions,
   RecordForm,
   RecordList,
   RecordTable,
   RoomHeader,
   RoomInviteRow,
+  HomeTabBar,
   RoomListItem,
   RoomTabBar,
   StatsBreakdown,
   SummaryStrip,
   TagOptionEditor,
-  type NatureFilter,
+  type HomeTab,
   type RecordDraft,
   type RoomView,
 } from '../../../src/client/ledger';
@@ -77,9 +84,12 @@ import {
   type FieldDef,
   type KindOption,
 } from '../../../src/shared/ledger';
+import { assetBalance } from '../../../src/shared/assets';
 import {
   FIXTURE_TODAY,
+  assets,
   friends,
+  messages,
   invites,
   ledgers,
   me,
@@ -281,7 +291,7 @@ export const previews: Record<string, () => ReactNode> = {
     return (
       <Phone>
         <SegmentedControl
-          aria-label="구분"
+          aria-label="유형"
           value={nature}
           onValueChange={setNature}
           options={[
@@ -333,7 +343,7 @@ export const previews: Record<string, () => ReactNode> = {
   FilterChip: () => (
     <Wide>
       <Inline gap={2}>
-        <FilterChip label="구분: 지출" onRemove={noop} />
+        <FilterChip label="유형: 지출" onRemove={noop} />
         <FilterChip label="카테고리: 외식/배달/간식" onRemove={noop} />
         <FilterChip label="누가: 예디" onRemove={noop} />
       </Inline>
@@ -446,12 +456,17 @@ export const previews: Record<string, () => ReactNode> = {
   RoomListItem: () => (
     <Phone>
       <List aria-label="방 목록">
-        {[november, year2026, ledgers.find((ledger) => ledger.id === 'dec')!].map((room, index) => (
+        {[
+          { room: year2026, depth: 0 },
+          { room: ledgers.find((ledger) => ledger.id === 'h2')!, depth: 1 },
+          { room: november, depth: 2 },
+        ].map(({ room, depth }, index) => (
           <RoomListItem
             key={room.id}
             room={room}
+            depth={depth}
             latest={latestOf(room.id)}
-            unseen={index === 0 ? 3 : 0}
+            unseen={index === 2 ? 3 : 0}
             today={FIXTURE_TODAY}
             onOpen={noop}
           />
@@ -473,15 +488,18 @@ export const previews: Record<string, () => ReactNode> = {
     </Phone>
   ),
   RoomTabBar: function TabPreview() {
-    const [view, setView] = useState<RoomView>('table');
+    const [view, setView] = useState<RoomView>('records');
     return (
       <Phone>
-        <RoomTabBar
-          views={['table', 'calendar', 'stats']}
-          view={view}
-          onViewChange={setView}
-          onAdd={noop}
-        />
+        <RoomTabBar views={['records', 'stats', 'settings']} view={view} onViewChange={setView} />
+      </Phone>
+    );
+  },
+  HomeTabBar: function HomeTabPreview() {
+    const [tab, setTab] = useState<HomeTab>('ledgers');
+    return (
+      <Phone>
+        <HomeTabBar tab={tab} onTabChange={setTab} pending={2} />
       </Phone>
     );
   },
@@ -500,24 +518,90 @@ export const previews: Record<string, () => ReactNode> = {
       <RecordTable records={novemberRecords.slice(-6)} ledgers={ledgers} onOpenRecord={noop} />
     </Wide>
   ),
+  AssetRow: () => {
+    const balances = assets.map((asset) => assetBalance(asset, ledgers, records));
+    const sum = (debt: boolean) =>
+      assets.reduce(
+        (total, asset, index) => total + ((asset.kind === 'debt') === debt ? balances[index] : 0),
+        0,
+      );
+    return (
+      <Phone>
+        <NetWorthSummary owned={sum(false)} owed={sum(true)} />
+        <List aria-label="자산">
+          {assets.map((asset, index) => (
+            <AssetRow
+              key={asset.id}
+              asset={asset}
+              balance={balances[index]}
+              ledgers={ledgers}
+              onOpen={noop}
+            />
+          ))}
+        </List>
+      </Phone>
+    );
+  },
+  ChatThread: () => (
+    <Phone>
+      <ChatThread
+        messages={messages}
+        memberId="u1"
+        members={[
+          { id: 'u1', name: '준상' },
+          { id: 'u2', name: '예디' },
+        ]}
+        onSend={noop}
+      />
+    </Phone>
+  ),
+  RecordReactions: function ReactionsPreview() {
+    const [reactions, setReactions] = useState<Record<string, string[]>>({
+      'cracking-up': ['u2'],
+      thanks: ['u2', 'u1'],
+    });
+    return (
+      <Phone>
+        <RecordReactions
+          reactions={reactions}
+          memberId="u1"
+          members={[
+            { id: 'u1', name: '준상' },
+            { id: 'u2', name: '예디' },
+          ]}
+          onToggle={(reaction) =>
+            setReactions((all) => {
+              const who = (all[reaction] ?? []).filter((id) => id !== 'u1');
+              const next = {
+                ...all,
+                [reaction]: all[reaction]?.includes('u1') ? who : [...who, 'u1'],
+              };
+              if (!next[reaction].length) delete next[reaction];
+              return next;
+            })
+          }
+        />
+      </Phone>
+    );
+  },
   RecordFilterBar: function FilterPreview() {
     const [query, setQuery] = useState('');
-    const [nature, setNature] = useState<NatureFilter>('all');
     const [wide, setWide] = useState(false);
-    const [conditions, setConditions] = useState(['카테고리: 장보기']);
+    const [conditions, setConditions] = useState([{ axis: '카테고리', name: '장보기' }]);
+    const [display, setDisplay] = useState<'list' | 'calendar'>('list');
     return (
       <Phone>
         <RecordFilterBar
           query={query}
           onQueryChange={setQuery}
-          nature={nature}
-          onNatureChange={setNature}
           wide={wide}
           onWideChange={setWide}
           conditions={conditions}
           onRemoveCondition={(condition) =>
             setConditions((all) => all.filter((item) => item !== condition))
           }
+          display={display}
+          onDisplayChange={setDisplay}
         />
       </Phone>
     );
@@ -594,6 +678,26 @@ export const previews: Record<string, () => ReactNode> = {
       </List>
     </Phone>
   ),
+  ProfilePicture: () => (
+    <Wide>
+      <Inline gap={4} align="center">
+        <ProfilePicture profile={me} size={56} />
+        <ProfilePicture profile={yedi} size={56} />
+        <ProfilePicture
+          profile={{ avatar: 'sleep', photo: 'https://example.com/x.svg' }}
+          size={56}
+        />
+      </Inline>
+    </Wide>
+  ),
+  KindOptionEditor: function KindPreview() {
+    const [kinds, setKinds] = useState(november.kinds);
+    return (
+      <Phone>
+        <KindOptionEditor kinds={kinds} onChange={setKinds} />
+      </Phone>
+    );
+  },
   AvatarPicker: function AvatarPreview() {
     const [avatar, setAvatar] = useState('calm');
     return (

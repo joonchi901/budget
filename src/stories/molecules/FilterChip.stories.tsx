@@ -24,7 +24,7 @@ export const Ready: Story = {};
 export const Applied: Story = {
   render: function AppliedFilters() {
     const [filters, setFilters] = useState([
-      '구분: 지출',
+      '유형: 지출',
       '카테고리: 외식/배달/간식',
       '누가: 예디',
     ]);

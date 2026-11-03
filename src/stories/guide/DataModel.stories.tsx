@@ -49,7 +49,7 @@ function LedgerCard({ ledger }: { ledger: Ledger }) {
             {ledger.period.start} ~ {ledger.period.end} · 내역 {own.length}건
           </p>
         </Stack>
-        <Inline gap={2} role="group" aria-label="구분">
+        <Inline gap={2} role="group" aria-label="유형">
           {ledger.kinds.map((kind) => (
             <Tag
               key={kind.id}
@@ -84,7 +84,7 @@ function DataModel() {
         <h1>데이터 모델과 합성 데이터</h1>
         <p>
           src/shared/ledger.ts의 타입과 src/stories/fixtures.ts의 합성 데이터입니다.
-          날짜·구분·내용·금액은 모든 가계부의 고정 필드이고, 나머지 필드와 태그 옵션은 가계부마다
+          유형·금액·내용·날짜는 모든 가계부의 고정 필드이고, 나머지 필드와 태그 옵션은 가계부마다
           따로 둡니다. 내역은 하위가 없는 가계부에만 쌓이고, 상위 가계부는 아래 가계부의 내역을 모아
           보기만 합니다.
         </p>

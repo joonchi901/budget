@@ -1,8 +1,8 @@
-import { useState, type ComponentProps } from 'react';
-import { ChevronLeft, Link2 } from 'lucide-react';
+import { useState, type ComponentProps, type ReactNode } from 'react';
+import { Link2 } from 'lucide-react';
 import { FriendList, PersonRow, RoomInviteRow } from '../ledger';
 import { BottomSheet, Screen } from '../templates';
-import { Button, Empty, IconButton, Inline, Input, List, Stack, TextField } from '../ui';
+import { Button, Empty, Inline, Input, List, Stack, TextField } from '../ui';
 import type { IsoDate } from '../../shared/ledger';
 import type { Friend, Profile, RoomInvite, SignupLink } from '../../shared/people';
 
@@ -40,6 +40,12 @@ export function SignupLinkSheet({
         <p className="view-meta">
           {shortDay(link.expiresAt)}까지 · {link.joined}/{link.limit}명 가입
         </p>
+        {/* The consequence goes above the buttons so the button label stays short. */}
+        {confirmRenew && (
+          <p className="view-meta" role="status">
+            새 링크를 만들면 지금 링크로는 더 가입할 수 없어요.
+          </p>
+        )}
         <Inline gap={2} wrap={false} className="view-actions">
           <Button
             className="view-danger"
@@ -50,7 +56,7 @@ export function SignupLinkSheet({
               onRenew();
             }}
           >
-            {confirmRenew ? '지금 링크를 끝내고 새로 만들기' : '새 링크'}
+            {confirmRenew ? '새로 만들기' : '새 링크'}
           </Button>
           <Button
             variant="primary"
@@ -68,15 +74,15 @@ export function SignupLinkSheet({
 }
 
 /**
- * Friends, opened from the room list. Ledger invitations to answer come first, then finding
- * someone by their exact ID, then friends by state. The signup link is at the bottom.
+ * Home's 친구 tab. Ledger invitations to answer come first, then finding someone by their exact
+ * ID, then friends by state. The signup link is at the bottom.
  */
 export function FriendsView({
   friends,
   invites,
   today,
   signupLink,
-  onBack,
+  tabBar,
   onFind,
   onRequest,
   onOpenInvite,
@@ -88,7 +94,8 @@ export function FriendsView({
   invites: RoomInvite[];
   today: IsoDate;
   signupLink: SignupLink;
-  onBack(): void;
+  /** The app's bottom tabs. */
+  tabBar?: ReactNode;
   /** Exact ID lookup; null when no one has it. */
   onFind(handle: string): Promise<Profile | null>;
   onRequest(profile: Profile): void;
@@ -114,18 +121,10 @@ export function FriendsView({
     <Screen
       top={
         <div className="view-page-header">
-          <IconButton aria-label="방 목록으로" onClick={onBack}>
-            <ChevronLeft size={22} />
-          </IconButton>
           <h1>친구</h1>
         </div>
       }
-      bottom={
-        <Button onClick={() => setLinkOpen(true)}>
-          <Link2 size={18} />
-          가입 초대 링크
-        </Button>
-      }
+      bottom={tabBar}
     >
       <Stack gap={6}>
         {invites.length > 0 && (
@@ -194,6 +193,10 @@ export function FriendsView({
         ) : (
           <Empty>아직 친구가 없어요. 아이디로 찾거나 가입 초대 링크를 보내 보세요.</Empty>
         )}
+        <Button onClick={() => setLinkOpen(true)}>
+          <Link2 size={18} />
+          가입 초대 링크
+        </Button>
       </Stack>
       {linkOpen && (
         <SignupLinkSheet

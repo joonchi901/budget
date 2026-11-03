@@ -13,6 +13,7 @@
 - [반응형 HTML 보드](../design/uga/system/index.html). 앱 정적 경로 `/brand/design-system.html`에서도 동일한 보드를 제공한다.
 - [테마 계약](../design/uga/system/theme-contract.md): 색상 의미, 대비, 크기, 초점, 모션, 사용 원칙.
 - [SVG 에셋 목록](../public/brand/manifest.json): 38종의 파일·출처·제작 방식.
+- [감정·대화 스티커와 장식](../design/uga/reactions/README.md): 스티커 30종과 장식 23종의 개별 투명 PNG, 표시 크기 미리보기, 생성 프롬프트.
 
 브랜드 원형은 [대표 캐릭터](../design/uga/representative/uga-character-v1.png)와 [Primary Logo Lockup](../design/uga/primary-logo/uga-primary-logo.svg)이다. 앱용 SVG는 `public/brand/`에 둔다. Primary 로고는 승인된 SVG와 바이트가 동일하다. 나머지 캐릭터는 같은 참고 이미지의 얼굴·수염·머리·점박이 옷·뼈다귀를 유지해 벡터화하거나 조합했다. UI 아이콘은 브라운 윤곽과 뼈·돌·가죽·종이 모티브로 구성했다. 명암과 질감은 벡터 면으로 단순화했다.
 

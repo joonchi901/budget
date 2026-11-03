@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
+import { HomeTabBar } from '../../client/ledger';
 import { RoomListView } from '../../client/views';
-import { FIXTURE_TODAY, ledgers, me, records } from '../fixtures';
+import { FIXTURE_TODAY, ledgers, records } from '../fixtures';
 
 const meta = {
   title: '06 Views · 화면/방 목록',
@@ -14,7 +15,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '첫 화면. 오른쪽 위에서 친구(답할 요청·초대 수)와 내 계정을 엽니다. 모든 가계부를 메신저 대화방처럼 최근 활동 순으로 보여주고 새 내역 수를 배지로 표시합니다. 상위 가계부의 활동은 하위 가계부의 내역까지 포함합니다. 이름으로 검색하고, 하단 새 가계부에서 내역을 적는 가계부나 상위 가계부를 만듭니다.',
+          '첫 화면, 하단 탭(친구·가계부·자산·설정)의 가계부 탭. 모든 가계부를 메신저 대화방처럼 최근 활동 순으로 보여주고, 하위 가계부는 그 상위 아래에 들여 씁니다(상위가 둘이면 각각 아래에). 상위 가계부의 활동은 하위 가계부의 내역까지 포함합니다. 줄마다 마지막 내역·시간·새 내역 수를 보여줍니다. 이름으로 검색하면 맞는 방만 평평하게 보이고, 로고 오른쪽 새 가계부에서 내역을 적는 가계부나 상위 가계부를 만듭니다.',
       },
     },
   },
@@ -34,8 +35,9 @@ const meta = {
           {...args}
           onOpenRoom={(room) => setLog(`열기: ${room.name}`)}
           onCreate={() => setLog('만들기')}
-          onOpenFriends={args.onOpenFriends && (() => setLog('친구'))}
-          onOpenAccount={args.onOpenAccount && (() => setLog('내 계정'))}
+          tabBar={
+            <HomeTabBar tab="ledgers" pending={2} onTabChange={(tab) => setLog(`탭: ${tab}`)} />
+          }
         />
         <p role="status" className="sr-only">
           {log}
@@ -47,11 +49,25 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+// Read as screen readers hear it: a 하위 가계부 row starts with that phrase.
+const ORDER = [
+  '2026',
+  '하위 가계부 하반기',
+  '하위 가계부 11월',
+  '하위 가계부 12월',
+  '하위 가계부 일본여행',
+  '여행',
+  '하위 가계부 일본여행',
+];
+
 export const Rooms: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);
     const rows = within(c.getByRole('list', { name: '방 목록' })).getAllByRole('button');
-    await expect(rows).toHaveLength(6);
+    // 일본여행 sits under both 2026 and 여행.
+    await expect(rows.map((row) => row.querySelector('.ui-list-row-title')!.textContent)).toEqual(
+      ORDER,
+    );
     await userEvent.click(c.getByRole('button', { name: /^2026/ }));
     await expect(c.getByRole('status')).toHaveTextContent('열기: 2026');
   },
@@ -77,13 +93,15 @@ export const Create: Story = {
   },
 };
 export const FirstUse: Story = { args: { ledgers: [], records: [], unseen: {} } };
-export const WithPeople: Story = {
-  args: { profile: me, pending: 2, onOpenFriends: () => {}, onOpenAccount: () => {} },
+export const Tabs: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);
-    await userEvent.click(c.getByRole('button', { name: '친구, 답할 요청·초대 2건' }));
-    await expect(c.getByRole('status')).toHaveTextContent('친구');
-    await userEvent.click(c.getByRole('button', { name: '내 계정' }));
-    await expect(c.getByRole('status')).toHaveTextContent('내 계정');
+    const tabs = within(c.getByRole('group', { name: '메뉴' }));
+    await expect(tabs.getByRole('button', { name: '가계부' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await userEvent.click(tabs.getByRole('button', { name: /^친구.*답할 요청·초대 2건$/ }));
+    await expect(c.getByRole('status')).toHaveTextContent('탭: friends');
   },
 };

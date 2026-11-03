@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
+import { ChatThread, HomeTabBar, type HomeTab, type RoomView } from '../ledger';
 import { addDays, addMonths, localDate } from '../ledger/format';
 import { StatusScreen } from '../templates';
 import { Button, Notice } from '../ui';
 import {
+  AccountView,
+  AppSettingsView,
+  AssetEditView,
+  AssetsView,
   CreateLedgerView,
+  FriendsView,
+  InviteAcceptView,
+  LedgerMembersView,
   LedgerRoomView,
   LedgerSettingsView,
   LoginView,
@@ -18,14 +26,17 @@ import {
   type Ledger,
   type LedgerRecord,
 } from '../../shared/ledger';
+import { assetFor, type Asset } from '../../shared/assets';
+import type { Profile, RoomInvite } from '../../shared/people';
 import { ApiFailure, api } from './api';
+import { reencodePhoto } from './photo';
 
 type Sheet =
   | { type: 'entry'; ledgers: Ledger[]; date?: IsoDate; record?: LedgerRecord }
   | { type: 'create'; sourceId?: Id }
-  | { type: 'settings'; id: Id };
-
-const FIXED_KIND = '고정지출';
+  | { type: 'asset'; asset?: Asset }
+  | { type: 'members'; ledger: Ledger }
+  | { type: 'invite'; invite: RoomInvite };
 
 const parentIdsOf = (ledgers: Ledger[], id: Id) =>
   ledgers.filter((ledger) => ledger.childIds.includes(id)).map((ledger) => ledger.id);
@@ -46,54 +57,13 @@ const withLedger = (data: AppData, ledger: Ledger, parentIds: Id[]): AppData => 
   ],
 });
 
-/**
- * 고정지출 records of `source` for a ledger copied from it: one month later, with kinds, fields
- * and options matched by name because the copy has new ids. Values without a match are left out.
- */
-function copyFixed(source: Ledger, target: Ledger, records: LedgerRecord[], userId: Id) {
-  const nameOf = (list: { id: Id; name: string }[], id: Id) =>
-    list.find((item) => item.id === id)?.name;
-  const clamp = (date: IsoDate) =>
-    date < target.period.start
-      ? target.period.start
-      : date > target.period.end
-        ? target.period.end
-        : date;
-  return records
-    .filter(
-      (record) =>
-        record.ledgerId === source.id && nameOf(source.kinds, record.kindId) === FIXED_KIND,
-    )
-    .flatMap((record): LedgerRecord[] => {
-      const kind = target.kinds.find((item) => item.name === FIXED_KIND);
-      if (!kind) return [];
-      const values = Object.entries(record.values).flatMap(([fieldId, value]) => {
-        const from = source.fields.find((field) => field.id === fieldId);
-        const to = target.fields.find(
-          (field) => field.name === from?.name && field.type === from.type,
-        );
-        if (!from || !to) return [];
-        if (from.type === 'text' || to.type === 'text') return [[to.id, value]];
-        const ids = (value as Id[]).flatMap((id) => {
-          const match = to.options.find((option) => option.name === nameOf(from.options, id));
-          return match ? [match.id] : [];
-        });
-        return [[to.id, ids]];
-      });
-      return [
-        {
-          ...record,
-          id: crypto.randomUUID(),
-          ledgerId: target.id,
-          kindId: kind.id,
-          date: clamp(addMonths(record.date, 1)),
-          values: Object.fromEntries(values),
-          createdBy: userId,
-          createdAt: new Date().toISOString(),
-        },
-      ];
-    });
-}
+/** The record with the member's reaction added or taken away, for showing it at once. */
+const withReaction = (record: LedgerRecord, reaction: string, memberId: Id, on: boolean) => {
+  const who = (record.reactions?.[reaction] ?? []).filter((id) => id !== memberId);
+  const reactions = { ...record.reactions, [reaction]: on ? [...who, memberId] : who };
+  if (!reactions[reaction].length) delete reactions[reaction];
+  return { ...record, reactions };
+};
 
 /**
  * The app layer: loads the user's data, opens rooms and sheets, and saves through the API.
@@ -105,6 +75,10 @@ export function App() {
   const [error, setError] = useState<{ message: string; login?: boolean }>();
   const [roomId, setRoomId] = useState<Id>();
   const [sheet, setSheet] = useState<Sheet>();
+  const [tab, setTab] = useState<HomeTab>('ledgers');
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [roomView, setRoomView] = useState<RoomView>('records');
+  const [takenHandle, setTakenHandle] = useState<string>();
   const queue = useRef(Promise.resolve());
   const latest = useRef(0);
   const today = localDate(new Date());
@@ -122,6 +96,17 @@ export function App() {
   useEffect(() => {
     reload();
   }, []);
+  // Each room opens on 내역.
+  useEffect(() => setRoomView('records'), [roomId]);
+  // While a room's 대화 is open, look for new messages; queued after any change being sent.
+  const chatting = Boolean(roomId) && roomView === 'chat';
+  useEffect(() => {
+    if (!chatting) return;
+    const timer = setInterval(() => {
+      queue.current = queue.current.then(() => api('GET', '/api/data').then(setData, () => {}));
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [chatting]);
 
   const change = (
     local: (data: AppData) => AppData,
@@ -143,6 +128,9 @@ export function App() {
       ),
     );
   };
+  /** A change whose result only the server knows; the screen updates when it answers. */
+  const send = (method: 'PUT' | 'DELETE', path: string, body?: unknown) =>
+    change((current) => current, method, path, body);
   const saveLedger = (ledger: Ledger, parentIds: Id[], records: LedgerRecord[] = []) =>
     change(
       (current) => {
@@ -169,8 +157,36 @@ export function App() {
     );
 
   const room = data.ledgers.find((ledger) => ledger.id === roomId);
-  const settings =
-    sheet?.type === 'settings' && data.ledgers.find((ledger) => ledger.id === sheet.id);
+  const friends = data.friends ?? [];
+  const invites = data.invites ?? [];
+  const me: Profile = {
+    id: data.user.id,
+    handle: data.user.handle,
+    name: data.user.name,
+    avatar: data.user.avatar ?? 'happy',
+    ...(data.user.photo ? { photo: data.user.photo } : {}),
+  };
+  const tabBar = (
+    <HomeTabBar
+      tab={tab}
+      pending={friends.filter((friend) => friend.status === 'incoming').length + invites.length}
+      onTabChange={(next) => {
+        setTab(next);
+        setProfileOpen(false);
+      }}
+    />
+  );
+  const friendAction = (action: string) => (profile: Profile) =>
+    send('PUT', `/api/friends/${profile.id}`, { action });
+  const openRoom = (id: Id) => {
+    setRoomId(id);
+    if (data.unseen?.[id])
+      change(
+        (current) => ({ ...current, unseen: { ...current.unseen, [id]: 0 } }),
+        'PUT',
+        `/api/ledgers/${id}/seen`,
+      );
+  };
   const thisMonth = { start: today, end: addDays(addMonths(today, 1), -1) };
 
   return (
@@ -184,9 +200,49 @@ export function App() {
           records={data.records}
           today={today}
           onBack={() => setRoomId(undefined)}
+          onViewChange={setRoomView}
+          chat={
+            <ChatThread
+              messages={(data.messages ?? []).filter((message) => message.ledgerId === room.id)}
+              memberId={data.user.id}
+              members={data.members}
+              onSend={(content) => {
+                const message = {
+                  id: crypto.randomUUID(),
+                  ledgerId: room.id,
+                  authorId: data.user.id,
+                  createdAt: new Date().toISOString(),
+                  ...content,
+                };
+                change(
+                  (current) => ({ ...current, messages: [...(current.messages ?? []), message] }),
+                  'PUT',
+                  `/api/messages/${message.id}`,
+                  { ledgerId: room.id, ...content },
+                );
+              }}
+            />
+          }
           onAddRecord={(date) => {
             const ledgers = leafLedgers(data.ledgers, room);
             if (ledgers.length) setSheet({ type: 'entry', ledgers, date });
+          }}
+          reacting={{
+            memberId: data.user.id,
+            members: data.members,
+            onToggleReaction: (record, reaction) => {
+              const on = !record.reactions?.[reaction]?.includes(data.user.id);
+              change(
+                (current) => ({
+                  ...current,
+                  records: current.records.map((item) =>
+                    item.id === record.id ? withReaction(item, reaction, data.user.id, on) : item,
+                  ),
+                }),
+                on ? 'PUT' : 'DELETE',
+                `/api/records/${record.id}/reactions/${reaction}`,
+              );
+            },
           }}
           onOpenRecord={(record) =>
             setSheet({
@@ -195,17 +251,100 @@ export function App() {
               record,
             })
           }
-          onOpenSettings={() => setSheet({ type: 'settings', id: room.id })}
+          settings={
+            <LedgerSettingsView
+              key={room.id}
+              ledger={room}
+              ledgers={data.ledgers}
+              onSave={({ ledger, parentIds }) => saveLedger(ledger, parentIds)}
+              onArchive={(ledger) => {
+                saveLedger({ ...ledger, archived: true }, parentIdsOf(data.ledgers, ledger.id));
+                setRoomId(undefined);
+              }}
+            />
+          }
           onCopy={() => setSheet({ type: 'create', sourceId: room.id })}
-          onOpenLedger={(ledger) => setRoomId(ledger.id)}
+          onOpenLedger={(ledger) => openRoom(ledger.id)}
+          onOpenMembers={() => setSheet({ type: 'members', ledger: room })}
         />
-      ) : (
+      ) : tab === 'ledgers' ? (
         <RoomListView
           ledgers={data.ledgers}
           records={data.records}
+          unseen={data.unseen}
           today={today}
-          onOpenRoom={(ledger) => setRoomId(ledger.id)}
+          onOpenRoom={(ledger) => openRoom(ledger.id)}
           onCreate={() => setSheet({ type: 'create' })}
+          tabBar={tabBar}
+        />
+      ) : tab === 'assets' ? (
+        <AssetsView
+          assets={data.assets ?? []}
+          ledgers={data.ledgers}
+          records={data.records}
+          onAdd={() => setSheet({ type: 'asset' })}
+          onOpenAsset={(asset) => setSheet({ type: 'asset', asset })}
+          tabBar={tabBar}
+        />
+      ) : tab === 'settings' && !profileOpen ? (
+        <AppSettingsView onOpenProfile={() => setProfileOpen(true)} tabBar={tabBar} />
+      ) : tab === 'friends' ? (
+        <FriendsView
+          friends={friends}
+          invites={invites}
+          today={today}
+          signupLink={{
+            ...data.signupLink!,
+            url: new URL(data.signupLink!.url, location.origin).href,
+          }}
+          onFind={(handle) =>
+            api('GET', `/api/people?handle=${encodeURIComponent(handle)}`).then(
+              (answer) => (answer as unknown as { profile: Profile | null }).profile,
+              () => null,
+            )
+          }
+          onRequest={friendAction('request')}
+          onAccept={friendAction('accept')}
+          onDecline={friendAction('decline')}
+          onCancel={friendAction('cancel')}
+          onRemove={friendAction('remove')}
+          onBlock={friendAction('block')}
+          onUnblock={friendAction('unblock')}
+          onOpenInvite={(invite) => setSheet({ type: 'invite', invite })}
+          onCopyLink={(url) => navigator.clipboard?.writeText(url)}
+          onRenewLink={() => send('PUT', '/api/signup-link')}
+          tabBar={tabBar}
+        />
+      ) : (
+        <AccountView
+          key={`${me.handle}-${me.photo ?? me.avatar}`}
+          profile={me}
+          email={data.user.email ?? ''}
+          today={today}
+          handleChangeableFrom={data.user.handleChangeableFrom}
+          takenHandle={takenHandle}
+          onSave={(profile, photo) => {
+            setTakenHandle(undefined);
+            api('PUT', '/api/profile', profile)
+              .then(async (answer) => {
+                if (photo)
+                  answer = await api('PUT', '/api/profile/photo', await reencodePhoto(photo));
+                else if (photo === null) answer = await api('DELETE', '/api/profile/photo');
+                setData(answer);
+              })
+              .catch((failure) => {
+                if (failure instanceof ApiFailure && failure.code === 'HANDLE_TAKEN')
+                  setTakenHandle(profile.handle);
+                else report(failure);
+              });
+          }}
+          onLogout={() =>
+            setError({
+              message: '로컬 개발 계정은 로그아웃할 수 없어요. Google 로그인을 붙인 뒤에 열어요.',
+            })
+          }
+          onLeave={() => setError({ message: '탈퇴는 Google 로그인을 붙인 뒤에 열어요.' })}
+          onBack={() => setProfileOpen(false)}
         />
       )}
       {sheet?.type === 'entry' && (
@@ -240,23 +379,88 @@ export function App() {
             setSheet(undefined);
           }}
           onLedgerChange={(ledger) => saveLedger(ledger, parentIdsOf(data.ledgers, ledger.id))}
+          assetNameFor={(ledgerId) => assetFor(data.assets ?? [], data.ledgers, ledgerId)?.name}
           onClose={() => setSheet(undefined)}
         />
       )}
-      {sheet?.type === 'create' && (
-        <CreateLedgerView
+      {sheet?.type === 'asset' && (
+        <AssetEditView
+          asset={sheet.asset}
+          assets={data.assets ?? []}
           ledgers={data.ledgers}
           today={today}
-          initialSourceId={sheet.sourceId}
-          onCreate={({ ledger, parentIds, copyFixedFrom }) => {
-            const source = data.ledgers.find((item) => item.id === copyFixedFrom);
-            saveLedger(
-              ledger,
-              parentIds,
-              source ? copyFixed(source, ledger, data.records, data.user.id) : [],
+          onSave={(asset) => {
+            change(
+              (current) => ({
+                ...current,
+                assets: [...(current.assets ?? []).filter((item) => item.id !== asset.id), asset],
+              }),
+              'PUT',
+              `/api/assets/${asset.id}`,
+              asset,
             );
             setSheet(undefined);
-            setRoomId(ledger.id);
+          }}
+          onDelete={(asset) => {
+            change(
+              (current) => ({
+                ...current,
+                assets: (current.assets ?? []).filter((item) => item.id !== asset.id),
+              }),
+              'DELETE',
+              `/api/assets/${asset.id}`,
+            );
+            setSheet(undefined);
+          }}
+          onClose={() => setSheet(undefined)}
+        />
+      )}
+      {sheet?.type === 'members' && (
+        <LedgerMembersView
+          ledger={sheet.ledger}
+          meId={data.user.id}
+          members={data.ledgerMembers?.[sheet.ledger.id] ?? []}
+          below={
+            sheet.ledger.childIds.length
+              ? leafLedgers(data.ledgers, sheet.ledger).map((ledger) => ({
+                  ledger,
+                  owned: Boolean(
+                    data.ledgerMembers?.[ledger.id]?.some(
+                      (member) => member.profile.id === data.user.id && member.role === 'owner',
+                    ),
+                  ),
+                }))
+              : undefined
+          }
+          friends={friends
+            .filter((friend) => friend.status === 'friend')
+            .map((friend) => friend.profile)}
+          onInvite={(invite) => send('PUT', `/api/ledgers/${sheet.ledger.id}/invites`, invite)}
+          onRoleChange={(profile, role) =>
+            send('PUT', `/api/ledgers/${sheet.ledger.id}/members/${profile.id}`, { role })
+          }
+          onRemove={(profile) =>
+            send('DELETE', `/api/ledgers/${sheet.ledger.id}/members/${profile.id}`)
+          }
+          onLeave={() => {
+            send('DELETE', `/api/ledgers/${sheet.ledger.id}/members/${data.user.id}`);
+            setSheet(undefined);
+            setRoomId(undefined);
+          }}
+          onClose={() => setSheet(undefined)}
+        />
+      )}
+      {sheet?.type === 'invite' && (
+        <InviteAcceptView
+          invite={sheet.invite}
+          ledgers={data.ledgers}
+          onAccept={({ parentIds }) => {
+            send('PUT', `/api/invites/${sheet.invite.id}`, { parentIds });
+            setSheet(undefined);
+          }}
+          onDecline={() => {
+            send('DELETE', `/api/invites/${sheet.invite.id}`);
+            setSheet(undefined);
           }}
           onCreateParent={(name) => {
             const id = crypto.randomUUID();
@@ -269,18 +473,23 @@ export function App() {
           onClose={() => setSheet(undefined)}
         />
       )}
-      {settings && (
-        <LedgerSettingsView
-          ledger={settings}
+      {sheet?.type === 'create' && (
+        <CreateLedgerView
           ledgers={data.ledgers}
-          onSave={({ ledger, parentIds }) => {
+          today={today}
+          initialSourceId={sheet.sourceId}
+          onCreate={({ ledger, parentIds }) => {
             saveLedger(ledger, parentIds);
             setSheet(undefined);
+            setRoomId(ledger.id);
           }}
-          onArchive={(ledger) => {
-            saveLedger({ ...ledger, archived: true }, parentIdsOf(data.ledgers, ledger.id));
-            setSheet(undefined);
-            setRoomId(undefined);
+          onCreateParent={(name) => {
+            const id = crypto.randomUUID();
+            saveLedger(
+              { id, name, icon: 'ledger', period: thisMonth, kinds: [], fields: [], childIds: [] },
+              [],
+            );
+            return id;
           }}
           onClose={() => setSheet(undefined)}
         />

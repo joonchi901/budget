@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Copy, Settings2, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Plus, Users } from 'lucide-react';
 import {
   DayRecords,
   ChildLedgerList,
@@ -16,17 +16,21 @@ import {
   dayLabel,
   monthLabel,
   ledgerMeta,
-  type NatureFilter,
+  type ReactionContext,
+  type RecordDisplay,
   type RoomView,
+  type TagCondition,
 } from '../ledger';
 import { BottomSheet, Screen } from '../templates';
-import { IconButton, Inline, type MenuItem } from '../ui';
+import { Button, IconButton, Inline, type MenuItem } from '../ui';
 import {
+  KIND_AXIS,
   defaultStatAxis,
   filterRecords,
   isParent,
   leafLedgers,
   roomRecords,
+  tagAxes,
   totals,
   type IsoDate,
   type KindOption,
@@ -40,12 +44,14 @@ type RoomActions = {
   /** Starts a new record, on a date when chosen from the calendar. */
   onAddRecord(date?: IsoDate): void;
   onOpenRecord(record: LedgerRecord): void;
+  /** Lets members react to records with Uga stickers. */
+  reacting?: ReactionContext;
 };
 
-type Condition = { axis: string; name: string };
-const conditionLabel = ({ axis, name }: Condition) => `${axis}: ${name}`;
-
-/** Room body: table, calendar and stats views, plus 하위 for parents. */
+/**
+ * Room body: 내역 (표 or 캘린더, chosen beside the filter, with a full-width 내역 추가 above the
+ * tab bar), 통계, 하위 for parents, and 설정.
+ */
 function Room({
   title,
   subtitle,
@@ -56,10 +62,14 @@ function Room({
   showLedger,
   calendar,
   ledgersView,
+  settingsView,
+  chatView,
+  onViewChange,
   today,
   onBack,
   onAddRecord,
   onOpenRecord,
+  reacting,
 }: RoomActions & {
   title: string;
   subtitle: string;
@@ -70,21 +80,20 @@ function Room({
   showLedger: boolean;
   calendar: { period: { start: IsoDate; end: IsoDate }; navigation?: ReactNode };
   ledgersView?: ReactNode;
+  settingsView: ReactNode;
+  chatView?: ReactNode;
+  onViewChange?(view: RoomView): void;
 }) {
-  const [view, setView] = useState<RoomView>('table');
+  const [view, setView] = useState<RoomView>('records');
+  const [display, setDisplay] = useState<RecordDisplay>('list');
   const [query, setQuery] = useState('');
-  const [nature, setNature] = useState<NatureFilter>('all');
-  const [conditions, setConditions] = useState<Condition[]>([]);
+  const [conditions, setConditions] = useState<TagCondition[]>([]);
   const [wide, setWide] = useState(false);
   const [day, setDay] = useState<IsoDate>();
   const [axis, setAxis] = useState(() => defaultStatAxis(ledgers));
   const [statNature, setStatNature] = useState<KindOption['nature']>('expense');
-  const shown = filterRecords(records, ledgers, {
-    query,
-    nature: nature === 'all' ? undefined : nature,
-    options: conditions,
-  });
-  const context = { ledgers, showLedger, onOpenRecord };
+  const shown = filterRecords(records, ledgers, { query, options: conditions });
+  const context = { ledgers, showLedger, onOpenRecord, reacting };
   return (
     <Screen
       top={
@@ -94,24 +103,54 @@ function Room({
         </>
       }
       bottom={
-        <RoomTabBar views={views} view={view} onViewChange={setView} onAdd={() => onAddRecord()} />
+        <RoomTabBar
+          views={views}
+          view={view}
+          onViewChange={(next) => {
+            setView(next);
+            onViewChange?.(next);
+          }}
+        />
       }
     >
-      {view === 'table' && (
+      {view === 'records' && (
         <>
           <RecordFilterBar
             query={query}
             onQueryChange={setQuery}
-            nature={nature}
-            onNatureChange={setNature}
             wide={wide}
             onWideChange={setWide}
-            conditions={conditions.map(conditionLabel)}
-            onRemoveCondition={(label) =>
-              setConditions(conditions.filter((item) => conditionLabel(item) !== label))
+            conditions={conditions}
+            onRemoveCondition={(removed) =>
+              setConditions(
+                conditions.filter(
+                  (item) => item.axis !== removed.axis || item.name !== removed.name,
+                ),
+              )
             }
+            tagAxes={tagAxes(ledgers)}
+            onConditionsChange={(axis, names) =>
+              setConditions([
+                ...conditions.filter((item) => item.axis !== axis),
+                ...names.map((name) => ({ axis, name })),
+              ])
+            }
+            display={display}
+            onDisplayChange={setDisplay}
           />
-          {wide ? (
+          {display === 'calendar' ? (
+            <>
+              {calendar.navigation}
+              <PeriodCalendar
+                period={calendar.period}
+                records={shown}
+                ledgers={ledgers}
+                today={today}
+                selected={day}
+                onSelect={setDay}
+              />
+            </>
+          ) : wide ? (
             <RecordTable records={shown} {...context} />
           ) : (
             <RecordList
@@ -120,24 +159,15 @@ function Room({
               {...context}
             />
           )}
-        </>
-      )}
-      {view === 'calendar' && (
-        <>
-          {calendar.navigation}
-          <PeriodCalendar
-            period={calendar.period}
-            records={records}
-            ledgers={ledgers}
-            today={today}
-            selected={day}
-            onSelect={setDay}
-          />
-          {day && (
+          <Button variant="primary" className="view-add-record" onClick={() => onAddRecord()}>
+            <Plus size={18} />
+            내역 추가
+          </Button>
+          {display === 'calendar' && day && (
             <BottomSheet title={dayLabel(day)} onClose={() => setDay(undefined)}>
               <DayRecords
                 date={day}
-                records={records.filter((record) => record.date === day)}
+                records={shown.filter((record) => record.date === day)}
                 {...context}
                 onAdd={(date) => {
                   setDay(undefined);
@@ -157,14 +187,27 @@ function Room({
           nature={statNature}
           onNatureChange={setStatNature}
           onSelect={(field, name) => {
-            setConditions([{ axis: field, name }]);
-            setNature(statNature);
+            // The stats show one nature; its 유형 tags keep the list to the same records.
+            const kinds = ledgers.flatMap((ledger) => ledger.kinds);
+            const natureKinds = kinds.filter((kind) => kind.nature === statNature);
+            setConditions([
+              { axis: field, name },
+              ...(field === KIND_AXIS
+                ? []
+                : [...new Set(natureKinds.map((kind) => kind.name))].map((kindName) => ({
+                    axis: KIND_AXIS,
+                    name: kindName,
+                  }))),
+            ]);
             setQuery('');
-            setView('table');
+            setDisplay('list');
+            setView('records');
           }}
         />
       )}
       {view === 'ledgers' && ledgersView}
+      {view === 'chat' && <div className="view-chat">{chatView}</div>}
+      {view === 'settings' && settingsView}
     </Screen>
   );
 }
@@ -172,13 +215,15 @@ function Room({
 /**
  * A ledger's room. Without children it shows its own records over its period; with children
  * (상위 가계부) it gathers every record below it, marks each record's ledger, steps the calendar
- * by month and adds a 하위 view to drill into the children.
+ * by month and adds a 하위 view to drill into the children. 설정 is a tab of the room.
  */
 export function LedgerRoomView({
   ledger,
   ledgers,
   records,
-  onOpenSettings,
+  settings,
+  chat,
+  onViewChange,
   onCopy,
   onOpenLedger,
   onOpenMembers,
@@ -188,7 +233,12 @@ export function LedgerRoomView({
   /** All ledgers, to resolve children. */
   ledgers: Ledger[];
   records: LedgerRecord[];
-  onOpenSettings(): void;
+  /** The 설정 tab's content, a LedgerSettingsView of this ledger. */
+  settings: ReactNode;
+  /** The 대화 tab's content, a ChatThread of this ledger; parents have no 대화. */
+  chat?: ReactNode;
+  /** Tells the app which tab is open, so it can look for new 대화 while it is. */
+  onViewChange?(view: RoomView): void;
   /** 복사해서 만들기, for ledgers that hold records. */
   onCopy(): void;
   onOpenLedger(ledger: Ledger): void;
@@ -211,9 +261,15 @@ export function LedgerRoomView({
       subtitle={ledgerMeta(ledger)}
       ledgers={leaves}
       records={scoped}
-      views={parent ? ['table', 'calendar', 'stats', 'ledgers'] : ['table', 'calendar', 'stats']}
+      views={
+        parent
+          ? ['records', 'stats', 'ledgers', 'settings']
+          : ['records', 'stats', ...(chat ? (['chat'] as const) : []), 'settings']
+      }
+      settingsView={settings}
+      chatView={chat}
+      onViewChange={onViewChange}
       menuItems={[
-        { label: '설정', icon: <Settings2 size={18} />, onSelect: onOpenSettings },
         ...(onOpenMembers
           ? [
               {

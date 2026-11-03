@@ -3,6 +3,7 @@ import { UgaIcon, type UgaIconName } from '../brand/Uga';
 import {
   ChildPicker,
   FieldSchemaEditor,
+  KindOptionEditor,
   ParentPicker,
   TagOptionEditor,
   addDays,
@@ -15,11 +16,11 @@ import {
   DateField,
   Field,
   Grid,
+  Inline,
   SegmentedControl,
   SelectField,
   SelectOption,
   Stack,
-  Switch,
   TextField,
 } from '../ui';
 import {
@@ -40,9 +41,17 @@ const ICONS: { value: UgaIconName; label: string }[] = [
   { value: 'home', label: '집' },
   { value: 'planning', label: '달력' },
 ];
+const KINDS = 'kinds';
 const DEFAULT_KINDS: Omit<KindOption, 'id'>[] = [
-  { name: '수입', color: '#38735B', nature: 'income' },
-  { name: '지출', color: '#AE393B', nature: 'expense' },
+  { name: '수입', color: '#38735B', nature: 'income', base: true },
+  { name: '지출', color: '#AE393B', nature: 'expense', base: true },
+];
+// A new empty ledger starts with these fields and no tags; tags are added while writing.
+const defaultFields = (): FieldDef[] => [
+  { id: crypto.randomUUID(), name: '결제방식', type: 'select', options: [] },
+  { id: crypto.randomUUID(), name: '카테고리', type: 'select', options: [] },
+  { id: crypto.randomUUID(), name: '누가', type: 'multiSelect', options: [], emptyLabel: '공동' },
+  { id: crypto.randomUUID(), name: '비고', type: 'text' },
 ];
 
 /** Name, period and icon, shared by creating and editing a ledger. Parents have no period. */
@@ -150,7 +159,7 @@ type Role = 'records' | 'parent';
 
 /**
  * Creating a ledger. One that holds records starts empty or copied from another (fields, tags
- * and kinds, period one month later, optionally its 고정지출 records). A 상위 가계부 only picks
+ * and kinds, period one month later). A 상위 가계부 only picks
  * its children. Either can sit under several parents.
  */
 export function CreateLedgerView({
@@ -165,7 +174,7 @@ export function CreateLedgerView({
   today: IsoDate;
   /** Start in copy mode from this ledger, e.g. from a room's 복사해서 만들기. */
   initialSourceId?: Id;
-  onCreate(result: { ledger: Ledger; parentIds: Id[]; copyFixedFrom?: Id }): void;
+  onCreate(result: { ledger: Ledger; parentIds: Id[] }): void;
   onCreateParent?(name: string): Id;
   onClose(): void;
 }) {
@@ -183,11 +192,10 @@ export function CreateLedgerView({
   const [period, setPeriod] = useState(() => nextPeriod(mode === 'copy' ? source : undefined));
   const [icon, setIcon] = useState(source && mode === 'copy' ? source.icon : 'ledger');
   const [fields, setFields] = useState<FieldDef[]>(() =>
-    mode === 'copy' && source ? copySchema(source).fields : [],
+    mode === 'copy' && source ? copySchema(source).fields : defaultFields(),
   );
   const [childIds, setChildIds] = useState<Id[]>([]);
   const [parentIds, setParentIds] = useState<Id[]>([]);
-  const [copyFixed, setCopyFixed] = useState(true);
   const [nameError, setNameError] = useState<string>();
 
   const switchSource = (nextMode: 'empty' | 'copy', id = sourceId) => {
@@ -195,7 +203,7 @@ export function CreateLedgerView({
     setMode(nextMode);
     setSourceId(id);
     setPeriod(nextPeriod(nextMode === 'copy' ? next : undefined));
-    setFields(nextMode === 'copy' && next ? copySchema(next).fields : []);
+    setFields(nextMode === 'copy' && next ? copySchema(next).fields : defaultFields());
     if (nextMode === 'copy' && next) setIcon(next.icon);
   };
   const create = () => {
@@ -226,7 +234,6 @@ export function CreateLedgerView({
     onCreate({
       ledger: { id, name: name.trim(), icon, period, kinds, fields, childIds: [] },
       parentIds,
-      copyFixedFrom: mode === 'copy' && copyFixed ? source?.id : undefined,
     });
   };
 
@@ -274,13 +281,6 @@ export function CreateLedgerView({
                     ))}
                   </SelectField>
                 </Field>
-                <Field>
-                  <Switch
-                    checked={copyFixed}
-                    onChange={(event) => setCopyFixed(event.target.checked)}
-                  />
-                  고정지출 내역도 가져오기
-                </Field>
               </>
             )}
           </Stack>
@@ -317,22 +317,21 @@ export function CreateLedgerView({
 }
 
 /**
- * A ledger's settings. One that holds records edits basics, fields and each select field's
- * tags; a parent edits its children. Both choose their parents and can be archived.
+ * A ledger's settings, shown in the room's 설정 tab. One that holds records edits basics, fields
+ * and each select field's tags; a parent edits its children. Both choose their parents and can
+ * be archived. 저장 turns on once something changed.
  */
 export function LedgerSettingsView({
   ledger,
   ledgers,
   onSave,
   onArchive,
-  onClose,
 }: {
   ledger: Ledger;
   /** All ledgers, to place this one among parents and children. */
   ledgers: Ledger[];
   onSave(result: { ledger: Ledger; parentIds: Id[] }): void;
   onArchive(ledger: Ledger): void;
-  onClose(): void;
 }) {
   const parent = isParent(ledger);
   const initialParents = ledgers
@@ -344,101 +343,99 @@ export function LedgerSettingsView({
     (field): field is Extract<FieldDef, { type: 'select' | 'multiSelect' }> =>
       field.type !== 'text',
   );
-  const [tagFieldId, setTagFieldId] = useState(selectFields[0]?.id ?? '');
+  // 유형 comes first among the tags: every ledger that holds records has it.
+  const [tagFieldId, setTagFieldId] = useState(KINDS);
   const tagField = selectFields.find((field) => field.id === tagFieldId);
   const dirty =
     JSON.stringify(draft) !== JSON.stringify(ledger) || parentIds.join() !== initialParents.join();
   return (
-    <FullScreenSheet
-      title="가계부 설정"
-      subtitle={ledger.name}
-      dirty={dirty}
-      onClose={onClose}
-      footer={
-        <>
-          <Button className="view-danger" onClick={() => onArchive(ledger)}>
-            보관
-          </Button>
-          <Button
-            variant="primary"
-            disabled={!draft.name.trim() || (parent && !draft.childIds.length)}
-            onClick={() =>
-              onSave({
-                ledger: {
-                  ...draft,
-                  name: draft.name.trim(),
-                  period: parent ? spanOf(ledgers, draft.childIds, draft.period) : draft.period,
-                },
-                parentIds,
-              })
-            }
-          >
-            저장
-          </Button>
-        </>
-      }
-    >
-      <Stack gap={6}>
-        <LedgerBasics
-          name={draft.name}
-          onNameChange={(name) => setDraft({ ...draft, name })}
-          period={parent ? undefined : draft.period}
-          onPeriodChange={(period) => setDraft({ ...draft, period })}
-          icon={draft.icon}
-          onIconChange={(icon) => setDraft({ ...draft, icon })}
-          nameError={draft.name.trim() ? undefined : '이름을 입력해 주세요.'}
-        />
-        {parent ? (
-          <ChildPicker
-            ledgers={ledgers}
-            self={ledger}
-            value={draft.childIds}
-            onValueChange={(childIds) => setDraft({ ...draft, childIds })}
-          />
-        ) : (
-          <>
-            <Stack gap={3}>
-              <h3>필드</h3>
-              <FieldSchemaEditor
-                fields={draft.fields}
-                onChange={(fields) => setDraft({ ...draft, fields })}
-              />
-            </Stack>
-            {tagField && (
-              <Stack gap={3}>
-                <h3>태그 옵션</h3>
-                <Field>
-                  필드
-                  <SelectField value={tagFieldId} onValueChange={setTagFieldId}>
-                    {selectFields.map((field) => (
-                      <SelectOption key={field.id} value={field.id}>
-                        {field.name}
-                      </SelectOption>
-                    ))}
-                  </SelectField>
-                </Field>
-                <TagOptionEditor
-                  field={tagField}
-                  onChange={(options) =>
-                    setDraft({
-                      ...draft,
-                      fields: draft.fields.map((field) =>
-                        field.id === tagField.id ? { ...tagField, options } : field,
-                      ),
-                    })
-                  }
-                />
-              </Stack>
-            )}
-          </>
-        )}
-        <ParentPicker
+    <Stack gap={6} className="view-settings">
+      <LedgerBasics
+        name={draft.name}
+        onNameChange={(name) => setDraft({ ...draft, name })}
+        period={parent ? undefined : draft.period}
+        onPeriodChange={(period) => setDraft({ ...draft, period })}
+        icon={draft.icon}
+        onIconChange={(icon) => setDraft({ ...draft, icon })}
+        nameError={draft.name.trim() ? undefined : '이름을 입력해 주세요.'}
+      />
+      {parent ? (
+        <ChildPicker
           ledgers={ledgers}
           self={ledger}
-          value={parentIds}
-          onValueChange={setParentIds}
+          value={draft.childIds}
+          onValueChange={(childIds) => setDraft({ ...draft, childIds })}
         />
-      </Stack>
-    </FullScreenSheet>
+      ) : (
+        <>
+          <Stack gap={3}>
+            <h2 className="view-section-title">필드</h2>
+            <FieldSchemaEditor
+              fields={draft.fields}
+              onChange={(fields) => setDraft({ ...draft, fields })}
+            />
+          </Stack>
+          <Stack gap={3}>
+            <h2 className="view-section-title">태그 옵션</h2>
+            <Field>
+              필드
+              <SelectField value={tagFieldId} onValueChange={setTagFieldId}>
+                <SelectOption value={KINDS}>유형</SelectOption>
+                {selectFields.map((field) => (
+                  <SelectOption key={field.id} value={field.id}>
+                    {field.name}
+                  </SelectOption>
+                ))}
+              </SelectField>
+            </Field>
+            {tagField ? (
+              <TagOptionEditor
+                field={tagField}
+                onChange={(options) =>
+                  setDraft({
+                    ...draft,
+                    fields: draft.fields.map((field) =>
+                      field.id === tagField.id ? { ...tagField, options } : field,
+                    ),
+                  })
+                }
+              />
+            ) : (
+              <KindOptionEditor
+                kinds={draft.kinds}
+                onChange={(kinds) => setDraft({ ...draft, kinds })}
+              />
+            )}
+          </Stack>
+        </>
+      )}
+      <ParentPicker
+        ledgers={ledgers}
+        self={ledger}
+        value={parentIds}
+        onValueChange={setParentIds}
+      />
+      <Inline gap={2} wrap={false} className="view-actions">
+        <Button className="view-danger" onClick={() => onArchive(ledger)}>
+          보관
+        </Button>
+        <Button
+          variant="primary"
+          disabled={!dirty || !draft.name.trim() || (parent && !draft.childIds.length)}
+          onClick={() =>
+            onSave({
+              ledger: {
+                ...draft,
+                name: draft.name.trim(),
+                period: parent ? spanOf(ledgers, draft.childIds, draft.period) : draft.period,
+              },
+              parentIds,
+            })
+          }
+        >
+          저장
+        </Button>
+      </Inline>
+    </Stack>
   );
 }

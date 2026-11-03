@@ -40,7 +40,7 @@ export const Choices: Story = {
         <Checkbox disabled /> 보관된 옵션
       </Field>
       <fieldset>
-        <legend>구분</legend>
+        <legend>유형</legend>
         <Field>
           <Radio name="kind" value="expense" defaultChecked /> 지출
         </Field>
