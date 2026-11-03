@@ -30,8 +30,8 @@ export function DynamicField({
   field: FieldDef;
   value: FieldValue | undefined;
   onChange(value: FieldValue): void;
-  /** Adds an option to the field and returns its id. */
-  onCreateOption?(fieldId: Id, name: string): Id;
+  /** Adds an option with the chosen color to the field and returns its id. */
+  onCreateOption?(fieldId: Id, name: string, color: string): Id;
 }) {
   if (field.type === 'text')
     return (
@@ -48,7 +48,7 @@ export function DynamicField({
       value={Array.isArray(value) ? value : []}
       onValueChange={onChange}
       multiple={field.type === 'multiSelect'}
-      onCreateOption={onCreateOption && ((name) => onCreateOption(field.id, name))}
+      onCreateOption={onCreateOption && ((name, color) => onCreateOption(field.id, name, color))}
     />
   );
 }
@@ -65,7 +65,7 @@ export function RecordForm({
   ledger: Ledger;
   draft: RecordDraft;
   onChange(draft: RecordDraft): void;
-  onCreateOption?(fieldId: Id, name: string): Id;
+  onCreateOption?(fieldId: Id, name: string, color: string): Id;
   /** Earlier 내용 values; up to four that extend what is typed are offered. */
   suggestions?: string[];
   /** Start on 금액 so phones open the number pad, e.g. for a new record. */

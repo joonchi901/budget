@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Check, Plus } from 'lucide-react';
 import { Button } from './Button';
+import { ColorField, pickTagColor } from './ColorField';
 import { Input } from './Fields';
 import { badgeColors, isHexColor } from './Tag';
 
@@ -13,8 +14,13 @@ export type ChipSelectProps = {
   value: string[];
   onValueChange(value: string[]): void;
   multiple?: boolean;
-  /** Creates an option from typed text and returns its id. Omit to hide adding. */
-  onCreateOption?(name: string): string;
+  /**
+   * Creates an option from typed text and its color, and returns its id. Omit to hide adding.
+   * The color starts as the palette color least used by these options and can be changed.
+   */
+  onCreateOption?(name: string, color: string): string;
+  /** false hides the color swatch while adding, for choices whose color means nothing. */
+  optionColors?: boolean;
   disabled?: boolean;
   className?: string;
 };
@@ -30,13 +36,15 @@ export function ChipSelect({
   onValueChange,
   multiple = false,
   onCreateOption,
+  optionColors = true,
   disabled,
   className = '',
 }: ChipSelectProps) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
+  const [draftColor, setDraftColor] = useState('');
   const addButton = useRef<HTMLButtonElement>(null);
-  // Enter/Escape return focus to the add button; a blur means the user moved on.
+  // Enter/Escape return focus to the add button; focus leaving the name and swatch means the user moved on.
   const refocus = useRef(false);
   // Enter, Escape and the blur that follows unmounting must finish an addition only once.
   const finished = useRef(false);
@@ -59,7 +67,7 @@ export function ChipSelect({
       const existing = options.find(
         (option) => option.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
       );
-      const id = existing?.id ?? onCreateOption(name);
+      const id = existing?.id ?? onCreateOption(name, draftColor);
       if (!value.includes(id)) onValueChange(multiple ? [...value, id] : [id]);
     }
     setDraft('');
@@ -97,28 +105,42 @@ export function ChipSelect({
           })}
         {onCreateOption &&
           (adding ? (
-            <Input
-              aria-label={`${label} 새 옵션 이름`}
-              className="ui-chip-input"
-              placeholder="새 옵션"
-              value={draft}
-              autoFocus
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  refocus.current = true;
-                  finish(true);
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  refocus.current = true;
-                  finish(false);
-                }
+            <span
+              className="ui-chip-new"
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) finish(true);
               }}
-              onBlur={() => finish(true)}
-            />
+            >
+              {optionColors && (
+                <ColorField
+                  compact
+                  aria-label={`${label} 새 옵션 색상`}
+                  value={draftColor}
+                  onValueChange={setDraftColor}
+                />
+              )}
+              <Input
+                aria-label={`${label} 새 옵션 이름`}
+                className="ui-chip-input"
+                placeholder="새 옵션"
+                value={draft}
+                autoFocus
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    refocus.current = true;
+                    finish(true);
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    refocus.current = true;
+                    finish(false);
+                  }
+                }}
+              />
+            </span>
           ) : (
             <Button
               ref={addButton}
@@ -127,6 +149,7 @@ export function ChipSelect({
               aria-label={`${label} 옵션 추가`}
               onClick={() => {
                 finished.current = false;
+                setDraftColor(pickTagColor(options.map((option) => option.color)));
                 setAdding(true);
               }}
             >

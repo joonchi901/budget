@@ -276,7 +276,8 @@
 .ledger-option-row {
   padding: var(--brand-space-2) var(--brand-space-3);
 }
-.ledger-option-row > .ui-input {
+.ledger-option-row > .ui-input,
+.ledger-option-new > .ui-input {
   flex: 1;
 }
 .ledger-option-archive.ui-button {

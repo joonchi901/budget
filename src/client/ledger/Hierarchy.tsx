@@ -93,7 +93,8 @@ export function ParentPicker({
       value={value}
       onValueChange={onValueChange}
       multiple
-      onCreateOption={onCreateParent}
+      onCreateOption={onCreateParent && ((name) => onCreateParent(name))}
+      optionColors={false}
     />
   );
 }

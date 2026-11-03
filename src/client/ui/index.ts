@@ -30,7 +30,7 @@ export { Tooltip } from './Tooltip';
 export { Popover, useControlLabel } from './Popover';
 export { SelectField, SelectGroup, SelectOption } from './SelectField';
 export { DateField, MonthField, type DateFieldProps } from './DateFields';
-export { ColorField } from './ColorField';
+export { ColorField, TAG_PALETTE, pickTagColor } from './ColorField';
 export { FileField } from './FileField';
 export { Empty } from './Empty';
 export { Stat } from './Stat';

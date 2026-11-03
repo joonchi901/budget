@@ -41,13 +41,13 @@ const meta = {
           ledger={ledger}
           draft={draft}
           onChange={setDraft}
-          onCreateOption={(fieldId, name) => {
+          onCreateOption={(fieldId, name, color) => {
             const id = `${fieldId}-new-${name}`;
             setLedger({
               ...ledger,
               fields: ledger.fields.map((field): FieldDef =>
                 field.id === fieldId && field.type !== 'text'
-                  ? { ...field, options: [...field.options, { id, name, color: '#B9A27A' }] }
+                  ? { ...field, options: [...field.options, { id, name, color }] }
                   : field,
               ),
             });

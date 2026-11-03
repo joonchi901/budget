@@ -1,7 +1,7 @@
 import { useEffect, useState, type ComponentProps } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { ColorField } from '../../client/ui';
+import { ColorField, TAG_PALETTE, pickTagColor } from '../../client/ui';
 
 function ControlledColor(args: ComponentProps<typeof ColorField>) {
   const [value, setValue] = useState(args.value);
@@ -91,5 +91,29 @@ export const Compact: Story = {
           '태그 옵션 목록처럼 좁은 곳에서는 색 견본만 보이고, 누르면 팔레트와 직접 입력이 열립니다.',
       },
     },
+  },
+};
+export const AutoColor: Story = {
+  render: () => {
+    const used = ['#D28C70', '#64866F'];
+    return (
+      <p>
+        사용 중 {used.join(', ')} → 다음 자동 색 <strong>{pickTagColor(used)}</strong>
+      </p>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '새 태그는 같은 필드가 가장 적게 쓴 팔레트 색을 받습니다. 안 쓴 색이 있으면 그중 앞의 것, 모두 쓰였으면 가장 적게 쓰인 색입니다. 대소문자는 구분하지 않습니다.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(pickTagColor([])).toBe('#D28C70');
+    await expect(pickTagColor(['#d28c70'])).toBe('#F08A5D');
+    await expect(pickTagColor([...TAG_PALETTE, '#D28C70', '#F08A5D'])).toBe('#E8AD3F');
+    await expect(within(canvasElement).getByText('#F08A5D')).toBeVisible();
   },
 };

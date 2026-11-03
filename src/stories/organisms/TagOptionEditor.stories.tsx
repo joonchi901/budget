@@ -47,5 +47,8 @@ export const EditOptions: Story = {
       '네이버페이{Enter}',
     );
     await expect(c.getByRole('status')).toHaveTextContent('삼성카드(보관), 자동이체, 네이버페이');
+    // 결제방식이 쓰는 색을 피해 팔레트 첫 색(#D28C70)을 자동으로 받는다.
+    const swatch = c.getByRole('button', { name: '네이버페이 색상' }).firstElementChild!;
+    await expect(getComputedStyle(swatch).backgroundColor).toBe('rgb(210, 140, 112)');
   },
 };

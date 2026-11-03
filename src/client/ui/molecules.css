@@ -115,6 +115,16 @@
   border-color: var(--brand-line-strong);
   color: var(--brand-text-secondary);
 }
+.ui-chip-new {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+.ui-chip-new .color-field-trigger {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--brand-radius-pill);
+}
 .ui-chip-select .ui-chip-input {
   width: 10em;
   min-height: 40px;

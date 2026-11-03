@@ -13,6 +13,7 @@ import {
   Stack,
   Switch,
   TextField,
+  pickTagColor,
 } from '../ui';
 import type { FieldDef, TagOption } from '../../shared/ledger';
 
@@ -22,7 +23,6 @@ const typeLabel: Record<FieldDef['type'], string> = {
   select: '단일 선택',
   multiSelect: '다중 선택',
 };
-const OPTION_COLORS = ['#D28C70', '#64866F', '#6C89A4', '#9176A6', '#E8AD3F', '#B9A27A'];
 
 /**
  * A ledger's field list. Fixed fields are locked; own fields can be reordered, hidden and
@@ -143,6 +143,9 @@ export function TagOptionEditor({
   onChange(options: TagOption[]): void;
 }) {
   const [name, setName] = useState('');
+  // Until the user picks one, a new option takes the palette color its siblings use least.
+  const [picked, setPicked] = useState<string>();
+  const color = picked ?? pickTagColor(field.options.map((option) => option.color));
   const update = (id: string, patch: Partial<TagOption>) =>
     onChange(field.options.map((option) => (option.id === id ? { ...option, ...patch } : option)));
   const add = () => {
@@ -154,15 +157,9 @@ export function TagOptionEditor({
       )
     )
       return;
-    onChange([
-      ...field.options,
-      {
-        id: crypto.randomUUID(),
-        name: trimmed,
-        color: OPTION_COLORS[field.options.length % OPTION_COLORS.length],
-      },
-    ]);
+    onChange([...field.options, { id: crypto.randomUUID(), name: trimmed, color }]);
     setName('');
+    setPicked(undefined);
   };
   return (
     <Stack gap={3}>
@@ -194,7 +191,13 @@ export function TagOptionEditor({
           </li>
         ))}
       </List>
-      <Inline gap={2} align="center" wrap={false}>
+      <Inline gap={2} align="center" wrap={false} className="ledger-option-new">
+        <ColorField
+          compact
+          aria-label={`${field.name} 새 옵션 색상`}
+          value={color}
+          onValueChange={setPicked}
+        />
         <Input
           aria-label={`${field.name} 새 옵션 이름`}
           placeholder="새 옵션"

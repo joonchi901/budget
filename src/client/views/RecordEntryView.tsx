@@ -103,9 +103,8 @@ export function RecordEntryView({
     onSave(candidate, keepOpen);
     if (keepOpen) setDraft({ ...draft, title: '', amount: null });
   };
-  const createOption = (fieldId: Id, name: string) => {
+  const createOption = (fieldId: Id, name: string, color: string) => {
     const id = crypto.randomUUID();
-    const color = '#B9A27A';
     const next: Ledger = {
       ...ledger,
       fields: ledger.fields.map((field): FieldDef =>

@@ -39,12 +39,18 @@ const meta = {
           options={options}
           value={value}
           onValueChange={setValue}
-          onCreateOption={(name) => {
+          onCreateOption={(name, color) => {
             const id = `new-${options.length + 1}`;
-            setOptions([...options, { id, name, color: '#B9A27A' }]);
+            setOptions([...options, { id, name, color }]);
             return id;
           }}
         />
+        <p role="status">
+          {options
+            .filter((option) => option.id.startsWith('new-'))
+            .map((option) => `${option.name} ${option.color}`)
+            .join(', ')}
+        </p>
       </div>
     );
   },
@@ -82,6 +88,8 @@ export const AddOption: Story = {
     await userEvent.click(c.getByRole('button', { name: '카테고리 옵션 추가' }));
     await userEvent.type(c.getByRole('textbox', { name: '카테고리 새 옵션 이름' }), '육아{Enter}');
     await expect(c.getByRole('button', { name: '육아' })).toHaveAttribute('aria-pressed', 'true');
+    // 외식·장보기·병원·관리비 색을 피해 팔레트에서 아직 안 쓴 첫 색을 받는다.
+    await expect(c.getByRole('status')).toHaveTextContent('육아 #F08A5D');
     await expect(c.getByRole('button', { name: '카테고리 옵션 추가' })).toHaveFocus();
     await userEvent.click(c.getByRole('button', { name: '카테고리 옵션 추가' }));
     await userEvent.type(
@@ -129,5 +137,26 @@ export const UnsafeColor: Story = {
   play: async ({ canvasElement }) => {
     const dot = canvasElement.querySelector<HTMLElement>('.ui-chip-dot')!;
     await expect(getComputedStyle(dot).backgroundImage).toBe('none');
+  },
+};
+export const PickColorWhileAdding: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '추가할 때 이름 옆 색 견본을 눌러 팔레트에서 색을 고를 수 있습니다. 고르지 않으면 자동 색을 씁니다.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await userEvent.click(c.getByRole('button', { name: '카테고리 옵션 추가' }));
+    const name = c.getByRole('textbox', { name: '카테고리 새 옵션 이름' });
+    await userEvent.type(name, '여행');
+    await userEvent.click(c.getByRole('button', { name: '카테고리 새 옵션 색상' }));
+    await userEvent.click(c.getByRole('button', { name: '#38735B' }));
+    await userEvent.type(name, '{Enter}');
+    await expect(c.getByRole('status')).toHaveTextContent('여행 #38735B');
+    await expect(c.getByRole('button', { name: '여행' })).toHaveAttribute('aria-pressed', 'true');
   },
 };

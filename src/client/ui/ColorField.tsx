@@ -2,8 +2,8 @@ import { useLayoutEffect, useState } from 'react';
 import { Popover } from './Popover';
 import './color-field.css';
 
-/** Tag colors that read well as tinted badges and bars. */
-const PALETTE = [
+/** Tag colors that read well as tinted badges and bars, in auto-pick order. */
+export const TAG_PALETTE = [
   '#D28C70',
   '#F08A5D',
   '#E8AD3F',
@@ -17,6 +17,13 @@ const PALETTE = [
   '#AE393B',
   '#4B4B4B',
 ];
+
+/** The palette color used least among `used` (an unused one first), earliest on ties. */
+export function pickTagColor(used: string[]): string {
+  const count = (color: string) =>
+    used.filter((item) => item.toLowerCase() === color.toLowerCase()).length;
+  return TAG_PALETTE.reduce((best, color) => (count(color) < count(best) ? color : best));
+}
 
 interface ColorFieldProps {
   value: string;
@@ -86,7 +93,7 @@ export function ColorField({
       {({ close }) => (
         <div className="color-field-panel">
           <div className="color-field-palette" role="group" aria-label="추천 색상">
-            {PALETTE.map((color) => (
+            {TAG_PALETTE.map((color) => (
               <button
                 key={color}
                 type="button"
