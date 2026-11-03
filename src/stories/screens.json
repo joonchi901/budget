@@ -23,5 +23,25 @@
     "name": "가계부 만들기·설정",
     "source": "src/client/views/SetupViews.tsx",
     "story": "src/stories/views/Setup.stories.tsx"
+  },
+  {
+    "name": "가입",
+    "source": "src/client/views/SignupView.tsx",
+    "story": "src/stories/views/Signup.stories.tsx"
+  },
+  {
+    "name": "친구·가입 초대 링크",
+    "source": "src/client/views/FriendsView.tsx",
+    "story": "src/stories/views/Friends.stories.tsx"
+  },
+  {
+    "name": "멤버·받은 초대",
+    "source": "src/client/views/SharingViews.tsx",
+    "story": "src/stories/views/Sharing.stories.tsx"
+  },
+  {
+    "name": "내 계정·탈퇴",
+    "source": "src/client/views/AccountViews.tsx",
+    "story": "src/stories/views/Account.stories.tsx"
   }
 ]

@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
-import { UgaLogo } from '../brand/Uga';
+import { Plus, Users } from 'lucide-react';
+import { UgaAvatar, UgaLogo } from '../brand/Uga';
 import { RoomListItem } from '../ledger';
 import { Screen } from '../templates';
-import { Button, Empty, List, SearchField } from '../ui';
+import { Button, CountBadge, Empty, IconButton, Inline, List, SearchField } from '../ui';
 import { roomRecords, type IsoDate, type Ledger, type LedgerRecord } from '../../shared/ledger';
+import type { Profile } from '../../shared/people';
 
 /**
  * Home: every ledger as a room, most recent activity first, like a messenger. A parent's
  * activity includes its children's records. Search narrows by name; 새 가계부 creates one.
+ * The top right opens friends (with requests and invitations waiting) and my account.
  */
 export function RoomListView({
   ledgers,
@@ -17,6 +19,10 @@ export function RoomListView({
   today,
   onOpenRoom,
   onCreate,
+  profile,
+  pending = 0,
+  onOpenFriends,
+  onOpenAccount,
 }: {
   ledgers: Ledger[];
   records: LedgerRecord[];
@@ -25,6 +31,11 @@ export function RoomListView({
   today: IsoDate;
   onOpenRoom(room: Ledger): void;
   onCreate(): void;
+  profile?: Profile;
+  /** Friend requests and ledger invitations waiting for an answer. */
+  pending?: number;
+  onOpenFriends?(): void;
+  onOpenAccount?(): void;
 }) {
   const [query, setQuery] = useState('');
   const rooms = ledgers
@@ -42,9 +53,27 @@ export function RoomListView({
     <Screen
       top={
         <>
-          <h1 className="view-home-title">
-            <UgaLogo size={112} alt="우리의 가계부" />
-          </h1>
+          <Inline justify="between" align="center" wrap={false}>
+            <h1 className="view-home-title">
+              <UgaLogo size={112} alt="우리의 가계부" />
+            </h1>
+            <Inline gap={1} align="center" wrap={false} className="view-home-actions">
+              {onOpenFriends && (
+                <IconButton
+                  aria-label={pending ? `친구, 답할 요청·초대 ${pending}건` : '친구'}
+                  onClick={onOpenFriends}
+                >
+                  <Users size={22} />
+                  <CountBadge count={pending} label={`답할 요청·초대 ${pending}건`} />
+                </IconButton>
+              )}
+              {onOpenAccount && profile && (
+                <IconButton aria-label="내 계정" onClick={onOpenAccount}>
+                  <UgaAvatar mood={profile.avatar} size={32} />
+                </IconButton>
+              )}
+            </Inline>
+          </Inline>
           <SearchField
             aria-label="가계부 검색"
             placeholder="가계부 이름"

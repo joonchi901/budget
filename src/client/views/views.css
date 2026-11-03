@@ -39,3 +39,55 @@
   align-items: center;
   gap: var(--brand-space-2);
 }
+
+/* People and account screens. */
+.view-signup {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: var(--brand-space-8) var(--brand-space-4) var(--brand-space-6);
+}
+.view-signup h1 {
+  font-size: var(--brand-font-size-title);
+}
+.view-signup > .ui-stack > .ui-button {
+  width: 100%;
+}
+.view-note {
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border-radius: var(--brand-radius-control);
+  background: var(--brand-success-soft);
+  color: var(--brand-success);
+  font-size: var(--brand-font-size-sm);
+}
+.view-meta {
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-sm);
+}
+.view-check {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+.view-page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+.view-page-header h1 {
+  font-size: var(--brand-font-size-section);
+}
+.view-find > .ui-text-field {
+  flex: 1;
+}
+.view-actions > .ui-button {
+  flex: 1;
+}
+.view-home-actions .ui-icon-button {
+  position: relative;
+}
+.view-home-actions .ui-count-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}

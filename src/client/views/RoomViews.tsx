@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, Copy, Settings2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Settings2, Users } from 'lucide-react';
 import {
   DayRecords,
   ChildLedgerList,
@@ -181,6 +181,7 @@ export function LedgerRoomView({
   onOpenSettings,
   onCopy,
   onOpenLedger,
+  onOpenMembers,
   ...actions
 }: RoomActions & {
   ledger: Ledger;
@@ -191,6 +192,8 @@ export function LedgerRoomView({
   /** 복사해서 만들기, for ledgers that hold records. */
   onCopy(): void;
   onOpenLedger(ledger: Ledger): void;
+  /** 멤버, or 하위 전부 공유 for a parent. */
+  onOpenMembers?(): void;
 }) {
   const parent = isParent(ledger);
   const leaves = leafLedgers(ledgers, ledger);
@@ -211,6 +214,15 @@ export function LedgerRoomView({
       views={parent ? ['table', 'calendar', 'stats', 'ledgers'] : ['table', 'calendar', 'stats']}
       menuItems={[
         { label: '설정', icon: <Settings2 size={18} />, onSelect: onOpenSettings },
+        ...(onOpenMembers
+          ? [
+              {
+                label: parent ? '하위 전부 공유' : '멤버',
+                icon: <Users size={18} />,
+                onSelect: onOpenMembers,
+              },
+            ]
+          : []),
         ...(parent
           ? []
           : [{ label: '복사해서 만들기', icon: <Copy size={18} />, onSelect: onCopy }]),

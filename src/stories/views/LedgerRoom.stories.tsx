@@ -41,6 +41,7 @@ const meta = {
           onOpenSettings={() => setLog('설정')}
           onCopy={() => setLog('복사')}
           onOpenLedger={(ledger) => setLog(`하위: ${ledger.name}`)}
+          onOpenMembers={() => setLog('멤버')}
         />
         <p role="status" className="sr-only">
           {log}
@@ -110,3 +111,12 @@ export const ParentMonthCalendar: Story = {
   },
 };
 export const ParentTravel: Story = { args: { ledger: travel } };
+export const MembersMenu: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(c.getByRole('button', { name: '11월 메뉴' }));
+    await userEvent.click(page.getByRole('menuitem', { name: '멤버' }));
+    await expect(c.getByRole('status')).toHaveTextContent('멤버');
+  },
+};

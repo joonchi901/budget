@@ -216,6 +216,14 @@
     "usage": "화면의 내용 경계·요약·도구모음·키보드 스크롤 영역"
   },
   {
+    "name": "Notice",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/Notice.tsx",
+    "story": "src/stories/molecules/Notice.stories.tsx",
+    "status": "ready",
+    "usage": "페이지 위에 떠서 알리는 메시지. 저장 실패(alert)·복사 완료(status), 닫기"
+  },
+  {
     "name": "RoomListItem",
     "layer": "04 Organisms",
     "source": "src/client/ledger/Room.tsx",
@@ -312,6 +320,54 @@
     "usage": "상위 가계부의 하위 보기, 하위·상위 가계부 선택(순환 제외), 상위 방에서 저장할 가계부 선택"
   },
   {
+    "name": "PersonRow",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "사람 한 줄: 우가 그림, 표시 이름, @아이디"
+  },
+  {
+    "name": "AvatarPicker",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "프로필 그림 고르기. 우가 그림 4종만, 올린 파일은 받지 않음"
+  },
+  {
+    "name": "FriendList",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "받은 요청·친구·보낸 요청·차단. 수락·거절·취소·삭제·차단"
+  },
+  {
+    "name": "MemberList",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "가계부 멤버와 권한. 소유자만 편집·보기 바꾸기와 내보내기"
+  },
+  {
+    "name": "FriendPicker",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "초대할 친구 여러 명 고르기"
+  },
+  {
+    "name": "RoomInviteRow",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "받은 가계부 초대 한 줄: 가계부, 초대한 사람·권한, 시간"
+  },
+  {
     "name": "Dialog",
     "layer": "05 Templates",
     "source": "src/client/templates/Dialog.tsx",
@@ -334,5 +390,13 @@
     "story": "src/stories/templates/Sheets.stories.tsx",
     "status": "ready",
     "usage": "입력·설정 전체 화면 시트와 짧은 내용용 하단 시트"
+  },
+  {
+    "name": "StatusScreen",
+    "layer": "05 Templates",
+    "source": "src/client/templates/Status.tsx",
+    "story": "src/stories/templates/StatusScreen.stories.tsx",
+    "status": "ready",
+    "usage": "앱 전체 불러오는 중·불러오기 실패(다시 시도)"
   }
 ]

@@ -291,3 +291,48 @@
   flex-direction: column;
   gap: var(--brand-space-2);
 }
+
+/* People: friends, members and invitations. */
+.ledger-people-section {
+  display: grid;
+  gap: var(--brand-space-2);
+}
+.ledger-people-section h2 {
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-sm);
+}
+.ledger-people-section h2 span {
+  color: var(--brand-accent);
+}
+.ledger-member-role {
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-sm);
+  white-space: nowrap;
+}
+.ledger-friend-picker {
+  display: grid;
+  gap: var(--brand-space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ledger-friend-picker legend {
+  margin-bottom: var(--brand-space-2);
+  padding: 0;
+  font-weight: var(--brand-font-weight-bold);
+}
+.ledger-friend-option {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  min-height: 56px;
+  padding: var(--brand-space-2) var(--brand-space-4);
+  cursor: pointer;
+}
+.ledger-friend-option small {
+  color: var(--brand-text-secondary);
+}
+.ledger-avatar-picker img {
+  display: block;
+}

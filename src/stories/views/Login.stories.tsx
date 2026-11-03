@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { LoginView } from '../../client/views';
+import { yedi } from '../fixtures';
 
 const meta = {
   title: '06 Views · 화면/로그인',
@@ -10,7 +11,12 @@ const meta = {
   globals: { viewport: { value: 'mobile390', isRotated: false } },
   parameters: {
     ownsMain: true,
-    docs: { description: { component: '등록된 두 Google 계정만 들어오는 로그인 화면.' } },
+    docs: {
+      description: {
+        component:
+          'Google 로그인. 처음이면 로그인 뒤 가입(프로필 만들기)으로 이어집니다. 가입 초대 링크로 열면 누가 초대했는지 보여줍니다.',
+      },
+    },
   },
   args: { onLogin: () => {} },
 } satisfies Meta<typeof LoginView>;
@@ -28,6 +34,12 @@ export const Ready: Story = {
     await expect(c.getByRole('button', { name: '확인하고 있어요' })).toBeDisabled();
   },
 };
-export const NotRegistered: Story = {
-  args: { error: '등록되지 않은 계정이에요. 가계부에 등록된 Google 계정으로 다시 시도해 주세요.' },
+export const Failed: Story = {
+  args: { error: 'Google 로그인을 마치지 못했어요. 다시 시도해 주세요.' },
+};
+export const Invited: Story = {
+  args: { invitedBy: yedi },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText(/예디님이 우가에 초대했어요/)).toBeVisible();
+  },
 };

@@ -1,15 +1,18 @@
 import { UgaLogo } from '../brand/Uga';
 import { Button, Stack } from '../ui';
+import type { Profile } from '../../shared/people';
 
-/** Sign-in for the two registered Google accounts. */
+/** Google sign-in. Opened from a signup link, it says who invited; joining makes you friends. */
 export function LoginView({
   onLogin,
   busy = false,
   error,
+  invitedBy,
 }: {
   onLogin(): void;
   busy?: boolean;
   error?: string;
+  invitedBy?: Profile;
 }) {
   return (
     <main className="view-login">
@@ -17,7 +20,11 @@ export function LoginView({
         <h1>
           <UgaLogo variant="primary" size={180} alt="우리의 가계부" />
         </h1>
-        <p className="muted">둘이 함께 쓰는 가계부예요. 등록된 Google 계정으로 들어와 주세요.</p>
+        <p className="muted">
+          {invitedBy
+            ? `${invitedBy.name}님이 우가에 초대했어요. 가입하면 바로 친구가 돼요.`
+            : '혼자 써도, 함께 써도 좋은 가계부예요.'}
+        </p>
         {error && (
           <p className="view-error" role="alert">
             {error}

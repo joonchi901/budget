@@ -10,6 +10,7 @@ import {
   type Member,
   type TagOption,
 } from '../shared/ledger';
+import type { Friend, LedgerMember, Profile, RoomInvite, SignupLink } from '../shared/people';
 
 export const FIXTURE_TODAY = '2026-11-02';
 
@@ -291,3 +292,45 @@ for (const item of records) {
   const problems = ledger ? recordProblems(ledger, item) : ['없는 가계부'];
   if (problems.length) throw new Error(`fixture ${item.id} ${item.title}: ${problems.join(', ')}`);
 }
+
+// People. `me` is 준상; 일본여행 is shared with 예디, and 예미 has invited me to her ledger.
+export const me: Profile = { id: 'u1', handle: 'junsang', name: '준상', avatar: 'happy' };
+export const yedi: Profile = { id: 'u2', handle: 'yedi_kim', name: '예디', avatar: 'calm' };
+export const yemi: Profile = { id: 'u3', handle: 'yemi22', name: '예미', avatar: 'surprise' };
+export const minho: Profile = { id: 'u4', handle: 'minho_park', name: '민호', avatar: 'sleep' };
+export const seoyeon: Profile = { id: 'u5', handle: 'seoyeon', name: '서연', avatar: 'happy' };
+
+export const friends: Friend[] = [
+  { profile: yedi, status: 'friend' },
+  { profile: minho, status: 'friend' },
+  { profile: yemi, status: 'incoming' },
+  { profile: seoyeon, status: 'outgoing' },
+];
+
+export const tripMembers: LedgerMember[] = [
+  { profile: me, role: 'owner' },
+  { profile: yedi, role: 'editor' },
+  { profile: minho, role: 'viewer', invited: true },
+];
+
+export const invites: RoomInvite[] = [
+  {
+    id: 'invite-jeju',
+    ledger: {
+      id: 'jeju',
+      name: '제주 여행',
+      icon: 'sprout',
+      period: { start: '2026-12-20', end: '2026-12-23' },
+    },
+    from: yemi,
+    role: 'editor',
+    sentAt: '2026-11-02T09:10:00+09:00',
+  },
+];
+
+export const signupLink: SignupLink = {
+  url: 'https://uga.example/j/K7xQ2mP9vR4tW8yZ',
+  expiresAt: '2026-12-02',
+  joined: 1,
+  limit: 20,
+};
