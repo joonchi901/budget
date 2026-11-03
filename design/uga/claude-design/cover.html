@@ -1,0 +1,52 @@
+<!-- @dsCard height=300 -->
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>우가 — cover</title>
+<style>
+  html, body { margin: 0; }
+  .cover { position: relative; width: 960px; height: 300px; overflow: hidden; background: var(--brand-canvas); }
+  .cover svg { position: absolute; left: 480px; top: 0; width: 480px; height: 300px; }
+  .brown { fill: var(--brand-brown); }
+  .coral { fill: var(--brand-coral); }
+  .sand { fill: var(--brand-sand); }
+  .mint { fill: var(--brand-mint); }
+  .sky { fill: var(--brand-sky); }
+  .ground { fill: var(--brand-canvas); }
+  .slab, .tile { rx: var(--brand-radius-card); }
+  .text { position: absolute; left: 40px; bottom: 40px; max-width: 440px; }
+  .name { margin: 0; font-family: var(--font-body); font-size: 120px; line-height: 0.95; color: var(--brand-text); }
+  .tagline { margin: var(--brand-space-2) 0 0; font-family: var(--font-body); font-size: 14px; color: var(--brand-muted); }
+</style>
+</head>
+<body>
+<div class="cover">
+  <!--
+    blocks: brand-brown slab 168×324, brand-coral pill 248×88, brand-sand tile 120×140, brand-mint disc r56, brand-sky pill 112×24
+    arrangement: one tall brown slab bleeding off top and bottom, with satellites to its right
+    pattern: discs cut out of the slab in brand-canvas; soft, friendly, pill-and-disc radii (README: 각진 모서리를 두지 않아요)
+    steps and radii: pitch brand-space-6 (24px), gaps brand-space-4 (16px), corners brand-radius-card (22px), pills half the short side
+  -->
+  <svg viewBox="0 0 480 300" aria-hidden="true">
+    <rect class="brown slab" x="24" y="-12" width="168" height="324" />
+    <rect class="coral" x="208" y="32" width="248" height="88" rx="44" />
+    <rect class="sand tile" x="208" y="136" width="120" height="140" />
+    <circle class="mint" cx="400" cy="196" r="56" />
+    <rect class="sky" x="344" y="264" width="112" height="24" rx="12" />
+    <g class="ground">
+      <circle cx="48" cy="200" r="6" /><circle cx="72" cy="200" r="6" /><circle cx="96" cy="200" r="6" />
+      <circle cx="120" cy="200" r="6" /><circle cx="144" cy="200" r="6" /><circle cx="168" cy="200" r="6" />
+      <circle cx="48" cy="224" r="6" /><circle cx="72" cy="224" r="6" /><circle cx="96" cy="224" r="6" />
+      <circle cx="120" cy="224" r="6" /><circle cx="144" cy="224" r="6" /><circle cx="168" cy="224" r="6" />
+      <circle cx="48" cy="248" r="6" /><circle cx="72" cy="248" r="6" /><circle cx="96" cy="248" r="6" />
+      <circle cx="120" cy="248" r="6" /><circle cx="144" cy="248" r="6" /><circle cx="168" cy="248" r="6" />
+    </g>
+  </svg>
+  <div class="text">
+    <p class="name">우가</p>
+    <p class="tagline">혼자 써도, 함께 써도 되는 가계부예요.</p>
+  </div>
+</div>
+</body>
+</html>
