@@ -600,17 +600,20 @@ function TrendChart({
           ))}
         </ul>
       )}
-      <table className="sr-only">
-        <caption>{title}</caption>
-        <tbody>
-          {columns.map((column) => (
-            <tr key={column.start}>
-              <th scope="row">{readoutLabel[bucket](column.start)}</th>
-              <td>{won(column.total)}원</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* A table keeps its full height whatever its own box says, so a hidden div holds it. */}
+      <div className="sr-only">
+        <table>
+          <caption>{title}</caption>
+          <tbody>
+            {columns.map((column) => (
+              <tr key={column.start}>
+                <th scope="row">{readoutLabel[bucket](column.start)}</th>
+                <td>{won(column.total)}원</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Stack>
   );
 }

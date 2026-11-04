@@ -237,7 +237,7 @@
     "source": "src/client/ledger/Room.tsx",
     "story": "src/stories/organisms/RoomHeader.stories.tsx",
     "status": "ready",
-    "usage": "방 제목 막대: 뒤로, 이름·기간, ⋯ 메뉴"
+    "usage": "방 제목 막대: 가계부 목록(휴대폰), 상위 경로 › 이름·기간, ⋯ 메뉴"
   },
   {
     "name": "RoomTabBar",
@@ -309,7 +309,7 @@
     "source": "src/client/ledger/Chat.tsx",
     "story": "src/stories/organisms/ChatThread.stories.tsx",
     "status": "ready",
-    "usage": "가계부 방 대화: 날짜별 말풍선(내 글 오른쪽), 글 또는 우가 스티커 보내기"
+    "usage": "가계부 방 대화: 프로필 사진·이름 아래 말풍선과 옆 시간(내 글 오른쪽), 말풍선 아래 스티커 반응, 호버 옵션(반응 추가·답장·⋯), 글 또는 우가 스티커 보내기"
   },
   {
     "name": "PeriodCalendar / DayRecords",

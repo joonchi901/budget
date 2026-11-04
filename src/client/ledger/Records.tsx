@@ -165,7 +165,12 @@ export function RecordDayGroup({
   const sum = totals(records, context.ledgers);
   const planned = records.every((record) => recordState(record, context.today) === 'scheduled');
   return (
-    <section className="ledger-day" aria-labelledby={id} data-planned={planned || undefined}>
+    <section
+      className="ledger-day"
+      aria-labelledby={id}
+      data-date={date}
+      data-planned={planned || undefined}
+    >
       <div className="ledger-day-heading">
         <h2 id={id}>{dayLabel(date)}</h2>
         <span className="ledger-day-totals">

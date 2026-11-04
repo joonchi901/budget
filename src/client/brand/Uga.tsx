@@ -13,8 +13,14 @@ const known = <T extends string>(names: readonly T[], value: string, fallback: T
   names.includes(value as T) ? (value as T) : fallback;
 
 const reactionIds: readonly string[] = UGA_REACTIONS.map((item) => item.id);
+const decorationIds: readonly string[] = UGA_REACTIONS.filter((item) => item.group === '장식').map(
+  (item) => item.id,
+);
 
-/** A reaction sticker from the 96px copies; an unknown stored id draws nothing. */
+/**
+ * A reaction: a sticker from the 96px copies, or a decoration (128px); an unknown stored id draws
+ * nothing.
+ */
 export function UgaReaction({
   id,
   size = 20,
@@ -25,7 +31,11 @@ export function UgaReaction({
   return (
     <img
       className={`uga-reaction ${className}`.trim()}
-      src={`/brand/reactions/stickers-96/uga-sticker-${id}.png`}
+      src={
+        decorationIds.includes(id)
+          ? `/brand/reactions/decorations/uga-decor-${id}.png`
+          : `/brand/reactions/stickers-96/uga-sticker-${id}.png`
+      }
       width={size}
       height={size}
       alt={alt}

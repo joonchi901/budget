@@ -682,12 +682,12 @@ const assetGroups = {
   },
   Reactions: {
     tile: 'm',
-    note: '내역에 다는 반응 스티커 30종(대화 12·감정 18, 256px PNG). 반응에는 `reactions/stickers-96/`의 96px 사본을 칩 22px·고르기 44px로 써요. 문구가 없어 같은 표정에 상황에 맞는 말을 붙일 수 있어요. 저장된 반응 이름도 이 30종만 받아요.',
+    note: '내역에 다는 반응 스티커 30종(대화 12·감정 18, 256px PNG). 반응에는 `reactions/stickers-96/`의 96px 사본을 칩 22px·고르기 44px로 써요. 문구가 없어 같은 표정에 상황에 맞는 말을 붙일 수 있어요. 저장된 반응 이름은 이 30종과 장식 23종만 받아요.',
     files: pngsIn('reactions/stickers'),
   },
   Decorations: {
     tile: 'xs',
-    note: '작은 장식 23종(128px PNG, 24px로 써요). 스티커 옆이나 빈 상태에 곁들이는 그림이고, 혼자서 뜻을 전하지 않아요.',
+    note: '작은 장식 23종(128px PNG). 스티커 옆이나 빈 상태에 곁들이고, 반응과 대화에서는 스티커처럼 골라 보내요(칩 22px·고르기 44px).',
     files: pngsIn('reactions/decorations'),
   },
 };

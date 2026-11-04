@@ -2,11 +2,13 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { ChatThread } from '../../client/ledger';
+import { ledgerPath } from '../../shared/ledger';
 import { LedgerRoomView, LedgerSettingsView } from '../../client/views';
 import {
   FIXTURE_TODAY,
   december,
   ledgers,
+  me,
   members,
   messages,
   november,
@@ -14,6 +16,7 @@ import {
   travel,
   upcoming,
   year2026,
+  yedi,
 } from '../fixtures';
 
 const meta = {
@@ -26,7 +29,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '가계부 하나의 방. 상단에 방 이름·기간·요약, 하단에 내역·통계·설정 탭이 있습니다. 내역 탭은 위쪽 조회 도구 옆에서 표/캘린더를 바꾸고, 탭 막대 바로 위에 가로 전체 내역 추가 버튼이 늘 보입니다. 설정은 탭 안에서 바로 고칩니다. 하위 가계부가 있으면(상위 가계부) 아래 모든 내역을 한 번씩 모으고 금액 아래에 원본 가계부로 가는 링크("11월 →")를 두며, 캘린더는 월 단위로 넘깁니다. 하위 탭은 없고 이 링크로 하위 방에 들어갑니다. 통계 탭은 내역과 같은 조회 조건을 쓰고 그 아래 차트(요약·순위·비율·추이)를 보여 줍니다. 차트의 태그를 누르면 모든 차트가 그 조건으로 좁혀지고 "이 조건으로 내역 보기"로 표로 갑니다. 기준은 차트마다 잠깐 바꿔 볼 수 있고, 소유자는 그 기준을 기본으로 저장하거나 편집에서 차트를 더하고 빼고 순서를 바꿉니다. 내역마다 우가 스티커로 반응할 수 있습니다. 내역을 적는 가계부에는 설정 왼쪽에 대화 탭이 있습니다.',
+          '가계부 하나의 방. 상단에 방 이름·기간·요약, 하단에 내역·통계·설정 탭이 있습니다. 내역 탭은 위쪽 조회 도구 옆에서 표/캘린더를 바꾸고, 탭 막대 바로 위에 가로 전체 내역 추가 버튼이 늘 보입니다. 설정은 탭 안에서 바로 고칩니다. 하위 가계부가 있으면(상위 가계부) 아래 모든 내역을 한 번씩 모으고 금액 아래에 원본 가계부로 가는 링크("11월 →")를 두며, 캘린더는 월 단위로 넘깁니다. 하위 탭은 없고 이 링크로 하위 방에 들어갑니다. 통계 탭은 내역과 같은 조회 조건을 쓰고 그 아래 차트(요약·순위·비율·추이)를 보여 줍니다. 차트의 태그를 누르면 모든 차트가 그 조건으로 좁혀지고 "이 조건으로 내역 보기"로 표로 갑니다. 기준은 차트마다 잠깐 바꿔 볼 수 있고, 소유자는 그 기준을 기본으로 저장하거나 편집에서 차트를 더하고 빼고 순서를 바꿉니다. 내역마다 우가 스티커로 반응할 수 있습니다. 가계부마다(상위 포함) 설정 왼쪽에 그 가계부만의 대화 탭이 있고, 혼자 쓰면 메모라고 부릅니다. 입력창은 화면 아래 끝에 가로 전체로 붙습니다.',
       },
     },
   },
@@ -51,6 +54,9 @@ const meta = {
         <LedgerRoomView
           {...args}
           ledger={ledger}
+          path={ledgerPath(args.ledgers, ledger.id)}
+          onOpenPath={(item) => setLog(`경로: ${item.name}`)}
+          onBack={() => setLog('가계부 목록')}
           onSaveStatCards={(statCards) => {
             setLedger({ ...ledger, statCards });
             setLog(`통계 저장: ${statCards.map((card) => card.chart).join(', ')}`);
@@ -75,6 +81,8 @@ const meta = {
               messages={messages.filter((message) => message.ledgerId === args.ledger.id)}
               memberId="u1"
               members={members}
+              people={[me, yedi]}
+              onToggleReaction={(_, reaction) => setLog(`반응: ${reaction}`)}
               onSend={(content) =>
                 setLog(`대화: ${'text' in content ? content.text : content.sticker}`)
               }
@@ -260,5 +268,35 @@ export const Memo: Story = {
     // Used alone, the ledger's 대화 is its owner's 메모.
     await userEvent.click(c.getByRole('button', { name: '메모' }));
     await expect(c.getByRole('textbox', { name: '메시지' })).toBeVisible();
+    // The composer is the screen's bottom edge: full width, right on the tab bar.
+    const composer = canvasElement.querySelector('.ledger-chat-composer')!.getBoundingClientRect();
+    const screen = canvasElement.querySelector('.ui-screen')!.getBoundingClientRect();
+    const bar = canvasElement.querySelector('.ui-screen-bottom')!.getBoundingClientRect();
+    await expect(composer.left).toBeCloseTo(screen.left, 0);
+    await expect(composer.right).toBeCloseTo(screen.right, 0);
+    await expect(composer.bottom).toBeCloseTo(bar.top, 0);
+  },
+};
+export const ParentChat: Story = {
+  args: { ledger: year2026, memo: true },
+  play: async ({ canvasElement }) => {
+    // A 상위 가계부 keeps its own thread too.
+    const c = within(canvasElement);
+    await userEvent.click(c.getByRole('button', { name: '메모' }));
+    await expect(c.getByRole('textbox', { name: '메시지' })).toBeVisible();
+  },
+};
+export const Path: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    // 11월 sits under 하반기 under 2026; its title says so and leads up.
+    await expect(c.getByRole('navigation', { name: '상위 가계부' })).toHaveTextContent(
+      '2026하반기',
+    );
+    await userEvent.click(c.getByRole('button', { name: '2026' }));
+    await expect(c.getByRole('status')).toHaveTextContent('경로: 2026');
+    // Back is the room list, not the page before.
+    await userEvent.click(c.getByRole('button', { name: '가계부 목록' }));
+    await expect(c.getByRole('status')).toHaveTextContent('가계부 목록');
   },
 };

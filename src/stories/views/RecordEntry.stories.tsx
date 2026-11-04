@@ -55,6 +55,11 @@ type Story = StoryObj<typeof meta>;
 export const Add: Story = {
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
+    // A new record starts as 지출, though 고정지출 is listed before it.
+    await expect(page.getByRole('button', { name: '지출' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     await userEvent.click(page.getByRole('button', { name: '저장' }));
     await expect(page.getByRole('alert')).toHaveTextContent('내용, 금액');
     await userEvent.type(page.getByRole('textbox', { name: '금액' }), '13460');

@@ -13,7 +13,7 @@ export type ReactionContext = {
 };
 
 const labelOf = (id: string) => UGA_REACTIONS.find((item) => item.id === id)?.label;
-const groups = ['대화', '감정'] as const;
+const groups = ['대화', '감정', '장식'] as const;
 
 /**
  * Slack-like reactions under a record: one chip per Uga sticker with how many reacted (mine

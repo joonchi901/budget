@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ChatThread, HomeTabBar, type RoomView } from '../ledger';
 import { addDays, addMonths, localDate } from '../ledger/format';
 import { UgaLogo } from '../brand/Uga';
-import { AppShell, StatusScreen, useWide } from '../templates';
-import { Button, Notice } from '../ui';
+import { AppShell, Dialog, StatusScreen, useWide } from '../templates';
+import { Button, CloseButton, FormBody, FormFooter, Notice } from '../ui';
 import {
   AccountView,
   AppSettingsView,
@@ -24,9 +24,12 @@ import {
 import {
   isScheduled,
   leafLedgers,
+  ledgerPath,
+  pathBetween,
   rescheduled,
   writeAhead,
   type AppData,
+  type ChatMessage,
   type Id,
   type IsoDate,
   type Ledger,
@@ -43,7 +46,8 @@ type Sheet =
   | { type: 'create'; sourceId?: Id }
   | { type: 'asset'; asset?: Asset }
   | { type: 'members'; ledger: Ledger }
-  | { type: 'invite'; invite: RoomInvite };
+  | { type: 'invite'; invite: RoomInvite }
+  | { type: 'deleteMessage'; message: ChatMessage };
 
 const parentIdsOf = (ledgers: Ledger[], id: Id) =>
   ledgers.filter((ledger) => ledger.childIds.includes(id)).map((ledger) => ledger.id);
@@ -64,12 +68,17 @@ const withLedger = (data: AppData, ledger: Ledger, parentIds: Id[]): AppData => 
   ],
 });
 
-/** The record with the member's reaction added or taken away, for showing it at once. */
-const withReaction = (record: LedgerRecord, reaction: string, memberId: Id, on: boolean) => {
-  const who = (record.reactions?.[reaction] ?? []).filter((id) => id !== memberId);
-  const reactions = { ...record.reactions, [reaction]: on ? [...who, memberId] : who };
+/** The record or message with the member's reaction added or taken away, for showing it at once. */
+const withReaction = <T extends LedgerRecord | ChatMessage>(
+  item: T,
+  reaction: string,
+  memberId: Id,
+  on: boolean,
+): T => {
+  const who = (item.reactions?.[reaction] ?? []).filter((id) => id !== memberId);
+  const reactions = { ...item.reactions, [reaction]: on ? [...who, memberId] : who };
   if (!reactions[reaction].length) delete reactions[reaction];
-  return { ...record, reactions };
+  return { ...item, reactions };
 };
 
 /**
@@ -88,6 +97,8 @@ export function App() {
   const wide = useWide();
   const settingsPage = wide && tab === 'settings' ? (route.page ?? 'profile') : route.page;
   const [roomView, setRoomView] = useState<RoomView>('records');
+  /** The 상위 가계부 a room was opened through, for its title's path. */
+  const [via, setVia] = useState<{ roomId: Id; ids: Id[] }>();
   const [takenHandle, setTakenHandle] = useState<string>();
   const queue = useRef(Promise.resolve());
   const latest = useRef(0);
@@ -184,6 +195,9 @@ export function App() {
     );
 
   const room = data.ledgers.find((ledger) => ledger.id === roomId);
+  const roomPath = room
+    ? ledgerPath(data.ledgers, room.id, via?.roomId === room.id ? via.ids : undefined)
+    : [];
   /** Only owners change a ledger: its 통계 charts and 반복 내역 included. */
   const owns = (ledgerId: Id) =>
     Boolean(
@@ -211,7 +225,8 @@ export function App() {
   );
   const friendAction = (action: string) => (profile: Profile) =>
     send('PUT', `/api/friends/${profile.id}`, { action });
-  const openRoom = (id: Id) => {
+  const openRoom = (id: Id, through?: Id[]) => {
+    setVia(through && { roomId: id, ids: through });
     go({ tab: 'ledgers', roomId: id });
     if (data.unseen?.[id])
       change(
@@ -228,7 +243,8 @@ export function App() {
       unseen={data.unseen}
       today={today}
       currentId={roomId}
-      onOpenRoom={(ledger) => openRoom(ledger.id)}
+      currentPath={roomPath.map((ledger) => ledger.id)}
+      onOpenRoom={(ledger, through) => openRoom(ledger.id, through)}
       onCreate={() => setSheet({ type: 'create' })}
       tabBar={tabBar}
     />
@@ -285,37 +301,76 @@ export function App() {
             ledgers={data.ledgers}
             records={data.records}
             today={today}
-            onBack={back}
+            // On phones back is the room list; the desktop keeps the list beside the room.
+            onBack={wide ? undefined : () => go({ tab: 'ledgers' })}
+            path={roomPath}
+            onOpenPath={(ledger, index) =>
+              openRoom(
+                ledger.id,
+                roomPath.slice(0, index).map((item) => item.id),
+              )
+            }
             onViewChange={setRoomView}
             // Alone, the 대화 tab is the owner's 메모; it turns into 대화 once someone joins.
             memo={(data.ledgerMembers?.[room.id]?.length ?? 0) <= 1}
+            // Every ledger, 상위 included, keeps one thread of its own.
             chat={
-              !room.childIds.length && (
-                <ChatThread
-                  memo={(data.ledgerMembers?.[room.id]?.length ?? 0) <= 1}
-                  messages={(data.messages ?? []).filter((message) => message.ledgerId === room.id)}
-                  memberId={data.user.id}
-                  members={data.members}
-                  onSend={(content) => {
-                    const message = {
-                      id: crypto.randomUUID(),
-                      ledgerId: room.id,
-                      authorId: data.user.id,
-                      createdAt: new Date().toISOString(),
-                      ...content,
-                    };
-                    change(
-                      (current) => ({
-                        ...current,
-                        messages: [...(current.messages ?? []), message],
-                      }),
-                      'PUT',
-                      `/api/messages/${message.id}`,
-                      { ledgerId: room.id, ...content },
-                    );
-                  }}
-                />
-              )
+              <ChatThread
+                memo={(data.ledgerMembers?.[room.id]?.length ?? 0) <= 1}
+                messages={(data.messages ?? []).filter((message) => message.ledgerId === room.id)}
+                memberId={data.user.id}
+                members={data.members}
+                people={data.ledgerMembers?.[room.id]?.map((member) => member.profile)}
+                onToggleReaction={(message, reaction) => {
+                  const on = !message.reactions?.[reaction]?.includes(data.user.id);
+                  change(
+                    (current) => ({
+                      ...current,
+                      messages: (current.messages ?? []).map((item) =>
+                        item.id === message.id
+                          ? withReaction(item, reaction, data.user.id, on)
+                          : item,
+                      ),
+                    }),
+                    on ? 'PUT' : 'DELETE',
+                    `/api/messages/${message.id}/reactions/${reaction}`,
+                  );
+                }}
+                onSend={(content) => {
+                  const message = {
+                    id: crypto.randomUUID(),
+                    ledgerId: room.id,
+                    authorId: data.user.id,
+                    createdAt: new Date().toISOString(),
+                    ...content,
+                  };
+                  change(
+                    (current) => ({
+                      ...current,
+                      messages: [...(current.messages ?? []), message],
+                    }),
+                    'PUT',
+                    `/api/messages/${message.id}`,
+                    { ledgerId: room.id, ...content },
+                  );
+                }}
+                onEdit={(message, text) =>
+                  change(
+                    (current) => ({
+                      ...current,
+                      messages: (current.messages ?? []).map((item) =>
+                        item.id === message.id
+                          ? { ...item, text, editedAt: new Date().toISOString() }
+                          : item,
+                      ),
+                    }),
+                    'PUT',
+                    `/api/messages/${message.id}`,
+                    { ledgerId: message.ledgerId, text },
+                  )
+                }
+                onDelete={(message) => setSheet({ type: 'deleteMessage', message })}
+              />
             }
             onAddRecord={(date) => {
               const ledgers = leafLedgers(data.ledgers, room);
@@ -381,7 +436,14 @@ export function App() {
                     saveLedger({ ...room, statCards }, parentIdsOf(data.ledgers, room.id))
                 : undefined
             }
-            onOpenLedger={(ledger) => openRoom(ledger.id)}
+            // A record's own ledger opens below this room, keeping the path down to it.
+            onOpenLedger={(ledger) =>
+              openRoom(ledger.id, [
+                ...roomPath.map((item) => item.id),
+                room.id,
+                ...(pathBetween(data.ledgers, room.id, ledger.id) ?? []),
+              ])
+            }
             onOpenMembers={() => setSheet({ type: 'members', ledger: room })}
           />
         ) : tab === 'ledgers' ? (
@@ -516,6 +578,36 @@ export function App() {
           assetNameFor={(ledgerId) => assetFor(data.assets ?? [], data.ledgers, ledgerId)?.name}
           onClose={() => setSheet(undefined)}
         />
+      )}
+      {sheet?.type === 'deleteMessage' && (
+        <Dialog title="메시지를 지울까요?" onClose={() => setSheet(undefined)}>
+          <FormBody>
+            <p>모두의 대화에서 사라지고, 이 글에 단 답장에는 "삭제된 메시지"로 보여요.</p>
+          </FormBody>
+          <FormFooter>
+            <CloseButton variant="secondary" autoFocus>
+              취소
+            </CloseButton>
+            <Button
+              variant="primary"
+              className="view-danger"
+              onClick={() => {
+                const { id } = sheet.message;
+                change(
+                  (current) => ({
+                    ...current,
+                    messages: (current.messages ?? []).filter((item) => item.id !== id),
+                  }),
+                  'DELETE',
+                  `/api/messages/${id}`,
+                );
+                setSheet(undefined);
+              }}
+            >
+              지우기
+            </Button>
+          </FormFooter>
+        </Dialog>
       )}
       {sheet?.type === 'asset' && (
         <AssetEditView

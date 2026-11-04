@@ -108,11 +108,14 @@ const browser = await chromium.launch();
 const captured = [];
 const images = new Set();
 for (const entry of stories) {
-  // Stories tagged desktop show the AppShell at 1440 × 900; other screens at phone width.
-  const desktop = entry.tags?.includes('desktop');
+  // Stories tagged desktop show the AppShell at 1440 × 900, those tagged portrait on a portrait
+  // monitor (1080 × 1920); other screens at phone width.
+  const portrait = entry.tags?.includes('portrait');
+  const desktop = portrait || entry.tags?.includes('desktop');
   const view = desktop || entry.title.startsWith('06');
-  const width = desktop ? 1440 : view ? 390 : 600;
-  const page = await browser.newPage({ viewport: { width, height: desktop ? 900 : 844 } });
+  const width = portrait ? 1080 : desktop ? 1440 : view ? 390 : 600;
+  const screenHeight = portrait ? 1920 : desktop ? 900 : 844;
+  const page = await browser.newPage({ viewport: { width, height: screenHeight } });
   await page.route('**/*', (route) =>
     route.request().url().startsWith(base) ? route.continue() : route.abort(),
   );
@@ -163,7 +166,7 @@ for (const entry of stories) {
       '<div style="position: absolute; inset: 0; z-index: 40; background: var(--brand-backdrop)"></div><dialog open=""',
     );
   const height = desktop
-    ? 900
+    ? screenHeight
     : view
       ? result.dialog
         ? 844

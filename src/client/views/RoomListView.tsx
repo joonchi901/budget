@@ -47,6 +47,7 @@ export function RoomListView({
   onOpenRoom,
   onCreate,
   currentId,
+  currentPath,
   tabBar,
 }: {
   ledgers: Ledger[];
@@ -54,10 +55,13 @@ export function RoomListView({
   /** Records the other member added since this member last opened each room. */
   unseen?: Record<string, number>;
   today: IsoDate;
-  onOpenRoom(room: Ledger): void;
+  /** `via`: the 상위 가계부 above the row chosen, top first, when it was chosen in the tree. */
+  onOpenRoom(room: Ledger, via?: Id[]): void;
   onCreate(): void;
   /** The room open beside this list on desktop. */
   currentId?: Id;
+  /** Its 상위 가계부 as the room shows them, so only that row of a room listed twice is marked. */
+  currentPath?: Id[];
   /** The app's bottom tabs. */
   tabBar?: ReactNode;
 }) {
@@ -79,7 +83,7 @@ export function RoomListView({
   const byActivity = (a: Ledger, b: Ledger) =>
     (latest.get(b.id)?.createdAt ?? '').localeCompare(latest.get(a.id)?.createdAt ?? '');
   const search = query.trim().toLocaleLowerCase();
-  const rows: { key: string; room: Ledger; depth: number }[] = [];
+  const rows: { key: string; room: Ledger; depth: number; via?: Id[] }[] = [];
   if (search)
     for (const room of open
       .filter((item) => item.name.toLocaleLowerCase().includes(search))
@@ -88,7 +92,7 @@ export function RoomListView({
   else {
     // A 하위 가계부 held by two 상위 shows under each; `path` guards against a cycle in bad data.
     const visit = (room: Ledger, path: Id[]) => {
-      rows.push({ key: [...path, room.id].join('/'), room, depth: path.length });
+      rows.push({ key: [...path, room.id].join('/'), room, depth: path.length, via: path });
       open
         .filter((child) => room.childIds.includes(child.id) && !path.includes(child.id))
         .sort(byActivity)
@@ -99,6 +103,8 @@ export function RoomListView({
       .sort(byActivity)
       .forEach((room) => visit(room, []));
   }
+  const currentKey = currentId && [...(currentPath ?? []), currentId].join('/');
+  const exact = rows.some((row) => row.key === currentKey);
   return (
     <Screen
       top={
@@ -125,7 +131,7 @@ export function RoomListView({
     >
       {rows.length ? (
         <List aria-label="방 목록">
-          {rows.map(({ key, room, depth }) => (
+          {rows.map(({ key, room, depth, via }) => (
             <RoomListItem
               key={key}
               room={room}
@@ -133,8 +139,8 @@ export function RoomListView({
               unseen={unseen[room.id]}
               today={today}
               depth={depth}
-              current={room.id === currentId}
-              onOpen={() => onOpenRoom(room)}
+              current={exact ? key === currentKey : room.id === currentId}
+              onOpen={() => onOpenRoom(room, via)}
             />
           ))}
         </List>

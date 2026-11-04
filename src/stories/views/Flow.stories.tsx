@@ -124,7 +124,7 @@ export const AddRecordAppearsEverywhere: StoryObj<typeof meta> = {
     await userEvent.click(c.getByRole('button', { name: '통계' }));
     await expect(c.getByRole('button', { name: /^장보기/ })).toHaveTextContent('209,930원');
 
-    await userEvent.click(c.getByRole('button', { name: '뒤로' }));
+    await userEvent.click(c.getByRole('button', { name: '가계부 목록' }));
     await expect(c.getByRole('button', { name: /^하위 가계부 11월/ })).toHaveTextContent(
       '장보기_쿠팡 · 9,550원',
     );

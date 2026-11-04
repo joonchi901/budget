@@ -20,8 +20,9 @@ export const UGA_ICON_NAMES = [
 export const UGA_MOODS = ['happy', 'calm', 'surprise', 'sleep'] as const;
 
 /**
- * Uga stickers people can react to a record with (public/brand/reactions/manifest.json). 대화
- * stickers come first as everyday replies; 감정 stickers follow.
+ * Uga stickers and decorations people react to a record with or send in 대화
+ * (public/brand/reactions/manifest.json). 대화 stickers come first as everyday replies, 감정
+ * stickers follow, then 장식.
  */
 export const UGA_REACTIONS = [
   { id: 'nodding', label: '끄덕끄덕', group: '대화' },
@@ -54,4 +55,28 @@ export const UGA_REACTIONS = [
   { id: 'proud', label: '혼자 뿌듯', group: '감정' },
   { id: 'make-up', label: '슬쩍 화해', group: '감정' },
   { id: 'party-popper', label: '축하해요', group: '감정' },
+  // Decorations (128px, from the board's manifest): small things to send or react with.
+  { id: 'pebbles', label: '조약돌 세 알', group: '장식' },
+  { id: 'acorn', label: '도토리', group: '장식' },
+  { id: 'flower', label: '작은 꽃', group: '장식' },
+  { id: 'cloud', label: '둥근 구름', group: '장식' },
+  { id: 'campfire', label: '작은 모닥불', group: '장식' },
+  { id: 'leaf-bundle', label: '나뭇잎 꾸러미', group: '장식' },
+  { id: 'stone-coins', label: '돌 동전 두 닢', group: '장식' },
+  { id: 'steaming-mug', label: '김 나는 머그잔', group: '장식' },
+  { id: 'cookie', label: '쿠키 한 조각', group: '장식' },
+  { id: 'blanket', label: '작은 담요', group: '장식' },
+  { id: 'confetti', label: '색종이 조각', group: '장식' },
+  { id: 'ribbon', label: '작은 리본', group: '장식' },
+  { id: 'sun-rays', label: '햇살 세 줄', group: '장식' },
+  { id: 'steam-puff', label: '뿜는 콧김', group: '장식' },
+  { id: 'storm-cloud', label: '울퉁불퉁한 먹구름', group: '장식' },
+  { id: 'zigzag', label: '삐죽 지그재그', group: '장식' },
+  { id: 'tear-drop', label: '눈물 한 방울', group: '장식' },
+  { id: 'sweat-drop', label: '작은 땀방울', group: '장식' },
+  { id: 'swirl', label: '빙글 소용돌이', group: '장식' },
+  { id: 'typing-bubble', label: '점 세 개 말풍선', group: '장식' },
+  { id: 'stone-question', label: '돌조각 물음표', group: '장식' },
+  { id: 'stone-check', label: '돌판 체크', group: '장식' },
+  { id: 'pointing-hand', label: '콕 가리키는 손', group: '장식' },
 ] as const;

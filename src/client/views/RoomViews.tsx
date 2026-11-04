@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -55,7 +55,8 @@ import {
 
 type RoomActions = {
   today: IsoDate;
-  onBack(): void;
+  /** Back to the room list (phones); left out where the list stays beside the room. */
+  onBack?(): void;
   /** Starts a new record, on a date when chosen from the calendar. */
   onAddRecord(date?: IsoDate): void;
   onOpenRecord(record: LedgerRecord): void;
@@ -90,9 +91,14 @@ function Room({
   onOpenRecord,
   onOpenLedger,
   reacting,
+  path,
+  onOpenPath,
 }: RoomActions & {
   title: string;
   subtitle: string;
+  /** The 상위 가계부 above the room, top first, shown before its name. */
+  path?: Ledger[];
+  onOpenPath?(ledger: Ledger, index: number): void;
   ledgers: Ledger[];
   records: LedgerRecord[];
   views: RoomView[];
@@ -119,6 +125,18 @@ function Room({
   const [conditions, setConditions] = useState<TagCondition[]>([]);
   const [wide, setWide] = useState(false);
   const [day, setDay] = useState<IsoDate>();
+  /** The day last shown in the records beside the calendar. */
+  const [marked, setMarked] = useState<IsoDate>();
+  const listPart = useRef<HTMLDivElement>(null);
+  // With the records in view beside or under the calendar, a day scrolls them to it; alone (a
+  // phone) or on a day without records, its sheet opens (with 이 날짜로 추가).
+  const pickDay = (date: IsoDate) => {
+    const list = listPart.current;
+    const group = list?.querySelector<HTMLElement>(`[data-date="${date}"]`);
+    if (!list?.getClientRects().length || !group) return setDay(date);
+    group.scrollIntoView({ block: 'start' });
+    setMarked(date);
+  };
   // 통계: a 기준 picked for now per chart, and 편집's draft with the chart open in its sheet.
   const [axisFor, setAxisFor] = useState<{ [cardId: string]: string }>({});
   const [editing, setEditing] = useState<StatCard[]>();
@@ -169,6 +187,8 @@ function Room({
           <RoomHeader
             title={title}
             subtitle={subtitle}
+            path={path}
+            onOpenPath={onOpenPath}
             onBack={onBack}
             menuItems={menuItems}
             action={
@@ -209,8 +229,8 @@ function Room({
         <>
           {filterBar}
           {meta}
-          {/* Phones show 표 or 캘린더 as chosen; a wide body shows 캘린더 (the calendar left of
-              the records) or 테이블 (the 넓게 보기 table alone). */}
+          {/* Phones show 표 or 캘린더 as chosen; a desktop body shows 캘린더 (the calendar beside
+              or over the records) or 테이블 (the 넓게 보기 table alone). */}
           <div className="view-records" data-display={display} data-wide={wide || undefined}>
             <div className="view-records-calendar">
               {calendar.navigation}
@@ -219,11 +239,11 @@ function Room({
                 records={shown}
                 ledgers={ledgers}
                 today={today}
-                selected={day}
-                onSelect={setDay}
+                selected={day ?? marked}
+                onSelect={pickDay}
               />
             </div>
-            <div className="view-records-list">
+            <div className="view-records-list" ref={listPart}>
               {wide ? (
                 <RecordTable records={shown} {...context} />
               ) : (
@@ -487,6 +507,8 @@ export function LedgerRoomView({
   onOpenMembers,
   onSaveStatCards,
   memo,
+  path,
+  onOpenPath,
   ...actions
 }: RoomActions & {
   ledger: Ledger;
@@ -495,7 +517,7 @@ export function LedgerRoomView({
   records: LedgerRecord[];
   /** The 설정 tab's content, a LedgerSettingsView of this ledger. */
   settings: ReactNode;
-  /** The 대화 tab's content, a ChatThread of this ledger; parents have no 대화. */
+  /** The 대화 (메모 when used alone) tab's content: this ledger's own ChatThread, 상위 included. */
   chat?: ReactNode;
   /** Tells the app which tab is open, so it can look for new 대화 while it is. */
   onViewChange?(view: RoomView): void;
@@ -508,6 +530,10 @@ export function LedgerRoomView({
   onSaveStatCards?(cards: StatCard[]): void;
   /** Used alone: 대화 is the owner's 메모. */
   memo?: boolean;
+  /** The 상위 가계부 above this one, top first (ledgerPath), shown before its name. */
+  path?: Ledger[];
+  /** Opens one of them; `index` is its place in `path`. */
+  onOpenPath?(ledger: Ledger, index: number): void;
 }) {
   const parent = isParent(ledger);
   const leaves = leafLedgers(ledgers, ledger);
@@ -525,11 +551,7 @@ export function LedgerRoomView({
       subtitle={ledgerMeta(ledger)}
       ledgers={leaves}
       records={scoped}
-      views={
-        parent
-          ? ['records', 'stats', 'settings']
-          : ['records', 'stats', ...(chat ? (['chat'] as const) : []), 'settings']
-      }
+      views={['records', 'stats', ...(chat ? (['chat'] as const) : []), 'settings']}
       settingsView={settings}
       chatView={chat}
       onViewChange={onViewChange}
@@ -537,6 +559,8 @@ export function LedgerRoomView({
       statPeriod={ledger.period}
       onSaveStatCards={onSaveStatCards}
       memo={memo}
+      path={path}
+      onOpenPath={onOpenPath}
       menuItems={[
         ...(onOpenMembers
           ? [

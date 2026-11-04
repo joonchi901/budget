@@ -115,6 +115,8 @@ type MessageRow = {
   text: string | null;
   sticker: string | null;
   created_at: string;
+  reply_to: string | null;
+  edited_at: string | null;
 };
 type AssetRow = {
   id: Id;
@@ -127,62 +129,82 @@ type AssetRow = {
 
 // shortcut: loads every visible ledger and record at once; page records by period once data grows.
 async function load(db: D1Database, user: AppData['user']): Promise<Loaded> {
-  const [ledgerRows, edgeRows, recordRows, reactionRows, memberRows, assetRows, messageRows] =
-    await Promise.all([
-      db
-        .prepare(
-          'SELECT l.*, m.role FROM ledgers l JOIN ledger_members m ON m.ledger_id = l.id WHERE m.user_id = ?',
-        )
-        .bind(user.id)
-        .all<LedgerRow>(),
-      // A parent belongs to its owner alone, so only the owner sees its links (§8.1).
-      db
-        .prepare(
-          "SELECT c.parent_id, c.child_id FROM ledger_children c JOIN ledger_members m ON m.ledger_id = c.parent_id AND m.role = 'owner' WHERE m.user_id = ? ORDER BY c.position",
-        )
-        .bind(user.id)
-        .all<{ parent_id: Id; child_id: Id }>(),
-      db
-        .prepare(
-          'SELECT r.* FROM records r JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ? ORDER BY r.date, r.created_at',
-        )
-        .bind(user.id)
-        .all<RecordRow>(),
-      db
-        .prepare(
-          'SELECT x.record_id, x.reaction, x.user_id FROM record_reactions x JOIN records r ON r.id = x.record_id JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ? ORDER BY x.created_at',
-        )
-        .bind(user.id)
-        .all<{ record_id: Id; reaction: string; user_id: Id }>(),
-      // People who share a ledger with the user, or wrote or reacted to a visible record.
-      db
-        .prepare(
-          `SELECT id, name FROM users WHERE id IN (
+  const [
+    ledgerRows,
+    edgeRows,
+    recordRows,
+    reactionRows,
+    memberRows,
+    assetRows,
+    messageRows,
+    messageReactionRows,
+  ] = await Promise.all([
+    db
+      .prepare(
+        'SELECT l.*, m.role FROM ledgers l JOIN ledger_members m ON m.ledger_id = l.id WHERE m.user_id = ?',
+      )
+      .bind(user.id)
+      .all<LedgerRow>(),
+    // A parent belongs to its owner alone, so only the owner sees its links (§8.1).
+    db
+      .prepare(
+        "SELECT c.parent_id, c.child_id FROM ledger_children c JOIN ledger_members m ON m.ledger_id = c.parent_id AND m.role = 'owner' WHERE m.user_id = ? ORDER BY c.position",
+      )
+      .bind(user.id)
+      .all<{ parent_id: Id; child_id: Id }>(),
+    db
+      .prepare(
+        'SELECT r.* FROM records r JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ? ORDER BY r.date, r.created_at',
+      )
+      .bind(user.id)
+      .all<RecordRow>(),
+    db
+      .prepare(
+        'SELECT x.record_id, x.reaction, x.user_id FROM record_reactions x JOIN records r ON r.id = x.record_id JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ? ORDER BY x.created_at',
+      )
+      .bind(user.id)
+      .all<{ record_id: Id; reaction: string; user_id: Id }>(),
+    // People who share a ledger with the user, or wrote or reacted to a visible record.
+    db
+      .prepare(
+        `SELECT id, name FROM users WHERE id IN (
            SELECT o.user_id FROM ledger_members o JOIN ledger_members m ON m.ledger_id = o.ledger_id WHERE m.user_id = ?1
            UNION SELECT r.created_by FROM records r JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ?1
            UNION SELECT x.user_id FROM record_reactions x JOIN records r ON r.id = x.record_id
              JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ?1)`,
-        )
-        .bind(user.id)
-        .all<{ id: Id; name: string }>(),
-      db
-        .prepare('SELECT * FROM assets WHERE owner_id = ? ORDER BY created_at')
-        .bind(user.id)
-        .all<AssetRow>(),
-      // shortcut: the latest 500 messages across rooms; page per room once 대화 grows.
-      db
-        .prepare(
-          `SELECT * FROM (SELECT x.* FROM messages x JOIN ledger_members m ON m.ledger_id = x.ledger_id
+      )
+      .bind(user.id)
+      .all<{ id: Id; name: string }>(),
+    db
+      .prepare('SELECT * FROM assets WHERE owner_id = ? ORDER BY created_at')
+      .bind(user.id)
+      .all<AssetRow>(),
+    // shortcut: the latest 500 messages across rooms; page per room once 대화 grows.
+    db
+      .prepare(
+        `SELECT * FROM (SELECT x.* FROM messages x JOIN ledger_members m ON m.ledger_id = x.ledger_id
              WHERE m.user_id = ? ORDER BY x.created_at DESC LIMIT 500) ORDER BY created_at`,
-        )
-        .bind(user.id)
-        .all<MessageRow>(),
-    ]);
+      )
+      .bind(user.id)
+      .all<MessageRow>(),
+    db
+      .prepare(
+        'SELECT x.message_id, x.reaction, x.user_id FROM message_reactions x JOIN messages g ON g.id = x.message_id JOIN ledger_members m ON m.ledger_id = g.ledger_id WHERE m.user_id = ? ORDER BY x.created_at',
+      )
+      .bind(user.id)
+      .all<{ message_id: Id; reaction: string; user_id: Id }>(),
+  ]);
   const reactions = new Map<Id, Record<string, Id[]>>();
   for (const row of reactionRows.results) {
     const byReaction = reactions.get(row.record_id) ?? {};
     byReaction[row.reaction] = [...(byReaction[row.reaction] ?? []), row.user_id];
     reactions.set(row.record_id, byReaction);
+  }
+  const messageReactions = new Map<Id, Record<string, Id[]>>();
+  for (const row of messageReactionRows.results) {
+    const byReaction = messageReactions.get(row.message_id) ?? {};
+    byReaction[row.reaction] = [...(byReaction[row.reaction] ?? []), row.user_id];
+    messageReactions.set(row.message_id, byReaction);
   }
   const visible = new Set(ledgerRows.results.map((row) => row.id));
   const loaded: Loaded = {
@@ -234,6 +256,9 @@ async function load(db: D1Database, user: AppData['user']): Promise<Loaded> {
       ...(row.text ? { text: row.text } : {}),
       ...(row.sticker ? { sticker: row.sticker } : {}),
       createdAt: row.created_at,
+      ...(row.reply_to ? { replyTo: row.reply_to } : {}),
+      ...(row.edited_at ? { editedAt: row.edited_at } : {}),
+      ...(messageReactions.has(row.id) ? { reactions: messageReactions.get(row.id) } : {}),
     })),
   };
   return { ...loaded, ...(await loadPeople(db, loaded)) };
@@ -650,24 +675,50 @@ async function putAsset(db: D1Database, data: Loaded, id: Id, body: unknown) {
 }
 
 /** Sends a 대화 line to a ledger the user belongs to: a text of up to 1,000 characters or one sticker. */
+/**
+ * Sends a message, or changes the text of one the user wrote. A new one may answer another
+ * message of the same 대화 (답장).
+ */
 async function putMessage(db: D1Database, data: Loaded, id: Id, body: unknown) {
   const value = raw(body);
   const ledgerId = value.ledgerId;
   const text = typeof value.text === 'string' ? value.text.trim() : undefined;
   const sticker = value.sticker;
+  const replyTo = value.replyTo;
   if (
     !isId(ledgerId) ||
     (text === undefined) === (sticker === undefined) ||
     (text !== undefined && !isText(text, 1000)) ||
-    (sticker !== undefined && !reactionIds.includes(sticker as string))
+    (sticker !== undefined && !reactionIds.includes(sticker as string)) ||
+    (replyTo !== undefined && !isId(replyTo))
   )
     invalid('대화');
   if (!data.roles.has(ledgerId)) fail(403, 'FORBIDDEN', '이 가계부의 대화에 쓸 수 없어요.');
-  if (await db.prepare('SELECT 1 FROM messages WHERE id = ?').bind(id).first())
-    fail(409, 'ID_TAKEN', '이미 보낸 글이에요.');
+  const before = await db
+    .prepare('SELECT ledger_id, author_id, text FROM messages WHERE id = ?')
+    .bind(id)
+    .first<{ ledger_id: Id; author_id: Id; text: string | null }>();
+  if (before) {
+    // Only its author changes a message, and only its text.
+    if (before.author_id !== data.user.id || before.ledger_id !== ledgerId || !before.text || !text)
+      fail(403, 'FORBIDDEN', '내가 쓴 글만 고칠 수 있어요.');
+    await db
+      .prepare('UPDATE messages SET text = ?, edited_at = ? WHERE id = ?')
+      .bind(text, new Date().toISOString(), id)
+      .run();
+    return;
+  }
+  if (
+    replyTo &&
+    !(await db
+      .prepare('SELECT 1 FROM messages WHERE id = ? AND ledger_id = ?')
+      .bind(replyTo, ledgerId)
+      .first())
+  )
+    invalid('답장할 글');
   await db
     .prepare(
-      'INSERT INTO messages (id, ledger_id, author_id, text, sticker, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO messages (id, ledger_id, author_id, text, sticker, created_at, reply_to) VALUES (?, ?, ?, ?, ?, ?, ?)',
     )
     .bind(
       id,
@@ -676,8 +727,51 @@ async function putMessage(db: D1Database, data: Loaded, id: Id, body: unknown) {
       text ?? null,
       (sticker as string | undefined) ?? null,
       new Date().toISOString(),
+      (replyTo as string | undefined) ?? null,
     )
     .run();
+}
+
+/** Deletes a message its author wrote, with its reactions; answers to it then show it as deleted. */
+async function deleteMessage(db: D1Database, data: Loaded, id: Id) {
+  const own = await db
+    .prepare('SELECT 1 FROM messages WHERE id = ? AND author_id = ?')
+    .bind(id, data.user.id)
+    .first();
+  if (!own) fail(404, 'NOT_FOUND', '내가 쓴 글만 지울 수 있어요.');
+  await db.batch([
+    db.prepare('DELETE FROM message_reactions WHERE message_id = ?').bind(id),
+    db.prepare('DELETE FROM messages WHERE id = ?').bind(id),
+  ]);
+}
+
+/** Adds or removes the user's own reaction on a message of a 대화 they belong to. */
+async function setMessageReaction(
+  db: D1Database,
+  data: Loaded,
+  id: Id,
+  reaction: string,
+  on: boolean,
+) {
+  const message = await db
+    .prepare('SELECT ledger_id FROM messages WHERE id = ?')
+    .bind(id)
+    .first<{ ledger_id: Id }>();
+  if (!message || !data.roles.has(message.ledger_id)) fail(404, 'NOT_FOUND', '없는 글이에요.');
+  if (!reactionIds.includes(reaction)) invalid('반응');
+  await (
+    on
+      ? db
+          .prepare(
+            'INSERT OR IGNORE INTO message_reactions (message_id, reaction, user_id, created_at) VALUES (?, ?, ?, ?)',
+          )
+          .bind(id, reaction, data.user.id, new Date().toISOString())
+      : db
+          .prepare(
+            'DELETE FROM message_reactions WHERE message_id = ? AND reaction = ? AND user_id = ?',
+          )
+          .bind(id, reaction, data.user.id)
+  ).run();
 }
 
 async function deleteAsset(db: D1Database, data: Loaded, id: Id) {
@@ -733,6 +827,8 @@ export default {
         await deleteAsset(env.DB, data, target);
       else if (resource === 'messages' && request.method === 'PUT' && target)
         await putMessage(env.DB, data, target, await request.json());
+      else if (resource === 'messages' && request.method === 'DELETE' && target)
+        await deleteMessage(env.DB, data, target);
       else if (
         resource === 'records' &&
         isId(id) &&
@@ -742,6 +838,15 @@ export default {
         (request.method === 'PUT' || request.method === 'DELETE')
       )
         await setReaction(env.DB, data, id, reaction, request.method === 'PUT');
+      else if (
+        resource === 'messages' &&
+        isId(id) &&
+        extra === 'reactions' &&
+        reaction &&
+        rest === undefined &&
+        (request.method === 'PUT' || request.method === 'DELETE')
+      )
+        await setMessageReaction(env.DB, data, id, reaction, request.method === 'PUT');
       else if (resource === 'profile' && id === undefined && request.method === 'PUT')
         await putProfile(env.DB, data, await request.json());
       else if (

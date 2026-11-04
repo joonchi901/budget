@@ -395,6 +395,7 @@ export const messages: ChatMessage[] = [
     authorId: 'u2',
     text: '11월 고정지출 다 넣었어',
     createdAt: '2026-11-01T00:05:00.000Z',
+    reactions: { thanks: ['u1'] },
   },
   {
     id: 'm2',
@@ -423,6 +424,20 @@ export const messages: ChatMessage[] = [
     authorId: 'u2',
     text: '코스트코 영수증은 내일 올릴게',
     createdAt: '2026-11-01T23:30:00.000Z',
+  },
+  {
+    id: 'm6',
+    ledgerId: 'nov',
+    authorId: 'u2',
+    text: '주말에 같이 정리하자',
+    createdAt: '2026-11-01T23:30:40.000Z',
+  },
+  {
+    id: 'm7',
+    ledgerId: 'nov',
+    authorId: 'u2',
+    text: '영수증 사진도 같이 올릴게',
+    createdAt: '2026-11-01T23:32:10.000Z',
   },
 ];
 

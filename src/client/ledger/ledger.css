@@ -14,6 +14,61 @@
   line-height: var(--brand-line-height-heading);
   overflow-wrap: anywhere;
 }
+/* The path runs into the name on one line; when it is long the 상위 names give way first. */
+.ledger-room-heading {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.ledger-room-heading > h1 {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.ledger-room-path {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.ledger-room-path ol {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ledger-room-path li {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 2.5em;
+  color: var(--brand-muted);
+}
+.ledger-room-path li > :is(.ui-button, span) {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  padding: 2px var(--brand-space-1);
+  overflow: hidden;
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-section);
+  font-weight: var(--brand-font-weight-semibold);
+  line-height: var(--brand-line-height-heading);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ledger-room-path li > .ui-button {
+  border-radius: var(--brand-radius-control);
+}
+.ledger-room-path li > .ui-button:hover {
+  background: var(--brand-surface-hover);
+  color: var(--brand-text);
+}
+.ledger-room-path li > svg {
+  flex: none;
+}
+.ledger-room-path li:first-child > :is(.ui-button, span) {
+  padding-left: 0;
+}
 .ledger-room-header-title p {
   color: var(--brand-text-secondary);
   font-size: var(--brand-font-size-caption);
@@ -1017,41 +1072,185 @@
 }
 .ledger-chat-list {
   display: grid;
-  gap: var(--brand-space-3);
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
+/* A message like a messenger's: others' with their picture and name (first of a run), the bubble
+   with its time beside it, and reactions under it; mine on the right without picture or name. */
 .ledger-chat-message {
   display: grid;
-  justify-items: start;
-  gap: 2px;
-  max-width: 80%;
+  grid-template-columns: 36px minmax(0, 1fr);
+  column-gap: var(--brand-space-2);
+}
+.ledger-chat-message[data-start]:not(:first-child) {
+  margin-top: var(--brand-space-2);
 }
 .ledger-chat-message[data-mine] {
-  justify-self: end;
+  grid-template-columns: minmax(0, 1fr);
+}
+.ledger-chat-avatar {
+  display: flex;
+}
+.ledger-chat-main {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-width: 0;
+}
+.ledger-chat-message[data-mine] .ledger-chat-main {
   justify-items: end;
 }
-.ledger-chat-author,
+.ledger-chat-head {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  min-height: 20px;
+}
+.ledger-chat-author {
+  color: var(--brand-text);
+  font-size: var(--brand-font-size-sm);
+  font-weight: var(--brand-font-weight-semibold);
+}
 .ledger-chat-time {
+  flex: none;
   color: var(--brand-text-secondary);
   font-size: var(--brand-font-size-xs);
+  white-space: nowrap;
+}
+/* The bubble and its time. A long press selects nothing and calls up no system menu. */
+.ledger-chat-line {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  /* Room beside the bubble for its options; lines stay readable on a wide pane. */
+  max-width: min(100% - 92px, 560px);
+  -webkit-touch-callout: none;
+}
+.ledger-chat-message[data-mine] .ledger-chat-line {
+  flex-direction: row-reverse;
+}
+.ledger-chat-line > .ledger-chat-bubble {
+  min-width: 0;
 }
 .ledger-chat-bubble {
+  margin: 0;
   padding: var(--brand-space-2) var(--brand-space-3);
-  border-radius: 16px 16px 16px 4px;
+  border-radius: 16px;
   background: var(--brand-surface);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 .ledger-chat-message[data-mine] .ledger-chat-bubble {
-  border-radius: 16px 16px 4px 16px;
   background: var(--brand-accent-soft);
 }
-.ledger-chat-composer {
+/* The first bubble of each minute points at its sender. */
+.ledger-chat-message[data-tail] .ledger-chat-bubble {
+  border-start-start-radius: 4px;
+}
+.ledger-chat-message[data-mine][data-tail] .ledger-chat-bubble {
+  border-start-start-radius: 16px;
+  border-start-end-radius: 4px;
+}
+/* Options under the pointer or keyboard focus: beside the name, or beside a bubble that has
+   none. On a touch screen a long press opens the same menu instead. */
+.ledger-chat-tools {
   display: flex;
   align-items: center;
+  gap: 2px;
+  margin-block: -4px;
+  opacity: 0;
+}
+.ledger-chat-line > .ledger-chat-tools {
+  position: absolute;
+  inset-inline-start: calc(100% + 4px);
+  top: 50%;
+  margin: 0;
+  transform: translateY(-50%);
+}
+.ledger-chat-message[data-mine] .ledger-chat-line > .ledger-chat-tools {
+  inset-inline: auto calc(100% + 4px);
+}
+.ledger-chat-tools .ui-icon-button {
+  flex: none;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  color: var(--brand-text-secondary);
+}
+.ledger-chat-message:hover .ledger-chat-tools,
+.ledger-chat-tools:focus-within,
+.ledger-chat-tools:has([aria-expanded='true']) {
+  opacity: 1;
+}
+.ledger-chat-main > .ledger-reactions {
+  margin-top: 2px;
+}
+@media (hover: none) {
+  .ledger-chat-line {
+    max-width: min(100%, 560px);
+    user-select: none;
+  }
+  .ledger-chat-tools {
+    pointer-events: none;
+  }
+  /* Kept over the bubble's end, so the menu it anchors opens beside the message. */
+  .ledger-chat-line > .ledger-chat-tools {
+    inset-inline: auto 0;
+  }
+  .ledger-chat-message[data-mine] .ledger-chat-line > .ledger-chat-tools {
+    inset-inline: 0 auto;
+  }
+}
+/* An answer quotes the message it answers; choosing the quote shows that message. */
+.ledger-chat-quote.ui-button {
+  display: flex;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 0;
+  padding: 2px var(--brand-space-2);
+  border-left: 3px solid var(--brand-line-strong);
+  border-radius: 4px;
+  background: var(--brand-surface-muted);
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-xs);
+}
+.ledger-chat-quote > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Over the box while answering or changing a message: what it is about, and a way out. */
+.ledger-chat-context {
+  display: flex;
+  flex-basis: 100%;
+  align-items: center;
   gap: var(--brand-space-2);
+  min-width: 0;
+  padding-left: var(--brand-space-2);
+  border-left: 3px solid var(--brand-primary);
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-sm);
+}
+.ledger-chat-context > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ledger-chat-context strong {
+  color: var(--brand-text);
+}
+.ledger-chat-notice {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-xs);
+  text-align: center;
 }
 .ledger-chat-composer > .ui-input {
   flex: 1;

@@ -3,6 +3,7 @@ import {
   BookOpen,
   ChartPie,
   ChevronLeft,
+  ChevronRight,
   CornerDownRight,
   List,
   MessageCircle,
@@ -83,18 +84,27 @@ const viewLabels: Record<RoomView, string> = {
   settings: '설정',
 };
 
-/** Room title bar: back (to where the room was opened from), name and period, ⋯ menu. The title is
- * the page heading. */
+/**
+ * Room title bar: back to the room list (phones; the desktop keeps the list beside), the 상위
+ * 가계부 above the room as links before its name (2026 › 하반기 › 11월), its period, ⋯ menu. The
+ * name is the page heading.
+ */
 export function RoomHeader({
   title,
   subtitle,
+  path = [],
+  onOpenPath,
   onBack,
   menuItems,
   action,
 }: {
   title: string;
   subtitle: string;
-  onBack(): void;
+  /** The 상위 가계부 above the room, top first. */
+  path?: Ledger[];
+  onOpenPath?(ledger: Ledger, index: number): void;
+  /** Back to the room list; left out where the list stays beside the room. */
+  onBack?(): void;
   menuItems: MenuItem[];
   /** The room's main action, such as 내역 추가; shown here on desktop, where nothing is pinned
    * to the bottom. */
@@ -102,11 +112,33 @@ export function RoomHeader({
 }) {
   return (
     <div className="ledger-room-header-bar">
-      <IconButton aria-label="뒤로" onClick={onBack}>
-        <ChevronLeft size={22} />
-      </IconButton>
+      {onBack && (
+        <IconButton aria-label="가계부 목록" onClick={onBack}>
+          <ChevronLeft size={22} />
+        </IconButton>
+      )}
       <div className="ledger-room-header-title">
-        <h1>{title}</h1>
+        <div className="ledger-room-heading">
+          {path.length > 0 && (
+            <nav aria-label="상위 가계부" className="ledger-room-path">
+              <ol>
+                {path.map((ledger, index) => (
+                  <li key={ledger.id}>
+                    {onOpenPath ? (
+                      <Button variant="plain" onClick={() => onOpenPath(ledger, index)}>
+                        {ledger.name}
+                      </Button>
+                    ) : (
+                      <span>{ledger.name}</span>
+                    )}
+                    <ChevronRight size={18} aria-hidden="true" />
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          )}
+          <h1>{title}</h1>
+        </div>
         <p>{subtitle}</p>
       </div>
       {action && <span className="ledger-room-header-action">{action}</span>}

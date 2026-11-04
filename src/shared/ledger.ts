@@ -251,6 +251,12 @@ export type ChatMessage = {
   sticker?: string;
   /** ISO timestamp. */
   createdAt: string;
+  /** The message this one answers (답장); it may since have been deleted. */
+  replyTo?: Id;
+  /** When the author last changed its text (수정됨). */
+  editedAt?: string;
+  /** Uga sticker reactions, as on records. */
+  reactions?: Reactions;
 };
 
 /** What the API returns after every read or change: the user and only what they may see. */
@@ -357,6 +363,48 @@ export function roomRecords(
 ): LedgerRecord[] {
   const ids = new Set(leafLedgers(ledgers, root).map((ledger) => ledger.id));
   return records.filter((record) => ids.has(record.ledgerId));
+}
+
+/**
+ * The 상위 가계부 above a ledger, top first, for its title (2026 › 하반기 › 11월). A ledger may sit
+ * under several; `via` is the chain the person came down (ids from the top) and wins while it still
+ * holds, else each step takes the first parent.
+ */
+export function ledgerPath(ledgers: Ledger[], id: Id, via?: Id[]): Ledger[] {
+  const byId = new Map(ledgers.map((ledger) => [ledger.id, ledger]));
+  const chain = [...(via ?? []), id];
+  // The chain holds when it starts at a top ledger and each step is a child of the one before.
+  if (
+    via &&
+    !ledgers.some((ledger) => ledger.childIds.includes(chain[0])) &&
+    chain.every((step, index) => index === 0 || byId.get(chain[index - 1])?.childIds.includes(step))
+  )
+    return via.map((step) => byId.get(step)!);
+  const path: Ledger[] = [];
+  for (let current = id; ;) {
+    const parent = ledgers.find(
+      (ledger) => ledger.childIds.includes(current) && ledger.id !== id && !path.includes(ledger),
+    );
+    if (!parent) return path;
+    path.unshift(parent);
+    current = parent.id;
+  }
+}
+
+/** The ledgers strictly between `from` and a ledger below it (a 상위 room's record to its own). */
+export function pathBetween(
+  ledgers: Ledger[],
+  from: Id,
+  to: Id,
+  seen: Id[] = [],
+): Id[] | undefined {
+  for (const child of ledgers.find((ledger) => ledger.id === from)?.childIds ?? []) {
+    if (child === to) return [];
+    if (seen.includes(child)) continue;
+    const rest = pathBetween(ledgers, child, to, [...seen, from]);
+    if (rest) return [child, ...rest];
+  }
+  return undefined;
 }
 
 /** Whether `child` may go under `parent` without a cycle (not itself, not one of its ancestors). */

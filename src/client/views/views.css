@@ -135,26 +135,24 @@
 .view-records[data-display='calendar'] > .view-records-list {
   display: none;
 }
-@container screen (min-width: 720px) {
+/* A desktop body shows both at once and gives them its whole height, the records scrolling on
+   their own and the calendar's days growing to fill it: side by side when the body is wide, the
+   calendar over the records when it is tall (a portrait monitor). Smaller bodies switch between
+   them as phones do. The desktop body is a size container, so these read its height too. */
+@container screen ((min-width: 720px) and (orientation: landscape)) or ((min-width: 480px) and (min-height: 800px) and (orientation: portrait)) {
   .view-records {
     display: grid;
-    grid-template-columns: minmax(340px, 6fr) minmax(360px, 5fr);
-    align-items: start;
   }
   .view-records[data-display] > .view-records-list,
   .view-records[data-display] > .view-records-calendar {
     display: flex;
   }
-  .view-records-calendar {
-    position: sticky;
-    top: 0;
-  }
   .view-records-calendar .ledger-calendar-grid {
-    grid-auto-rows: minmax(84px, auto);
+    grid-auto-rows: minmax(48px, 1fr);
   }
-  /* 테이블 (넓게 보기) gives the table the whole width, without the calendar beside it. */
+  /* 테이블 (넓게 보기) gives the table the whole body, without the calendar. */
   .view-records[data-wide] {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   }
   .view-records[data-wide] > .view-records-calendar {
     display: none;
@@ -171,6 +169,33 @@
   .ledger-filter-row > .ui-icon-button[data-wide]:not([data-active]) {
     border-color: var(--brand-line);
     color: var(--brand-muted);
+  }
+}
+@container screen (min-width: 720px) and (orientation: landscape) {
+  .view-records {
+    grid-template-columns: minmax(340px, 6fr) minmax(360px, 5fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+}
+@container screen (min-width: 480px) and (min-height: 800px) and (orientation: portrait) {
+  .view-records {
+    grid-template-rows: minmax(0, 9fr) minmax(0, 11fr);
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* On any desktop body only the records scroll: the search, the toggle and the calendar stay put,
+   whether the two show together or one at a time. */
+@media (min-width: 1024px) {
+  .ui-shell .view-records {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .ui-shell .view-records-list,
+  .ui-shell .view-records-calendar {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
   }
 }
 
@@ -198,24 +223,26 @@
 .view-archived > .ui-list {
   margin-top: var(--brand-space-2);
 }
-/* Desktop pages: forms and conversations keep a readable width; 내역 추가 moves to the title bar
-   and pinned buttons sit at the bottom edge, with no tab bar under them. */
+/* Desktop pages: forms keep a readable width while 대화 spans the pane; 내역 추가 moves to the
+   title bar and pinned buttons sit at the bottom edge, with no tab bar under them. */
 @media (min-width: 1024px) {
   .ui-shell-main .view-form,
-  .ui-shell-main .view-settings,
-  .ui-shell-main .view-chat {
+  .ui-shell-main .view-settings {
     width: 100%;
     max-width: 720px;
   }
   .ui-shell .view-add-record.ui-button {
     display: none;
   }
-  .ui-shell .view-sticky-action.ui-button,
-  .ui-shell .view-chat .ledger-chat-composer {
+  .ui-shell .view-sticky-action.ui-button {
     bottom: 0;
   }
-  .ui-shell .view-chat > .ledger-chat {
-    min-height: calc(100cqh - var(--brand-space-5) - var(--brand-space-6));
+  /* Without a tab bar under it, the composer is the pane's bottom edge. Sticky stops at the
+     pane's padding, so its offset takes that back too. */
+  .ui-shell .view-chat .ledger-chat-composer {
+    bottom: calc(-1 * var(--brand-space-6));
+    margin: 0 calc(-1 * var(--brand-space-6)) calc(-1 * var(--brand-space-6));
+    padding: var(--brand-space-3) var(--brand-space-6);
   }
   /* An empty state's action sits under it instead of spanning the page. */
   .ui-shell-main .empty ~ .ui-button {
@@ -247,17 +274,24 @@
 
 /* 대화: the composer sits at the bottom even with few messages (the room's top and tab bar take
    about 260px), and stays just above the tab bar while the messages scroll. */
+/* 대화 fills the screen; its composer is the screen's bottom edge, full width, just above the tab
+   bar (the body's padding for the bar is taken back), and stays there while messages scroll. */
+.view-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
 .view-chat > .ledger-chat {
-  min-height: calc(100dvh - 260px);
+  flex: 1;
 }
 .view-chat .ledger-chat-composer {
   position: sticky;
-  bottom: calc(52px + var(--brand-space-3) * 3 + env(safe-area-inset-bottom));
+  bottom: calc(52px + var(--brand-space-3) * 2 + env(safe-area-inset-bottom));
   z-index: 4;
-  padding: var(--brand-space-2);
-  border-radius: var(--brand-radius-control);
-  background: var(--brand-surface-glass);
-  box-shadow: var(--brand-shadow-raised);
+  margin: 0 calc(-1 * var(--brand-space-4)) calc(-1 * var(--brand-space-4));
+  padding: var(--brand-space-2) var(--brand-space-4);
+  background: var(--brand-surface);
+  box-shadow: 0 -1px 0 var(--brand-line);
 }
 
 /* 통계: a toolbar over the charts (조건 summary, 내역 보기, 편집), then the charts, two to a row on

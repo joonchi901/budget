@@ -19,8 +19,11 @@
   background: var(--brand-canvas);
   box-shadow: 0 1px 0 var(--brand-line);
 }
-/* Views lay out by the body's width (`@container screen`), so a pane and a page agree. */
+/* Views lay out by the body's width (`@container screen`), so a pane and a page agree. It also
+   anchors hidden screen-reader content (`.sr-only`), which would otherwise stretch the page past a
+   pane that scrolls on its own. */
 .ui-screen-body {
+  position: relative;
   container: screen / inline-size;
   flex: 1;
   display: flex;
@@ -80,11 +83,12 @@
     background: var(--brand-surface);
     box-shadow: 1px 0 0 var(--brand-line);
   }
+  /* The list pane and the screen share the canvas without a rule between them; the gutter of
+     their paddings (16 + 24px) sets them apart. */
   .ui-shell-aside {
     display: block;
     min-width: 0;
     overflow: hidden;
-    box-shadow: 1px 0 0 var(--brand-line);
   }
   .ui-shell-main {
     min-width: 0;
@@ -98,10 +102,12 @@
     height: 100dvh;
     min-height: 0;
   }
+  /* Bodies scroll under nothing here, so tops and tab rows need no rule beneath them. */
   .ui-shell .ui-screen-top {
     grid-row: 1;
     position: static;
     padding: var(--brand-space-4) var(--brand-space-6);
+    box-shadow: none;
   }
   .ui-shell .ui-screen-bottom {
     grid-row: 2;
@@ -109,7 +115,7 @@
     justify-content: flex-start;
     padding: 0 var(--brand-space-6);
     background: var(--brand-canvas);
-    box-shadow: 0 1px 0 var(--brand-line);
+    box-shadow: none;
   }
   .ui-shell .ui-screen-bottom[data-kind='nav'] {
     display: none;
@@ -120,12 +126,17 @@
     grid-row: 3;
     container-type: size;
     overflow-y: auto;
-    padding: var(--brand-space-5) var(--brand-space-6) var(--brand-space-6);
+    padding: var(--brand-space-4) var(--brand-space-6) var(--brand-space-6);
   }
   .ui-shell-aside .ui-screen-top,
   .ui-shell-aside .ui-screen-body,
   .ui-shell-aside .ui-screen[data-has-bottom] .ui-screen-body {
     padding-inline: var(--brand-space-4);
+  }
+  /* Without a rule under the list's top, the list follows its search by the top's own 16px. */
+  .ui-shell-aside .ui-screen-body,
+  .ui-shell-aside .ui-screen[data-has-bottom] .ui-screen-body {
+    padding-top: 0;
   }
 }
 @media (min-width: 1440px) {
