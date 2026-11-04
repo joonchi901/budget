@@ -80,7 +80,7 @@ src/stories/<단계>/                       스토리도 같은 단계로
 - `Input`/`Textarea`/`Checkbox`/`Radio`/`Field`는 native props·ref·라벨·폼 검증을 유지한다. 설명과 오류 연결이 필요한 새 폼은 `TextField`로 조립한다.
 - `FormBody`/`FormFooter`/`FormGrid`/`FormSection`은 모든 편집창의 공통 구조다. `Panel`/`SummaryGrid`/`Toolbar`/`TableScroll`은 화면의 내용 경계·요약·도구·표 영역을 담당한다. 가로로 긴 표는 이름이 있는 키보드 스크롤 영역에 둔다.
 - `SegmentedControl`은 선택 상태를 `aria-pressed`로, `Tabs`는 tablist/tab/tabpanel 계약으로 표현한다. 방향키·Home·End는 비활성 옵션을 건너뛴다. 별도 시각 패턴이 있으면 `appearance="plain"`을 사용한다.
-- `Dialog dirty`와 `CloseButton`은 미저장 내용을 버릴지 확인한다. 계속 작성 시 값과 포커스를 유지하고, 버리면 원래 열기 버튼으로 돌아간다. 저장 성공은 화면의 `onClose`/`onSaved`로 직접 닫는다. `locked` 동안은 닫기와 Escape를 막는다.
+- `Dialog dirty`와 `CloseButton`은 미저장 내용을 버릴지 확인한다. 계속 작성 시 값과 포커스를 유지하고, 버리면 원래 열기 버튼으로 돌아간다. 저장 성공은 화면의 `onClose`/`onSaved`로 직접 닫는다. `locked` 동안은 닫기와 Escape를 막는다. 대화상자 바깥의 어두운 곳을 눌렀다 떼면 닫기와 같다(입력 중이면 같은 확인). 안에서 누르고 바깥에서 떼는 드래그는 닫지 않는다.
 - 날짜·선택·색상은 기존 자체 컨트롤을 사용한다. 태그는 사용자 색상과 배지 표현을 유지한다.
 - Dialog를 열면 `[data-autofocus]`가 붙은 칸에 포커스를 둔다. 새 내역은 금액부터 시작해 휴대폰에서 숫자 키패드가 바로 열린다.
 - 다른 사람이 저장했을 수 있는 값(색·아이콘·우가 그림·프로필 사진)은 컴포넌트가 다시 검증한다. 색은 `isHexColor`를 통과한 `#RRGGBB`만 CSS로 보내고, Uga 이미지는 알려진 이름만 경로로 만들며, 프로필 사진은 `isProfilePhotoUrl`을 통과한 이 앱의 경로만 그린다. 사용자 글자는 HTML로 넣지 않는다.

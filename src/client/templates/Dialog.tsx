@@ -30,6 +30,21 @@ export function useUnsavedGuard(hasUnsavedChanges: boolean) {
     };
   }, [hasUnsavedChanges]);
 }
+/** Whether a press landed on the dimmed area around the dialog's box (its ::backdrop). */
+function onBackdrop(
+  event: { target: EventTarget; clientX: number; clientY: number },
+  dialog: HTMLDialogElement,
+) {
+  if (event.target !== dialog) return false;
+  const box = dialog.getBoundingClientRect();
+  return (
+    event.clientX < box.left ||
+    event.clientX > box.right ||
+    event.clientY < box.top ||
+    event.clientY > box.bottom
+  );
+}
+
 export function Dialog({
   title,
   subtitle,
@@ -72,6 +87,9 @@ export function Dialog({
     window.addEventListener(SHEET_BACK, onBack);
     return () => window.removeEventListener(SHEET_BACK, onBack);
   }, []);
+  // A press that starts and ends on the dimmed area closes like 닫기; a drag out of a field does
+  // not. A nested dialog's own backdrop is its target, so only that dialog closes.
+  const pressedBackdrop = useRef(false);
   const invalidFocus = useRef(false);
   useLayoutEffect(() => {
     const el = ref.current!;
@@ -113,6 +131,13 @@ export function Dialog({
           e.preventDefault();
           e.stopPropagation();
           requestClose();
+        }}
+        onPointerDown={(event) => {
+          pressedBackdrop.current = onBackdrop(event, ref.current!);
+        }}
+        onClick={(event) => {
+          if (pressedBackdrop.current && onBackdrop(event, ref.current!)) requestClose();
+          pressedBackdrop.current = false;
         }}
       >
         <div className="dialog-heading">

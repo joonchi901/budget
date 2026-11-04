@@ -320,13 +320,19 @@
   font-size: var(--brand-font-size-sm);
   background: var(--brand-surface);
 }
+/* Every cell's first line is as tall as a chip (22px) and chips fill it, so text, 유형 chips and
+   the 예정 mark share one centerline across a row. */
 .ledger-table th,
 .ledger-table td {
   padding: var(--brand-space-2);
   border-bottom: 1px solid var(--brand-line);
+  line-height: 22px;
   text-align: left;
   vertical-align: top;
   white-space: nowrap;
+}
+.ledger-table :is(.tag-badge.custom-tag, .ledger-record-state) {
+  vertical-align: top;
 }
 .ledger-table thead th {
   position: sticky;
@@ -345,7 +351,7 @@
   padding-inline-end: var(--brand-space-3);
 }
 /* Chips keep their words whole and wrap as a set; only 내용 and 비고 break their text. */
-.ledger-table .tag-badge {
+.ledger-table .tag-badge.custom-tag {
   min-height: 22px;
   padding: 0 6px;
   font-size: var(--brand-font-size-xs);
@@ -1053,6 +1059,7 @@
 /* 반복 내역: a 예정 record (not yet due) reads quieter with a dashed mark; one whose varying amount
    is due but unchecked asks for it (금액 확인). Muted ink, not opacity, keeps the text readable. */
 .ledger-record-state {
+  box-sizing: border-box;
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -1064,6 +1071,7 @@
   color: var(--brand-text-secondary);
   font-size: var(--brand-font-size-xs);
   font-weight: var(--brand-font-weight-semibold);
+  line-height: 20px;
   white-space: nowrap;
 }
 .ledger-record-state[data-state='check'] {
