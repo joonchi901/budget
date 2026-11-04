@@ -1,63 +1,17 @@
-import { UgaIcon, type UgaIconName } from '../brand/Uga';
-import { Amount, ChipSelect, Field, List, ListRow, SelectField, SelectOption } from '../ui';
+import { ChipSelect, Field, SelectField, SelectOption } from '../ui';
 import {
   canNest,
   isParent,
   ledgerForDate,
-  leafLedgers,
-  roomRecords,
-  totals,
   type Id,
   type IsoDate,
   type Ledger,
-  type LedgerRecord,
 } from '../../shared/ledger';
 import { periodLabel } from './format';
 
 /** "하위 3개" for a parent, the period for a ledger that holds records. */
 export const ledgerMeta = (ledger: Ledger) =>
   isParent(ledger) ? `하위 ${ledger.childIds.length}개` : periodLabel(ledger.period);
-
-/** A parent's direct children with their totals; each opens its own room, so parents drill down. */
-export function ChildLedgerList({
-  parent,
-  ledgers,
-  records,
-  onOpen,
-}: {
-  parent: Ledger;
-  /** All ledgers, to resolve children and their records. */
-  ledgers: Ledger[];
-  records: LedgerRecord[];
-  onOpen(ledger: Ledger): void;
-}) {
-  const children = parent.childIds
-    .map((id) => ledgers.find((ledger) => ledger.id === id))
-    .filter((ledger): ledger is Ledger => !!ledger && !ledger.archived);
-  return (
-    <List aria-label="하위 가계부">
-      {children.map((child) => {
-        const own = roomRecords(ledgers, child, records);
-        const sum = totals(own, leafLedgers(ledgers, child));
-        return (
-          <ListRow
-            key={child.id}
-            leading={<UgaIcon name={child.icon as UgaIconName} size={32} />}
-            title={child.name}
-            description={`${ledgerMeta(child)} · 내역 ${own.length}건`}
-            trailing={
-              <>
-                <Amount value={sum.expense} tone="expense" signed size="sm" />
-                {sum.income > 0 && <Amount value={sum.income} tone="income" signed size="sm" />}
-              </>
-            }
-            onClick={() => onOpen(child)}
-          />
-        );
-      })}
-    </List>
-  );
-}
 
 const PARENT_COLOR = '#B9A27A';
 

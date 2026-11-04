@@ -1,15 +1,16 @@
 import { Plus } from 'lucide-react';
 import { Button, Empty, List, Stack, won } from '../ui';
 import { totals, type IsoDate, type Ledger, type LedgerRecord } from '../../shared/ledger';
-import { RecordRow } from './Records';
+import { RecordRow, type RecordContext } from './Records';
 import { addDays, compactWon, dayLabel, weekdayOf } from './format';
 
 const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
 
 /**
- * Week-aligned calendar for a period (a pay-period month, a trip, one month of a group).
- * Days outside the period are dimmed and not selectable. Each day shows its expense in short
- * form; the button's name carries the full amounts.
+ * Week-aligned calendar for a period (a pay-period month, a trip, one month of a group) that
+ * fills the height it is given. Days outside the period are dimmed and not selectable. Each day
+ * shows its expense in short form; taller days add the income, then the records' 내용, largest
+ * first. The button's name carries the full amounts.
  */
 export function PeriodCalendar({
   period,
@@ -40,10 +41,8 @@ export function PeriodCalendar({
       <div className="ledger-calendar-grid">
         {days.map((day, index) => {
           const inPeriod = period.start <= day && day <= period.end;
-          const sum = totals(
-            records.filter((record) => record.date === day),
-            ledgers,
-          );
+          const own = records.filter((record) => record.date === day);
+          const sum = totals(own, ledgers);
           const [, month, date] = day.split('-').map(Number);
           const name = `${dayLabel(day)}, 지출 ${won(sum.expense)}원${sum.income ? `, 수입 ${won(sum.income)}원` : ''}`;
           return (
@@ -52,6 +51,7 @@ export function PeriodCalendar({
               variant="plain"
               className="ledger-calendar-day"
               data-today={day === today || undefined}
+              aria-current={day === today ? 'date' : undefined}
               aria-label={name}
               aria-pressed={day === selected}
               disabled={!inPeriod}
@@ -65,7 +65,23 @@ export function PeriodCalendar({
                   {compactWon(sum.expense)}
                 </span>
               )}
-              {sum.income > 0 && <span aria-hidden="true" className="ledger-calendar-income" />}
+              {sum.income > 0 && (
+                <>
+                  <span aria-hidden="true" className="ledger-calendar-income" />
+                  <span aria-hidden="true" className="ledger-calendar-income-amount">
+                    +{compactWon(sum.income)}
+                  </span>
+                </>
+              )}
+              {own.length > 0 && (
+                <ul aria-hidden="true" className="ledger-calendar-titles">
+                  {[...own]
+                    .sort((a, b) => b.amount - a.amount)
+                    .map((record) => (
+                      <li key={record.id}>{record.title}</li>
+                    ))}
+                </ul>
+              )}
             </Button>
           );
         })}
@@ -78,30 +94,19 @@ export function PeriodCalendar({
 export function DayRecords({
   date,
   records,
-  ledgers,
-  showLedger,
   onAdd,
-  onOpenRecord,
-}: {
+  ...context
+}: RecordContext & {
   date: IsoDate;
   records: LedgerRecord[];
-  ledgers: Ledger[];
-  showLedger?: boolean;
   onAdd(date: IsoDate): void;
-  onOpenRecord?(record: LedgerRecord): void;
 }) {
   return (
     <Stack gap={4}>
       {records.length ? (
         <List aria-label={`${dayLabel(date)} 내역`}>
           {records.map((record) => (
-            <RecordRow
-              key={record.id}
-              record={record}
-              ledgers={ledgers}
-              showLedger={showLedger}
-              onOpenRecord={onOpenRecord}
-            />
+            <RecordRow key={record.id} record={record} {...context} />
           ))}
         </List>
       ) : (

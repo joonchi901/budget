@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { CalendarDays, List as ListIcon, SlidersHorizontal } from 'lucide-react';
+import { CalendarDays, ChevronRight, List as ListIcon, SlidersHorizontal } from 'lucide-react';
 import {
   Amount,
   Button,
@@ -31,11 +31,13 @@ import { RecordReactions, type ReactionContext } from './Reactions';
 // The amount's sign and color already say 수입/지출; only other 유형 tags, like 고정지출, add meaning.
 const natureName = { income: '수입', expense: '지출' };
 
-type RecordContext = {
+export type RecordContext = {
   ledgers: Ledger[];
   /** Show the source ledger name, for group rooms. */
   showLedger?: boolean;
   onOpenRecord?(record: LedgerRecord): void;
+  /** With showLedger, the source ledger becomes a link under the amount ("11월 →"). */
+  onOpenLedger?(ledger: Ledger): void;
   /** Lets members react to records with Uga stickers. */
   reacting?: ReactionContext;
 };
@@ -62,6 +64,7 @@ export function RecordRow({
   ledgers,
   showLedger,
   onOpenRecord,
+  onOpenLedger,
   reacting,
 }: RecordContext & { record: LedgerRecord }) {
   const { ledger, kind, tags, texts } = describe(record, ledgers);
@@ -75,7 +78,9 @@ export function RecordRow({
       }
       description={
         <span className="ledger-record-meta">
-          {showLedger && <span className="ledger-record-source">{ledger.name}</span>}
+          {showLedger && !onOpenLedger && (
+            <span className="ledger-record-source">{ledger.name}</span>
+          )}
           {tags.map((tag) => (
             <Tag key={tag.id} name={tag.name} color={tag.color} archived={tag.archived} />
           ))}
@@ -89,13 +94,28 @@ export function RecordRow({
       trailing={<Amount value={record.amount} tone={kind.nature} signed />}
       onClick={onOpenRecord && (() => onOpenRecord(record))}
       footer={
-        reacting && (
-          <RecordReactions
-            reactions={record.reactions}
-            memberId={reacting.memberId}
-            members={reacting.members}
-            onToggle={(reaction) => reacting.onToggleReaction(record, reaction)}
-          />
+        (reacting || (showLedger && onOpenLedger)) && (
+          <div className="ledger-record-footer">
+            {reacting && (
+              <RecordReactions
+                reactions={record.reactions}
+                memberId={reacting.memberId}
+                members={reacting.members}
+                onToggle={(reaction) => reacting.onToggleReaction(record, reaction)}
+              />
+            )}
+            {showLedger && onOpenLedger && (
+              <Button
+                variant="plain"
+                className="ledger-record-source-link"
+                aria-label={`${ledger.name} 가계부로 이동`}
+                onClick={() => onOpenLedger(ledger)}
+              >
+                {ledger.name}
+                <ChevronRight size={16} aria-hidden="true" />
+              </Button>
+            )}
+          </div>
         )
       }
     />

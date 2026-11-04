@@ -15,11 +15,12 @@ import {
   type KindOption,
   type Ledger,
   type LedgerRecord,
+  type Share,
 } from '../../shared/ledger';
 
 /**
- * Totals per tag for one axis (유형 or a select field) and one nature. Choosing a row asks the
- * room to show those records. Same-named options merge across ledgers.
+ * Totals per tag for one axis (유형 or a select field) and one nature. With `onSelect`, choosing a
+ * row asks the room to show those records. Same-named options merge across ledgers.
  */
 export function StatsBreakdown({
   records,
@@ -40,6 +41,15 @@ export function StatsBreakdown({
 }) {
   const shares = breakdown(records, ledgers, axis, nature);
   const total = totals(records, ledgers)[nature];
+  const bar = (share: Share) => (
+    <StatBar
+      label={share.name}
+      value={share.value}
+      total={total}
+      max={shares[0].value}
+      color={share.color}
+    />
+  );
   const multiple = ledgers.some((ledger) =>
     ledger.fields.some((field) => field.name === axis && field.type === 'multiSelect'),
   );
@@ -70,19 +80,17 @@ export function StatsBreakdown({
         <List aria-label={`${axis}별 ${nature === 'expense' ? '지출' : '수입'}`}>
           {shares.map((share) => (
             <li key={share.name} className="ui-list-item">
-              <Button
-                variant="plain"
-                className="ledger-stat-row"
-                onClick={() => onSelect?.(axis, share.name)}
-              >
-                <StatBar
-                  label={share.name}
-                  value={share.value}
-                  total={total}
-                  max={shares[0].value}
-                  color={share.color}
-                />
-              </Button>
+              {onSelect ? (
+                <Button
+                  variant="plain"
+                  className="ledger-stat-row"
+                  onClick={() => onSelect(axis, share.name)}
+                >
+                  {bar(share)}
+                </Button>
+              ) : (
+                <div className="ledger-stat-row">{bar(share)}</div>
+              )}
             </li>
           ))}
         </List>

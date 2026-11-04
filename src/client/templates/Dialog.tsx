@@ -1,7 +1,15 @@
-import { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { X } from 'lucide-react';
 import { Button, CloseButton, DialogCloseContext, FormBody, FormFooter, IconButton } from '../ui';
 import {
+  SHEET_BACK,
   navigationWarning,
   registerNavigationGuard,
   subscribeNavigationWarning,
@@ -53,6 +61,17 @@ export function Dialog({
     else onClose();
   };
   const blockedNavigation = useSyncExternalStore(subscribeNavigationWarning, navigationWarning);
+  const close = useRef(requestClose);
+  close.current = requestClose;
+  useEffect(() => {
+    // Back closes only the topmost dialog, the way Escape does.
+    const onBack = () => {
+      const open = document.querySelectorAll('dialog[open]');
+      if (open[open.length - 1] === ref.current) close.current();
+    };
+    window.addEventListener(SHEET_BACK, onBack);
+    return () => window.removeEventListener(SHEET_BACK, onBack);
+  }, []);
   const invalidFocus = useRef(false);
   useLayoutEffect(() => {
     const el = ref.current!;

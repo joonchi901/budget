@@ -61,11 +61,20 @@ export const Add: Story = {
     await userEvent.type(page.getByRole('textbox', { name: /내용/ }), '우리마트');
     await userEvent.click(page.getByRole('button', { name: '장보기' }));
     await userEvent.click(page.getByRole('button', { name: '저장하고 계속' }));
-    await expect(page.getByRole('status')).toHaveTextContent('저장: 우리마트 13460 계속');
+    await expect(page.getByText('저장: 우리마트 13460 계속')).toBeInTheDocument();
+    // It says the record went, and is ready for the next one on 금액.
+    await expect(page.getByText('저장했어요 · 우리마트 13,460원')).toBeVisible();
     await expect(page.getByRole('textbox', { name: '금액' })).toHaveValue('');
+    await expect(page.getByRole('textbox', { name: '금액' })).toHaveFocus();
     await expect(page.getByRole('button', { name: '장보기' })).toHaveAttribute(
       'aria-pressed',
       'true',
+    );
+    // Switching to 수입 drops the 지출 tags.
+    await userEvent.click(page.getByRole('button', { name: '수입' }));
+    await expect(page.getByRole('button', { name: '장보기' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
     );
   },
 };

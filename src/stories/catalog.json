@@ -245,7 +245,7 @@
     "source": "src/client/ledger/Room.tsx",
     "story": "src/stories/organisms/RoomTabBar.stories.tsx",
     "status": "ready",
-    "usage": "방 하단 탭: 내역·통계·(하위)·대화·설정"
+    "usage": "방 하단 탭: 내역·통계·대화·설정"
   },
   {
     "name": "HomeTabBar",
@@ -264,12 +264,12 @@
     "usage": "수입·지출·남은 금액 · 1억 이상이면 세 줄"
   },
   {
-    "name": "AssetRow / NetWorthSummary",
+    "name": "AssetRow / NetWorthSummary / AssetAnalysis",
     "layer": "04 Organisms",
     "source": "src/client/ledger/Assets.tsx",
     "story": "src/stories/views/Assets.stories.tsx",
     "status": "ready",
-    "usage": "자산 한 줄(종류 아이콘·이름·연동 가계부·현재 잔액)과 순자산·자산·부채 요약"
+    "usage": "자산 한 줄(종류 아이콘·이름·연동 가계부·현재 잔액), 순자산·자산·부채 요약, 연동 가계부 내역으로 본 자산 분석(흐름·월별·항목별)"
   },
   {
     "name": "RecordRow / RecordDayGroup / RecordList",
@@ -352,12 +352,12 @@
     "usage": "유형 태그 관리: 옵션마다 수입·지출, 기본 수입·지출은 이름만 바꾸고 보관 불가"
   },
   {
-    "name": "ChildLedgerList / ChildPicker / ParentPicker / LedgerPicker",
+    "name": "ChildPicker / ParentPicker / LedgerPicker",
     "layer": "04 Organisms",
     "source": "src/client/ledger/Hierarchy.tsx",
     "story": "src/stories/organisms/Hierarchy.stories.tsx",
     "status": "ready",
-    "usage": "상위 가계부의 하위 보기, 하위·상위 가계부 선택(순환 제외), 상위 방에서 저장할 가계부 선택"
+    "usage": "하위·상위 가계부 선택(순환 제외), 상위 방에서 저장할 가계부 선택"
   },
   {
     "name": "PersonRow",

@@ -1,4 +1,11 @@
-import { leafLedgers, type Id, type IsoDate, type Ledger, type LedgerRecord } from './ledger';
+import {
+  leafLedgers,
+  totals,
+  type Id,
+  type IsoDate,
+  type Ledger,
+  type LedgerRecord,
+} from './ledger';
 
 export type AssetKind = 'cash' | 'savings' | 'investment' | 'debt';
 export const ASSET_KINDS: { value: AssetKind; label: string }[] = [
@@ -36,18 +43,39 @@ export function coveredLedgerIds(asset: Asset, ledgers: Ledger[]): Set<Id> {
 export const assetFor = (assets: Asset[], ledgers: Ledger[], ledgerId: Id) =>
   assets.find((asset) => coveredLedgerIds(asset, ledgers).has(ledgerId));
 
-/** What the asset holds now: its starting balance plus income minus expense reflected since then. */
-export function assetBalance(asset: Asset, ledgers: Ledger[], records: LedgerRecord[]): number {
+/** Records that move an asset: from its linked ledgers, dated from its 기준일, not kept out. */
+export function assetRecords(asset: Asset, ledgers: Ledger[], records: LedgerRecord[]) {
   const covered = coveredLedgerIds(asset, ledgers);
+  return records.filter(
+    (record) => covered.has(record.ledgerId) && record.date >= asset.since && !record.notInAsset,
+  );
+}
+
+/** What the asset holds now: its starting balance plus income minus expense reflected since then. */
+export const assetBalance = (asset: Asset, ledgers: Ledger[], records: LedgerRecord[]) =>
+  asset.balance + totals(assetRecords(asset, ledgers, records), ledgers).balance;
+
+export type AssetMonth = { month: string; income: number; expense: number; balance: number };
+
+/** Each month the asset moved, newest first: what came in, what went out, the balance at its end. */
+export function assetMonths(
+  asset: Asset,
+  ledgers: Ledger[],
+  records: LedgerRecord[],
+): AssetMonth[] {
+  const moved = assetRecords(asset, ledgers, records);
   let balance = asset.balance;
-  for (const record of records) {
-    if (!covered.has(record.ledgerId) || record.date < asset.since || record.notInAsset) continue;
-    const kind = ledgers
-      .find((ledger) => ledger.id === record.ledgerId)
-      ?.kinds.find((item) => item.id === record.kindId);
-    if (kind) balance += kind.nature === 'income' ? record.amount : -record.amount;
-  }
-  return balance;
+  return [...new Set(moved.map((record) => record.date.slice(0, 7)))]
+    .sort()
+    .map((month) => {
+      const sum = totals(
+        moved.filter((record) => record.date.startsWith(month)),
+        ledgers,
+      );
+      balance += sum.balance;
+      return { month, income: sum.income, expense: sum.expense, balance };
+    })
+    .reverse();
 }
 
 /** Assets minus debts. */

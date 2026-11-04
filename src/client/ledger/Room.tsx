@@ -4,7 +4,6 @@ import {
   ChartPie,
   ChevronLeft,
   CornerDownRight,
-  Layers,
   List,
   MessageCircle,
   MoreHorizontal,
@@ -72,16 +71,16 @@ export function RoomListItem({
   );
 }
 
-export type RoomView = 'records' | 'stats' | 'ledgers' | 'chat' | 'settings';
+export type RoomView = 'records' | 'stats' | 'chat' | 'settings';
 const viewLabels: Record<RoomView, string> = {
   records: '내역',
   stats: '통계',
-  ledgers: '하위',
   chat: '대화',
   settings: '설정',
 };
 
-/** Room title bar: back to the room list, name and period, ⋯ menu. The title is the page heading. */
+/** Room title bar: back (to where the room was opened from), name and period, ⋯ menu. The title is
+ * the page heading. */
 export function RoomHeader({
   title,
   subtitle,
@@ -95,7 +94,7 @@ export function RoomHeader({
 }) {
   return (
     <div className="ledger-room-header-bar">
-      <IconButton aria-label="방 목록으로" onClick={onBack}>
+      <IconButton aria-label="뒤로" onClick={onBack}>
         <ChevronLeft size={22} />
       </IconButton>
       <div className="ledger-room-header-title">
@@ -118,14 +117,13 @@ export function RoomHeader({
 const viewIcons: Record<RoomView, ReactNode> = {
   records: <List size={20} />,
   stats: <ChartPie size={20} />,
-  ledgers: <Layers size={20} />,
   chat: <MessageCircle size={20} />,
   settings: <Settings2 size={20} />,
 };
 
 /**
- * Bottom bar of a room, within thumb reach: 내역, 통계, 하위 for a parent, 대화 for a ledger that
- * holds records, and 설정. The views
+ * Bottom bar of a room, within thumb reach: 내역, 통계, 대화 for a ledger that holds records, and
+ * 설정. The views
  * keep the segmented keyboard contract (arrow keys, Home, End).
  */
 export function RoomTabBar({
@@ -205,7 +203,14 @@ export function HomeTabBar({
  * 수입 · 지출 · 남은 금액 for the room's current scope, in full. Three columns fit amounts below
  * 1억; from 1억 the amounts stack into rows so the whole number stays on one line.
  */
-export function SummaryStrip({ totals }: { totals: Totals }) {
+export function SummaryStrip({
+  totals,
+  balanceLabel = '남은 금액',
+}: {
+  totals: Totals;
+  /** Names income minus expense, such as 잔액 변화 for an asset. */
+  balanceLabel?: string;
+}) {
   const large = Math.max(totals.income, totals.expense, Math.abs(totals.balance)) >= 100_000_000;
   return (
     <dl className="ledger-summary" data-layout={large ? 'rows' : undefined}>
@@ -222,7 +227,7 @@ export function SummaryStrip({ totals }: { totals: Totals }) {
         </dd>
       </div>
       <div>
-        <dt>남은 금액</dt>
+        <dt>{balanceLabel}</dt>
         <dd>
           <Amount value={totals.balance} size="sm" />
         </dd>

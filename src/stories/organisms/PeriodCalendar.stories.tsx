@@ -15,7 +15,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '가계부 기간에 맞춘 주 단위 달력. 기간 밖 날은 흐리게 두고 고를 수 없습니다. 칸에는 지출을 짧게(6.4만), 수입은 초록 점으로 표시하고, 버튼 이름에는 전체 금액을 담습니다. 날짜를 고르면 DayRecords가 그날 내역과 "이 날짜로 추가"를 보여줍니다.',
+          '가계부 기간에 맞춘 주 단위 달력. 기간 밖 날은 흐리게 두고 고를 수 없습니다. 받은 높이를 채우고, 칸에는 지출을 짧게(6.4만) 보여 주며 칸이 높을수록 수입(+833만), 그다음 큰 금액 순 내용을 더 보여 줍니다(낮으면 수입은 초록 점). 버튼 이름에는 전체 금액을 담습니다. 날짜를 고르면 DayRecords가 그날 내역과 "이 날짜로 추가"를 보여줍니다.',
       },
     },
   },
@@ -58,6 +58,18 @@ export const PayPeriod: Story = {
     await expect(c.getByRole('list', { name: '10월 29일 (목) 내역' }).children).toHaveLength(8);
     await userEvent.click(c.getByRole('button', { name: '이 날짜로 추가' }));
     await expect(c.getByRole('status')).toHaveTextContent('2026-10-29 추가');
+    // Taller days show the income and then 내용, the largest amount first.
+    const payday = c.getByRole('button', { name: /^10월 23일/ });
+    await expect(payday.querySelector('.ledger-calendar-income-amount')).toHaveTextContent(
+      '+833만',
+    );
+    const largestFirst = novemberRecords
+      .filter((record) => record.date === '2026-10-29')
+      .sort((a, b) => b.amount - a.amount)
+      .map((record) => record.title);
+    await expect(
+      [...day.querySelectorAll('.ledger-calendar-titles > li')].map((title) => title.textContent),
+    ).toEqual(largestFirst);
   },
 };
 export const Trip: Story = {

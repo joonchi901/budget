@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { LedgerPicker, RecordForm, type RecordDraft } from '../ledger';
 import { FullScreenSheet } from '../templates';
-import { Button, Field, Stack, Switch } from '../ui';
+import { Button, Field, Stack, Switch, won } from '../ui';
 import {
   ledgerForDate,
   recordProblems,
@@ -53,7 +53,7 @@ export function RecordEntryView({
   today: IsoDate;
   memberId: Id;
   suggestions?: string[];
-  /** keepOpen: 저장하고 계속, which keeps 유형·날짜·태그 for the next record. */
+  /** keepOpen: 저장하고 계속, which keeps 유형·날짜·태그 for the next record and says it saved. */
   onSave(record: LedgerRecord, keepOpen: boolean): void;
   onDelete?(record: LedgerRecord): void;
   onLedgerChange?(ledger: Ledger): void;
@@ -88,6 +88,9 @@ export function RecordEntryView({
   const assetName = assetNameFor?.(ledgerId);
   const [problems, setProblems] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  /** The record 저장하고 계속 just sent, so the person sees it went. */
+  const [sent, setSent] = useState<LedgerRecord>();
+  const form = useRef<HTMLDivElement>(null);
   const dirty =
     JSON.stringify(draft) !== JSON.stringify(initial) || inAsset === Boolean(record?.notInAsset);
 
@@ -109,7 +112,11 @@ export function RecordEntryView({
     setProblems(found);
     if (found.length) return;
     onSave(candidate, keepOpen);
-    if (keepOpen) setDraft({ ...draft, title: '', amount: null });
+    if (!keepOpen) return;
+    setDraft({ ...draft, title: '', amount: null });
+    setSent(candidate);
+    // Ready for the next one: back on 금액, with the number pad.
+    form.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
   };
   const createOption = (fieldId: Id, name: string, color: string) => {
     const id = crypto.randomUUID();
@@ -174,19 +181,26 @@ export function RecordEntryView({
             }}
           />
         )}
+        {sent && (
+          <p className="view-meta" role="status">
+            저장했어요 · {sent.title} {won(sent.amount)}원
+          </p>
+        )}
         {problems.length > 0 && (
           <p className="view-error" role="alert">
             확인해 주세요: {problems.join(', ')}
           </p>
         )}
-        <RecordForm
-          ledger={ledger}
-          draft={draft}
-          onChange={setDraft}
-          onCreateOption={createOption}
-          suggestions={suggestions}
-          autoFocusAmount={!record}
-        />
+        <div ref={form}>
+          <RecordForm
+            ledger={ledger}
+            draft={draft}
+            onChange={setDraft}
+            onCreateOption={createOption}
+            suggestions={suggestions}
+            autoFocusAmount={!record}
+          />
+        </div>
         {assetName && (
           <Field>
             <Switch checked={inAsset} onChange={(event) => setInAsset(event.target.checked)} />

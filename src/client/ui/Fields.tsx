@@ -63,7 +63,14 @@ export function Textarea({ className = '', ...props }: ComponentPropsWithRef<'te
 }
 /** Composes labels without inserting extra elements between controls and their labels. */
 export function Field({ className = '', ...props }: ComponentPropsWithRef<'label'>) {
-  return <label {...props} className={`ui-field-label ${className}`.trim()} />;
+  // The id lets controls that are buttons (date, month) name themselves with it and their value.
+  return (
+    <label
+      id={props.htmlFor ? `${props.htmlFor}-label` : undefined}
+      {...props}
+      className={`ui-field-label ${className}`.trim()}
+    />
+  );
 }
 /** A field with an explicit description/error association for new form composition. */
 export function TextField({

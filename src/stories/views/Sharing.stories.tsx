@@ -49,6 +49,7 @@ const meta = {
           {...args}
           onInvite={({ profileIds, role }) => setLog(`초대 ${profileIds.join(',')} ${role}`)}
           onLeave={() => setLog('나가기')}
+          onFindFriends={() => setLog('친구 찾기')}
         />
         <p role="status" className="sr-only">
           {log}
@@ -80,6 +81,14 @@ export const Editor: Story = {
     await userEvent.click(page.getByRole('button', { name: '이 가계부에서 나가기' }));
     await userEvent.click(page.getByRole('button', { name: '한 번 더 누르면 나가요' }));
     await expect(page.getByRole('status')).toHaveTextContent('나가기');
+  },
+};
+export const NoFriends: Story = {
+  args: { friends: [] },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(page.getByRole('button', { name: '친구 찾기' }));
+    await expect(page.getByRole('status')).toHaveTextContent('친구 찾기');
   },
 };
 export const ShareFromParent: Story = {

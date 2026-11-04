@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
-import { Plus } from 'lucide-react';
-import { AssetRow, NetWorthSummary, ledgerMeta } from '../ledger';
+import { ChevronLeft, Plus } from 'lucide-react';
+import { AssetAnalysis, AssetRow, NetWorthSummary, ledgerMeta } from '../ledger';
 import { FullScreenSheet, Screen } from '../templates';
 import {
   AmountInput,
@@ -9,8 +9,11 @@ import {
   DateField,
   Empty,
   Field,
+  IconButton,
   List,
   SegmentedControl,
+  SelectField,
+  SelectOption,
   Stack,
   TextField,
 } from '../ui';
@@ -26,25 +29,17 @@ import { leafLedgers, type IsoDate, type Ledger, type LedgerRecord } from '../..
 
 const LINK_COLOR = '#B9A27A';
 
-/**
- * Home's 자산 tab: 순자산 on top, then the user's assets by kind with what each holds now. An
- * asset may follow ledgers; their records marked 자산에 반영 move its balance.
- */
-export function AssetsView({
+/** 순자산 on top, then the assets by kind with what each holds now; rows open when `onOpen` is set. */
+function AssetOverview({
   assets,
   ledgers,
   records,
-  onAdd,
-  onOpenAsset,
-  tabBar,
+  onOpen,
 }: {
   assets: Asset[];
   ledgers: Ledger[];
   records: LedgerRecord[];
-  onAdd(): void;
-  onOpenAsset(asset: Asset): void;
-  /** The app's bottom tabs. */
-  tabBar?: ReactNode;
+  onOpen?(asset: Asset): void;
 }) {
   const id = useId();
   const balances = new Map(
@@ -55,10 +50,133 @@ export function AssetsView({
       .filter((asset) => (asset.kind === 'debt') === debt)
       .reduce((sum, asset) => sum + balances.get(asset.id)!, 0);
   return (
+    <>
+      <NetWorthSummary owned={total(false)} owed={total(true)} />
+      {ASSET_KINDS.map(({ value, label }) => {
+        const group = assets.filter((asset) => asset.kind === value);
+        return (
+          group.length > 0 && (
+            <section key={value} aria-labelledby={`${id}-${value}`}>
+              <h2 id={`${id}-${value}`} className="view-section-title">
+                {label}
+              </h2>
+              <List aria-labelledby={`${id}-${value}`}>
+                {group.map((asset) => (
+                  <AssetRow
+                    key={asset.id}
+                    asset={asset}
+                    balance={balances.get(asset.id)!}
+                    ledgers={ledgers}
+                    onOpen={onOpen && (() => onOpen(asset))}
+                  />
+                ))}
+              </List>
+            </section>
+          )
+        );
+      })}
+    </>
+  );
+}
+
+/**
+ * Home's 자산 tab, for looking: 순자산 and the assets, then an analysis of one asset that follows
+ * ledgers (흐름, 월별, 항목별). Adding and changing assets is 설정 → 자산 관리.
+ */
+export function AssetsView({
+  assets,
+  ledgers,
+  records,
+  onManage,
+  tabBar,
+}: {
+  assets: Asset[];
+  ledgers: Ledger[];
+  records: LedgerRecord[];
+  /** Opens 설정 → 자산 관리, offered while there is nothing to analyze. */
+  onManage(): void;
+  /** The app's bottom tabs. */
+  tabBar?: ReactNode;
+}) {
+  const id = useId();
+  const linked = assets.filter((asset) => asset.ledgerIds.length);
+  const [chosen, setChosen] = useState(linked[0]?.id);
+  const asset = linked.find((item) => item.id === chosen) ?? linked[0];
+  const manage = <Button onClick={onManage}>자산 관리</Button>;
+  return (
     <Screen
       top={
         <div className="view-page-header">
           <h1>자산</h1>
+        </div>
+      }
+      bottom={tabBar}
+    >
+      {assets.length ? (
+        <Stack gap={6}>
+          <AssetOverview assets={assets} ledgers={ledgers} records={records} />
+          <section aria-labelledby={`${id}-analysis`}>
+            <Stack gap={4}>
+              <h2 id={`${id}-analysis`} className="view-section-title">
+                분석
+              </h2>
+              {asset ? (
+                <>
+                  <SelectField aria-label="분석할 자산" value={asset.id} onValueChange={setChosen}>
+                    {linked.map((item) => (
+                      <SelectOption key={item.id} value={item.id}>
+                        {item.name}
+                      </SelectOption>
+                    ))}
+                  </SelectField>
+                  <AssetAnalysis key={asset.id} asset={asset} ledgers={ledgers} records={records} />
+                </>
+              ) : (
+                <>
+                  <Empty>가계부를 연동한 자산이 없어요. 연동하면 항목별로 볼 수 있어요.</Empty>
+                  {manage}
+                </>
+              )}
+            </Stack>
+          </section>
+        </Stack>
+      ) : (
+        <Stack gap={4}>
+          <Empty>아직 자산이 없어요. 통장, 저축, 대출을 더해 보세요.</Empty>
+          {manage}
+        </Stack>
+      )}
+    </Screen>
+  );
+}
+
+/** 설정 → 자산 관리: the assets with 자산 추가; a row opens it to change or delete. */
+export function AssetManageView({
+  assets,
+  ledgers,
+  records,
+  onAdd,
+  onOpenAsset,
+  onBack,
+  tabBar,
+}: {
+  assets: Asset[];
+  ledgers: Ledger[];
+  records: LedgerRecord[];
+  onAdd(): void;
+  onOpenAsset(asset: Asset): void;
+  onBack(): void;
+  /** The app's bottom tabs, which stay while pages open above them. */
+  tabBar?: ReactNode;
+}) {
+  return (
+    <Screen
+      top={
+        <div className="view-page-header">
+          <IconButton aria-label="설정으로" onClick={onBack}>
+            <ChevronLeft size={22} />
+          </IconButton>
+          <h1>자산 관리</h1>
           <Button variant="primary" onClick={onAdd}>
             <Plus size={18} />
             자산 추가
@@ -69,30 +187,7 @@ export function AssetsView({
     >
       {assets.length ? (
         <Stack gap={6}>
-          <NetWorthSummary owned={total(false)} owed={total(true)} />
-          {ASSET_KINDS.map(({ value, label }) => {
-            const group = assets.filter((asset) => asset.kind === value);
-            return (
-              group.length > 0 && (
-                <section key={value} aria-labelledby={`${id}-${value}`}>
-                  <h2 id={`${id}-${value}`} className="view-section-title">
-                    {label}
-                  </h2>
-                  <List aria-labelledby={`${id}-${value}`}>
-                    {group.map((asset) => (
-                      <AssetRow
-                        key={asset.id}
-                        asset={asset}
-                        balance={balances.get(asset.id)!}
-                        ledgers={ledgers}
-                        onOpen={() => onOpenAsset(asset)}
-                      />
-                    ))}
-                  </List>
-                </section>
-              )
-            );
-          })}
+          <AssetOverview assets={assets} ledgers={ledgers} records={records} onOpen={onOpenAsset} />
         </Stack>
       ) : (
         <Empty>아직 자산이 없어요. 통장, 저축, 대출을 더해 보세요.</Empty>

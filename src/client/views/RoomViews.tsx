@@ -2,7 +2,6 @@ import { useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Copy, Plus, Users } from 'lucide-react';
 import {
   DayRecords,
-  ChildLedgerList,
   PeriodCalendar,
   RecordFilterBar,
   RecordList,
@@ -21,8 +20,8 @@ import {
   type RoomView,
   type TagCondition,
 } from '../ledger';
-import { BottomSheet, Screen } from '../templates';
-import { Button, IconButton, Inline, type MenuItem } from '../ui';
+import { BottomSheet, Screen, guardLeave } from '../templates';
+import { Button, IconButton, Inline, won, type MenuItem } from '../ui';
 import {
   KIND_AXIS,
   defaultStatAxis,
@@ -50,7 +49,7 @@ type RoomActions = {
 
 /**
  * Room body: 내역 (표 or 캘린더, chosen beside the filter, with a full-width 내역 추가 above the
- * tab bar), 통계, 하위 for parents, and 설정.
+ * tab bar), 통계, 대화 and 설정.
  */
 function Room({
   title,
@@ -61,7 +60,6 @@ function Room({
   menuItems,
   showLedger,
   calendar,
-  ledgersView,
   settingsView,
   chatView,
   onViewChange,
@@ -69,6 +67,7 @@ function Room({
   onBack,
   onAddRecord,
   onOpenRecord,
+  onOpenLedger,
   reacting,
 }: RoomActions & {
   title: string;
@@ -79,10 +78,11 @@ function Room({
   menuItems: MenuItem[];
   showLedger: boolean;
   calendar: { period: { start: IsoDate; end: IsoDate }; navigation?: ReactNode };
-  ledgersView?: ReactNode;
   settingsView: ReactNode;
   chatView?: ReactNode;
   onViewChange?(view: RoomView): void;
+  /** A parent room's records link to the ledger each came from. */
+  onOpenLedger?(ledger: Ledger): void;
 }) {
   const [view, setView] = useState<RoomView>('records');
   const [display, setDisplay] = useState<RecordDisplay>('list');
@@ -93,7 +93,9 @@ function Room({
   const [axis, setAxis] = useState(() => defaultStatAxis(ledgers));
   const [statNature, setStatNature] = useState<KindOption['nature']>('expense');
   const shown = filterRecords(records, ledgers, { query, options: conditions });
-  const context = { ledgers, showLedger, onOpenRecord, reacting };
+  const filtering = query.trim() !== '' || conditions.length > 0;
+  const found = totals(shown, ledgers);
+  const context = { ledgers, showLedger, onOpenRecord, onOpenLedger, reacting };
   return (
     <Screen
       top={
@@ -106,10 +108,13 @@ function Room({
         <RoomTabBar
           views={views}
           view={view}
-          onViewChange={(next) => {
-            setView(next);
-            onViewChange?.(next);
-          }}
+          onViewChange={(next) =>
+            // Leaving 설정 with unsaved changes asks first.
+            guardLeave(() => {
+              setView(next);
+              onViewChange?.(next);
+            })
+          }
         />
       }
     >
@@ -138,6 +143,13 @@ function Room({
             display={display}
             onDisplayChange={setDisplay}
           />
+          {filtering && (
+            // The summary above stays the whole room's; this is what the search found.
+            <p className="view-meta" aria-live="polite">
+              조건에 맞는 내역 {shown.length}건 · 수입 {won(found.income)}원 · 지출{' '}
+              {won(found.expense)}원
+            </p>
+          )}
           {display === 'calendar' ? (
             <>
               {calendar.navigation}
@@ -205,7 +217,6 @@ function Room({
           }}
         />
       )}
-      {view === 'ledgers' && ledgersView}
       {view === 'chat' && <div className="view-chat">{chatView}</div>}
       {view === 'settings' && settingsView}
     </Screen>
@@ -214,8 +225,8 @@ function Room({
 
 /**
  * A ledger's room. Without children it shows its own records over its period; with children
- * (상위 가계부) it gathers every record below it, marks each record's ledger, steps the calendar
- * by month and adds a 하위 view to drill into the children. 설정 is a tab of the room.
+ * (상위 가계부) it gathers every record below it, links each record to its ledger, and steps the
+ * calendar by month. 설정 is a tab of the room.
  */
 export function LedgerRoomView({
   ledger,
@@ -263,7 +274,7 @@ export function LedgerRoomView({
       records={scoped}
       views={
         parent
-          ? ['records', 'stats', 'ledgers', 'settings']
+          ? ['records', 'stats', 'settings']
           : ['records', 'stats', ...(chat ? (['chat'] as const) : []), 'settings']
       }
       settingsView={settings}
@@ -284,6 +295,7 @@ export function LedgerRoomView({
           : [{ label: '복사해서 만들기', icon: <Copy size={18} />, onSelect: onCopy }]),
       ]}
       showLedger={parent}
+      onOpenLedger={onOpenLedger}
       calendar={
         parent
           ? {
@@ -307,14 +319,6 @@ export function LedgerRoomView({
               ),
             }
           : { period: ledger.period }
-      }
-      ledgersView={
-        <ChildLedgerList
-          parent={ledger}
-          ledgers={ledgers}
-          records={records}
-          onOpen={onOpenLedger}
-        />
       }
     />
   );

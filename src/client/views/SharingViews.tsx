@@ -24,15 +24,22 @@ function InviteFields({
   onValueChange,
   role,
   onRoleChange,
+  onFindFriends,
 }: {
   friends: Profile[];
   value: Id[];
   onValueChange(value: Id[]): void;
   role: InviteRole;
   onRoleChange(role: InviteRole): void;
+  onFindFriends?(): void;
 }) {
   if (!friends.length)
-    return <p className="muted">초대할 친구가 없어요. 친구에서 먼저 친구를 추가해 주세요.</p>;
+    return (
+      <Stack gap={3}>
+        <p className="muted">초대할 친구가 없어요. 친구에서 먼저 친구를 추가해 주세요.</p>
+        {onFindFriends && <Button onClick={onFindFriends}>친구 찾기</Button>}
+      </Stack>
+    );
   return (
     <Stack gap={4}>
       <FriendPicker
@@ -72,6 +79,7 @@ export function LedgerMembersView({
   onRoleChange,
   onRemove,
   onLeave,
+  onFindFriends,
   onClose,
 }: {
   ledger: Ledger;
@@ -86,6 +94,8 @@ export function LedgerMembersView({
   onRoleChange(profile: Profile, role: InviteRole): void;
   onRemove(profile: Profile): void;
   onLeave(): void;
+  /** Opens 친구, offered when there is no one to invite yet. */
+  onFindFriends?(): void;
   onClose(): void;
 }) {
   const [picked, setPicked] = useState<Id[]>([]);
@@ -166,6 +176,7 @@ export function LedgerMembersView({
             onValueChange={setPicked}
             role={role}
             onRoleChange={setRole}
+            onFindFriends={onFindFriends}
           />
         )}
       </Stack>

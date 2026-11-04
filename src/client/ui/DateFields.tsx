@@ -333,7 +333,9 @@ export function DateField(props: DateFieldProps) {
             id={id}
             name={name}
             disabled={disabled}
-            aria-label={field.label || '날짜'}
+            aria-label={field.label || undefined}
+            // Without a wrapping label, a <Field htmlFor> names it, followed by the chosen value.
+            aria-labelledby={field.label ? undefined : `${id}-label ${id}-value`}
             aria-invalid={validation.invalid || undefined}
             aria-describedby={
               [required ? `${id}-required` : '', validation.invalid ? `${id}-error` : '']
@@ -342,7 +344,7 @@ export function DateField(props: DateFieldProps) {
             }
             data-value={value}
           >
-            <span className={selected ? undefined : 'date-field-placeholder'}>
+            <span id={`${id}-value`} className={selected ? undefined : 'date-field-placeholder'}>
               {selected ? fullDateLabel(selected) : '날짜 선택'}
             </span>
             <CalendarDays size={18} aria-hidden="true" />
@@ -605,7 +607,9 @@ export function MonthField(props: DateFieldProps) {
             id={id}
             name={name}
             disabled={disabled}
-            aria-label={field.label || '월'}
+            aria-label={field.label || undefined}
+            // Without a wrapping label, a <Field htmlFor> names it, followed by the chosen value.
+            aria-labelledby={field.label ? undefined : `${id}-label ${id}-value`}
             aria-invalid={validation.invalid || undefined}
             aria-describedby={
               [required ? `${id}-required` : '', validation.invalid ? `${id}-error` : '']
@@ -614,7 +618,7 @@ export function MonthField(props: DateFieldProps) {
             }
             data-value={value}
           >
-            <span className={selected ? undefined : 'date-field-placeholder'}>
+            <span id={`${id}-value`} className={selected ? undefined : 'date-field-placeholder'}>
               {selected ? monthLabel(selected) : '월 선택'}
             </span>
             <CalendarDays size={18} aria-hidden="true" />

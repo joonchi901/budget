@@ -20,7 +20,7 @@ export { PeriodCalendar, DayRecords } from './Calendar';
 export { StatsBreakdown } from './Stats';
 export { DynamicField, RecordForm, type RecordDraft } from './RecordForm';
 export { FieldSchemaEditor, TagOptionEditor, KindOptionEditor } from './Settings';
-export { ChildLedgerList, ChildPicker, ParentPicker, LedgerPicker, ledgerMeta } from './Hierarchy';
+export { ChildPicker, ParentPicker, LedgerPicker, ledgerMeta } from './Hierarchy';
 export { addDays, addMonths, dayLabel, monthLabel, periodLabel, whenLabel } from './format';
 export {
   PersonRow,
@@ -34,6 +34,6 @@ export {
   roleLabel,
 } from './People';
 export { RecordReactions, type ReactionContext } from './Reactions';
-export { AssetRow, NetWorthSummary } from './Assets';
+export { AssetAnalysis, AssetRow, NetWorthSummary } from './Assets';
 export { ChatThread } from './Chat';
 export { StickerPicker } from './Reactions';

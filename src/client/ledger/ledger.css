@@ -115,6 +115,22 @@
   font-weight: var(--brand-font-weight-semibold);
   color: var(--brand-text);
 }
+/* Under a record: reactions on the left, the source ledger link under the amount on the right. */
+.ledger-record-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+.ledger-record-source-link.ui-button {
+  gap: 2px;
+  min-height: 30px;
+  margin-inline-start: auto;
+  padding: 0 var(--brand-space-1) 0 var(--brand-space-2);
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-sm);
+  font-weight: var(--brand-font-weight-semibold);
+}
 .ledger-record-note {
   color: var(--brand-muted);
 }
@@ -163,6 +179,14 @@
 .ledger-filter-row > .ledger-display-toggle {
   flex: none;
 }
+/* As tall as the 조회 조건 button beside it: 4 + 36 + 4. */
+.ledger-display-toggle > button {
+  width: 36px;
+  min-height: 0;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+}
 .ledger-filter-row > .ui-icon-button[data-active] {
   border-color: var(--brand-primary);
   color: var(--brand-primary);
@@ -210,7 +234,9 @@
   text-underline-offset: 3px;
 }
 
+/* The calendar takes the rest of the screen; each day shows as much as its height allows. */
 .ledger-calendar {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: var(--brand-space-1);
@@ -221,6 +247,10 @@
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 2px;
 }
+.ledger-calendar-grid {
+  flex: 1;
+  grid-auto-rows: minmax(56px, 1fr);
+}
 .ledger-calendar-weekdays {
   color: var(--brand-text-secondary);
   font-size: var(--brand-font-size-xs);
@@ -230,6 +260,7 @@
   color: var(--brand-danger);
 }
 .ledger-calendar-day.ui-button {
+  container-type: size;
   position: relative;
   flex-direction: column;
   justify-content: flex-start;
@@ -262,13 +293,8 @@
   font-variant-numeric: tabular-nums;
 }
 .ledger-calendar-expense {
-  max-width: 100%;
-  overflow: hidden;
   color: var(--brand-danger);
-  font-size: 0.6875rem;
   font-variant-numeric: tabular-nums;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .ledger-calendar-income {
   position: absolute;
@@ -279,7 +305,59 @@
   border-radius: 50%;
   background: var(--brand-success);
 }
+.ledger-calendar-expense,
+.ledger-calendar-income-amount,
+.ledger-calendar-titles > li {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.6875rem;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ledger-calendar-income-amount {
+  display: none;
+  color: var(--brand-success);
+  font-variant-numeric: tabular-nums;
+}
+/* Titles that do not fit wrap into a hidden second column, so only whole lines show. */
+.ledger-calendar-titles {
+  display: none;
+  flex: 1;
+  flex-flow: column wrap;
+  align-self: stretch;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  color: var(--brand-text-secondary);
+  text-align: left;
+}
+.ledger-calendar-titles > li {
+  box-sizing: border-box;
+  width: 100%;
+  height: 14px;
+  padding: 0 2px;
+}
+/* Inside the padding: a 20px date and 14px lines with 2px gaps, so income fits from 52px and a
+   내용 line from 68px. */
+@container (min-height: 52px) {
+  .ledger-calendar-income {
+    display: none;
+  }
+  .ledger-calendar-income-amount {
+    display: block;
+  }
+}
+@container (min-height: 68px) {
+  .ledger-calendar-titles {
+    display: flex;
+  }
+}
 
+/* A row is a button when the room can show its records, plain text otherwise. */
+.ledger-stat-row,
 .ledger-stat-row.ui-button {
   display: block;
   width: 100%;
@@ -490,6 +568,11 @@
 .ledger-net-worth dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.ledger-asset-analysis h3 {
+  margin: 0 0 var(--brand-space-2);
+  font-size: var(--brand-font-size-md);
 }
 
 /* 대화: day labels, bubbles (mine on the right), and the composer row. */

@@ -10,7 +10,9 @@
   border-radius: var(--brand-radius-control);
   background: var(--brand-surface-subtle);
 }
-.ui-amount-input > input {
+/* :focus too, so form-wide focus fills never paint a box inside the rounded field. */
+.ui-amount-input > input,
+.ui-amount-input > input:focus {
   flex: 1;
   width: 100%;
   min-width: 0;
@@ -23,6 +25,14 @@
   font-variant-numeric: tabular-nums;
   line-height: var(--brand-line-height-tight);
   text-align: right;
+}
+/* The ring goes on the rounded box, like every other field, not on the bare input inside. */
+.ui-amount-input:focus-within {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+.ui-amount-input > input:focus-visible {
+  outline: none;
 }
 .ui-amount-input-unit {
   color: var(--brand-text-secondary);

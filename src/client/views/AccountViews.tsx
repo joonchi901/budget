@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { UgaIcon, type UgaIconName } from '../brand/Uga';
 import { AvatarPicker } from '../ledger';
@@ -35,6 +35,7 @@ export function AccountView({
   onLogout,
   onLeave,
   onBack,
+  tabBar,
 }: {
   profile: Profile;
   /** The Google account this profile signs in with. */
@@ -50,6 +51,8 @@ export function AccountView({
   onLeave(): void;
   /** Back to 설정. */
   onBack(): void;
+  /** The app's bottom tabs, which stay while pages open above them. */
+  tabBar?: ReactNode;
 }) {
   const [draft, setDraft] = useState(profile);
   const [photoFile, setPhotoFile] = useState<File | null>();
@@ -71,6 +74,7 @@ export function AccountView({
           <h1>프로필</h1>
         </div>
       }
+      bottom={tabBar}
     >
       <Stack gap={6}>
         <AvatarPicker

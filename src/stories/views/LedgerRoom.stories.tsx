@@ -25,7 +25,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '가계부 하나의 방. 상단에 방 이름·기간·요약, 하단에 내역·통계·설정 탭이 있습니다. 내역 탭은 위쪽 조회 도구 옆에서 표/캘린더를 바꾸고, 탭 막대 바로 위에 가로 전체 내역 추가 버튼이 늘 보입니다. 설정은 탭 안에서 바로 고칩니다. 하위 가계부가 있으면(상위 가계부) 아래 모든 내역을 한 번씩 모아 원본 가계부를 표시하고, 캘린더는 월 단위로 넘기며, 하위 보기에서 각 하위 방으로 들어갑니다. 통계 항목을 누르면 그 조건의 표로 이동합니다. 내역마다 우가 스티커로 반응할 수 있습니다. 내역을 적는 가계부에는 설정 왼쪽에 대화 탭이 있습니다.',
+          '가계부 하나의 방. 상단에 방 이름·기간·요약, 하단에 내역·통계·설정 탭이 있습니다. 내역 탭은 위쪽 조회 도구 옆에서 표/캘린더를 바꾸고, 탭 막대 바로 위에 가로 전체 내역 추가 버튼이 늘 보입니다. 설정은 탭 안에서 바로 고칩니다. 하위 가계부가 있으면(상위 가계부) 아래 모든 내역을 한 번씩 모으고 금액 아래에 원본 가계부로 가는 링크("11월 →")를 두며, 캘린더는 월 단위로 넘깁니다. 하위 탭은 없고 이 링크로 하위 방에 들어갑니다. 통계 항목을 누르면 그 조건의 표로 이동합니다. 내역마다 우가 스티커로 반응할 수 있습니다. 내역을 적는 가계부에는 설정 왼쪽에 대화 탭이 있습니다.',
       },
     },
   },
@@ -90,9 +90,9 @@ export const Table: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);
     await expect(c.getByRole('heading', { level: 1, name: '11월' })).toBeVisible();
-    await expect(c.queryByRole('button', { name: '하위' })).toBeNull();
     await userEvent.type(c.getByRole('searchbox', { name: '내역 검색' }), '쿠팡이츠');
     await expect(c.getAllByRole('button', { name: /쿠팡이츠/ })).toHaveLength(6);
+    await expect(c.getByText(/^조건에 맞는 내역 6건 · 수입 0원 · 지출/)).toBeVisible();
     await userEvent.click(c.getByRole('button', { name: '조회 조건' }));
     await userEvent.click(c.getByRole('switch', { name: '넓게 보기' }));
     await expect(c.getByRole('region', { name: '내역 표' })).toBeVisible();
@@ -165,9 +165,10 @@ export const ParentYear: Story = {
     await expect(c.getByText('하위 2개')).toBeVisible();
     await expect(c.getByText('남은 금액').nextElementSibling).toHaveTextContent('5,645,218원');
     await expect(c.queryByRole('menuitem', { name: '복사해서 만들기' })).toBeNull();
-    await userEvent.click(c.getByRole('button', { name: '하위' }));
-    await userEvent.click(c.getByRole('button', { name: /^하반기/ }));
-    await expect(c.getByRole('status')).toHaveTextContent('하위: 하반기');
+    // Parents have no 하위 tab; each record links to its own ledger instead.
+    await expect(c.queryByRole('button', { name: '하위' })).toBeNull();
+    await userEvent.click(c.getAllByRole('button', { name: '11월 가계부로 이동' })[0]);
+    await expect(c.getByRole('status')).toHaveTextContent('하위: 11월');
   },
 };
 export const ParentMonthCalendar: Story = {
@@ -181,7 +182,15 @@ export const ParentMonthCalendar: Story = {
     await expect(c.getByRole('button', { name: /^10월 9일 \(금\), 지출 692,000원/ })).toBeEnabled();
   },
 };
-export const ParentTravel: Story = { args: { ledger: travel } };
+export const ParentTravel: Story = {
+  args: { ledger: travel },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    // Each record links to the ledger it came from, under its amount.
+    await userEvent.click(c.getAllByRole('button', { name: '일본여행 가계부로 이동' })[0]);
+    await expect(c.getByRole('status')).toHaveTextContent('하위: 일본여행');
+  },
+};
 export const MembersMenu: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);

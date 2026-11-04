@@ -66,6 +66,19 @@ export function RecordForm({
 }) {
   const id = useId();
   const set = (patch: Partial<RecordDraft>) => onChange({ ...draft, ...patch });
+  const natureOf = (kindId: Id) => ledger.kinds.find((kind) => kind.id === kindId)?.nature;
+  // Tags picked for 지출 rarely fit 수입, so switching between them clears tags; text stays.
+  const withKind = (kindId: Id): Partial<RecordDraft> =>
+    natureOf(kindId) === natureOf(draft.kindId)
+      ? { kindId }
+      : {
+          kindId,
+          values: Object.fromEntries(
+            Object.entries(draft.values).filter(
+              ([fieldId]) => ledger.fields.find((field) => field.id === fieldId)?.type === 'text',
+            ),
+          ),
+        };
   const typed = draft.title.trim().toLocaleLowerCase();
   const matches = typed
     ? [...new Set(suggestions)]
@@ -81,7 +94,7 @@ export function RecordForm({
         label="유형"
         options={ledger.kinds}
         value={[draft.kindId]}
-        onValueChange={([kindId]) => kindId && set({ kindId })}
+        onValueChange={([kindId]) => kindId && set(withKind(kindId))}
       />
       <Stack gap={2}>
         <Field htmlFor={`${id}-amount`}>금액</Field>

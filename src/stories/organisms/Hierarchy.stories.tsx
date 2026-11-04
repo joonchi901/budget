@@ -1,47 +1,28 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
-import { ChildLedgerList, ChildPicker, LedgerPicker, ParentPicker } from '../../client/ledger';
+import { ChildPicker, LedgerPicker, ParentPicker } from '../../client/ledger';
 import { Stack } from '../../client/ui';
 import { leafLedgers } from '../../shared/ledger';
-import { FIXTURE_TODAY, ledgers, november, records, secondHalf, year2026 } from '../fixtures';
+import { FIXTURE_TODAY, ledgers, november, year2026 } from '../fixtures';
 
 const meta = {
   title: '04 Organisms · 유기체/Hierarchy',
-  component: ChildLedgerList,
+  component: ParentPicker,
   tags: ['autodocs'],
   parameters: {
     docs: {
       description: {
         component:
-          '상위·하위 가계부 블록. ChildLedgerList는 상위 가계부 방의 하위 보기(각 하위로 들어가 계속 내려감), ParentPicker는 가계부가 속할 상위(여러 개), ChildPicker는 상위 가계부의 하위, LedgerPicker는 상위 방에서 추가한 내역을 저장할 가계부입니다. 순환이 생기는 선택지는 처음부터 보이지 않습니다.',
+          '상위·하위 가계부 블록. ParentPicker는 가계부가 속할 상위(여러 개), ChildPicker는 상위 가계부의 하위, LedgerPicker는 상위 방에서 추가한 내역을 저장할 가계부입니다. 순환이 생기는 선택지는 처음부터 보이지 않습니다.',
       },
     },
   },
-  args: { parent: year2026, ledgers, records, onOpen: () => {} },
-} satisfies Meta<typeof ChildLedgerList>;
+  args: { ledgers, value: [], onValueChange: () => {} },
+} satisfies Meta<typeof ParentPicker>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Children: Story = {
-  render: function Controlled(args) {
-    const [opened, setOpened] = useState('');
-    return (
-      <div style={{ maxWidth: 390 }}>
-        <ChildLedgerList {...args} onOpen={(ledger) => setOpened(ledger.name)} />
-        <p role="status">{opened && `${opened} 열기`}</p>
-      </div>
-    );
-  },
-  play: async ({ canvasElement }) => {
-    const c = within(canvasElement);
-    await expect(c.getByRole('button', { name: /^하반기/ })).toHaveTextContent(
-      '하위 2개 · 내역 36건',
-    );
-    await userEvent.click(c.getByRole('button', { name: /^일본여행/ }));
-    await expect(c.getByRole('status')).toHaveTextContent('일본여행 열기');
-  },
-};
 export const PickParents: Story = {
   render: function Controlled() {
     const [value, setValue] = useState(['h2']);
@@ -119,4 +100,3 @@ export const PickLedger: Story = {
     );
   },
 };
-export const ParentWithoutRecords: Story = { args: { parent: secondHalf } };

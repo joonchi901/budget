@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
+import { HomeTabBar } from '../../client/ledger';
 import { AccountView, LeaveAccountView } from '../../client/views';
 import { FIXTURE_TODAY, december, japanTrip, me, samplePhoto, yedi } from '../fixtures';
 
@@ -14,7 +15,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '설정 탭의 프로필 메뉴에서 여는 화면(왼쪽 위로 설정에 돌아감). 프로필 사진(또는 기본 우가 그림)·표시 이름·아이디를 바꾸고(아이디는 30일에 한 번), 로그아웃하거나 탈퇴합니다. 탈퇴할 때 내가 만든 공유 가계부는 고른 편집 멤버가 수락하면 넘어가고, 편집 멤버가 없으면 함께 지워집니다.',
+          '설정 탭의 프로필 메뉴에서 여는 화면(왼쪽 위로 설정에 돌아감, 하단 탭은 그대로). 프로필 사진(또는 기본 우가 그림)·표시 이름·아이디를 바꾸고(아이디는 30일에 한 번), 로그아웃하거나 탈퇴합니다. 탈퇴할 때 내가 만든 공유 가계부는 고른 편집 멤버가 수락하면 넘어가고, 편집 멤버가 없으면 함께 지워집니다.',
       },
     },
   },
@@ -26,6 +27,7 @@ const meta = {
     onLogout: () => {},
     onLeave: () => {},
     onBack: () => {},
+    tabBar: <HomeTabBar tab="settings" onTabChange={() => {}} />,
   },
   render: function Logged(args) {
     const [log, setLog] = useState('');

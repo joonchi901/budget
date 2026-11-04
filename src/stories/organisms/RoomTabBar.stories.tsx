@@ -11,7 +11,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '방 화면 하단 막대. 엄지가 닿는 곳에 내역·통계·설정 탭을 두고, 상위 가계부는 하위 탭을 더합니다. 표/캘린더 전환은 내역 보기 위쪽 조회 도구 옆에, 내역 추가는 탭 막대 바로 위 가로 전체 버튼으로 있습니다. 탭은 방향키·Home·End로도 움직입니다.',
+          '방 화면 하단 막대. 엄지가 닿는 곳에 내역·통계·대화·설정 탭을 두고, 상위 가계부는 대화 없이 내역·통계·설정입니다. 표/캘린더 전환은 내역 보기 위쪽 조회 도구 옆에, 내역 추가는 탭 막대 바로 위 가로 전체 버튼으로 있습니다. 탭은 방향키·Home·End로도 움직입니다.',
       },
     },
   },
@@ -42,4 +42,4 @@ export const Ledger: Story = {
     await expect(c.queryByRole('button', { name: '내역 추가' })).toBeNull();
   },
 };
-export const Group: Story = { args: { views: ['records', 'stats', 'ledgers', 'settings'] } };
+export const Group: Story = { args: { views: ['records', 'stats', 'settings'] } };

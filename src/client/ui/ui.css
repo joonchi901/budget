@@ -77,6 +77,11 @@
   font: inherit;
   color: var(--brand-text);
 }
+/* iPhone zooms into fields set below 16px; a class rule so the element reset cannot undo it. */
+.ui-input,
+.ui-textarea {
+  font-size: max(1rem, 1em);
+}
 :where(.ui-input:not([type='hidden']), .ui-textarea) {
   border: 1px solid var(--brand-line);
   border-radius: var(--brand-radius-control);

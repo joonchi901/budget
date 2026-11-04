@@ -1,6 +1,10 @@
+/** Sent when the phone's back should close the topmost sheet instead of leaving the screen. */
+export const SHEET_BACK = 'uga:sheet-back';
+
 const guards = new Set<symbol>();
 const listeners = new Set<() => void>();
 let warning = '';
+let pending: (() => void) | undefined;
 
 function publish(next: string) {
   if (warning === next) return;
@@ -32,4 +36,24 @@ export function subscribeNavigationWarning(listener: () => void): () => void {
 
 export function navigationWarning(): string {
   return warning;
+}
+
+/** Runs `leave` now, or once the person agrees to drop the unsaved changes on screen. */
+export function guardLeave(leave: () => void) {
+  if (!guards.size) return leave();
+  pending = leave;
+  listeners.forEach((listener) => listener());
+}
+
+/** Whether a leave waits for an answer; Screen asks it. */
+export function leavePending(): boolean {
+  return pending !== undefined;
+}
+
+export function answerLeave(discard: boolean) {
+  const leave = pending;
+  pending = undefined;
+  if (discard) guards.clear();
+  listeners.forEach((listener) => listener());
+  if (discard) leave?.();
 }

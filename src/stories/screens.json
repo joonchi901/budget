@@ -50,7 +50,7 @@
     "story": "src/stories/views/AppSettings.stories.tsx"
   },
   {
-    "name": "자산·자산 추가",
+    "name": "자산·자산 관리",
     "source": "src/client/views/AssetsView.tsx",
     "story": "src/stories/views/Assets.stories.tsx"
   }

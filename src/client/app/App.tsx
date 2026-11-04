@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChatThread, HomeTabBar, type HomeTab, type RoomView } from '../ledger';
+import { ChatThread, HomeTabBar, type RoomView } from '../ledger';
 import { addDays, addMonths, localDate } from '../ledger/format';
 import { StatusScreen } from '../templates';
 import { Button, Notice } from '../ui';
@@ -7,6 +7,7 @@ import {
   AccountView,
   AppSettingsView,
   AssetEditView,
+  AssetManageView,
   AssetsView,
   CreateLedgerView,
   FriendsView,
@@ -30,6 +31,7 @@ import { assetFor, type Asset } from '../../shared/assets';
 import type { Profile, RoomInvite } from '../../shared/people';
 import { ApiFailure, api } from './api';
 import { reencodePhoto } from './photo';
+import { useRoute } from './route';
 
 type Sheet =
   | { type: 'entry'; ledgers: Ledger[]; date?: IsoDate; record?: LedgerRecord }
@@ -72,25 +74,31 @@ const withReaction = (record: LedgerRecord, reaction: string, memberId: Id, on: 
  */
 export function App() {
   const [data, setData] = useState<AppData>();
-  const [error, setError] = useState<{ message: string; login?: boolean }>();
-  const [roomId, setRoomId] = useState<Id>();
+  const [error, setError] = useState<{ message: string; login?: boolean; retry?(): void }>();
   const [sheet, setSheet] = useState<Sheet>();
-  const [tab, setTab] = useState<HomeTab>('ledgers');
-  const [profileOpen, setProfileOpen] = useState(false);
+  const { route, go, back } = useRoute();
+  const { tab, page: settingsPage, roomId } = route;
   const [roomView, setRoomView] = useState<RoomView>('records');
   const [takenHandle, setTakenHandle] = useState<string>();
   const queue = useRef(Promise.resolve());
   const latest = useRef(0);
+  /** The server's latest answer: what is saved for sure. */
+  const confirmed = useRef<AppData>(undefined);
+  const answered = (answer: AppData) => {
+    confirmed.current = answer;
+    setData(answer);
+  };
   const today = localDate(new Date());
 
-  const report = (failure: unknown) =>
+  const report = (failure: unknown, retry?: () => void) =>
     setError({
       message: failure instanceof Error ? failure.message : '문제가 생겼어요.',
       login: failure instanceof ApiFailure && failure.status === 401,
+      retry,
     });
   const reload = () =>
     api('GET', '/api/data').then((answer) => {
-      setData(answer);
+      answered(answer);
       setError(undefined);
     }, report);
   useEffect(() => {
@@ -103,7 +111,7 @@ export function App() {
   useEffect(() => {
     if (!chatting) return;
     const timer = setInterval(() => {
-      queue.current = queue.current.then(() => api('GET', '/api/data').then(setData, () => {}));
+      queue.current = queue.current.then(() => api('GET', '/api/data').then(answered, () => {}));
     }, 5000);
     return () => clearInterval(timer);
   }, [chatting]);
@@ -119,11 +127,15 @@ export function App() {
     queue.current = queue.current.then(() =>
       api(method, path, body).then(
         (answer) => {
+          confirmed.current = answer;
           if (turn === latest.current) setData(answer);
         },
         (failure) => {
-          report(failure);
-          return reload();
+          // Show only what the server holds, so nothing unsaved looks saved; 다시 시도 resends it.
+          if (confirmed.current) setData(confirmed.current);
+          report(failure, () => change(local, method, path, body));
+          // Catch up with the server quietly, keeping the notice and its 다시 시도.
+          return api('GET', '/api/data').then(answered, () => {});
         },
       ),
     );
@@ -170,16 +182,13 @@ export function App() {
     <HomeTabBar
       tab={tab}
       pending={friends.filter((friend) => friend.status === 'incoming').length + invites.length}
-      onTabChange={(next) => {
-        setTab(next);
-        setProfileOpen(false);
-      }}
+      onTabChange={(next) => go({ tab: next })}
     />
   );
   const friendAction = (action: string) => (profile: Profile) =>
     send('PUT', `/api/friends/${profile.id}`, { action });
   const openRoom = (id: Id) => {
-    setRoomId(id);
+    go({ tab: 'ledgers', roomId: id });
     if (data.unseen?.[id])
       change(
         (current) => ({ ...current, unseen: { ...current.unseen, [id]: 0 } }),
@@ -191,7 +200,26 @@ export function App() {
 
   return (
     <>
-      {error && <Notice onClose={() => setError(undefined)}>{error.message}</Notice>}
+      {error && (
+        <Notice
+          onClose={() => setError(undefined)}
+          action={
+            error.retry && (
+              <Button
+                variant="plain"
+                onClick={() => {
+                  setError(undefined);
+                  error.retry!();
+                }}
+              >
+                다시 시도
+              </Button>
+            )
+          }
+        >
+          {error.message}
+        </Notice>
+      )}
       {room ? (
         <LedgerRoomView
           key={room.id}
@@ -199,29 +227,33 @@ export function App() {
           ledgers={data.ledgers}
           records={data.records}
           today={today}
-          onBack={() => setRoomId(undefined)}
+          onBack={back}
           onViewChange={setRoomView}
           chat={
-            <ChatThread
-              messages={(data.messages ?? []).filter((message) => message.ledgerId === room.id)}
-              memberId={data.user.id}
-              members={data.members}
-              onSend={(content) => {
-                const message = {
-                  id: crypto.randomUUID(),
-                  ledgerId: room.id,
-                  authorId: data.user.id,
-                  createdAt: new Date().toISOString(),
-                  ...content,
-                };
-                change(
-                  (current) => ({ ...current, messages: [...(current.messages ?? []), message] }),
-                  'PUT',
-                  `/api/messages/${message.id}`,
-                  { ledgerId: room.id, ...content },
-                );
-              }}
-            />
+            // 대화 shows once someone else shares the ledger, or messages are already there.
+            ((data.ledgerMembers?.[room.id]?.length ?? 0) > 1 ||
+              data.messages?.some((message) => message.ledgerId === room.id)) && (
+              <ChatThread
+                messages={(data.messages ?? []).filter((message) => message.ledgerId === room.id)}
+                memberId={data.user.id}
+                members={data.members}
+                onSend={(content) => {
+                  const message = {
+                    id: crypto.randomUUID(),
+                    ledgerId: room.id,
+                    authorId: data.user.id,
+                    createdAt: new Date().toISOString(),
+                    ...content,
+                  };
+                  change(
+                    (current) => ({ ...current, messages: [...(current.messages ?? []), message] }),
+                    'PUT',
+                    `/api/messages/${message.id}`,
+                    { ledgerId: room.id, ...content },
+                  );
+                }}
+              />
+            )
           }
           onAddRecord={(date) => {
             const ledgers = leafLedgers(data.ledgers, room);
@@ -259,8 +291,11 @@ export function App() {
               onSave={({ ledger, parentIds }) => saveLedger(ledger, parentIds)}
               onArchive={(ledger) => {
                 saveLedger({ ...ledger, archived: true }, parentIdsOf(data.ledgers, ledger.id));
-                setRoomId(undefined);
+                back();
               }}
+              onRestore={({ archived: _, ...ledger }) =>
+                saveLedger(ledger, parentIdsOf(data.ledgers, ledger.id))
+              }
             />
           }
           onCopy={() => setSheet({ type: 'create', sourceId: room.id })}
@@ -282,12 +317,25 @@ export function App() {
           assets={data.assets ?? []}
           ledgers={data.ledgers}
           records={data.records}
-          onAdd={() => setSheet({ type: 'asset' })}
-          onOpenAsset={(asset) => setSheet({ type: 'asset', asset })}
+          onManage={() => go({ tab: 'settings', page: 'assets' })}
           tabBar={tabBar}
         />
-      ) : tab === 'settings' && !profileOpen ? (
-        <AppSettingsView onOpenProfile={() => setProfileOpen(true)} tabBar={tabBar} />
+      ) : tab === 'settings' && settingsPage === 'assets' ? (
+        <AssetManageView
+          assets={data.assets ?? []}
+          ledgers={data.ledgers}
+          records={data.records}
+          onAdd={() => setSheet({ type: 'asset' })}
+          onOpenAsset={(asset) => setSheet({ type: 'asset', asset })}
+          onBack={back}
+          tabBar={tabBar}
+        />
+      ) : tab === 'settings' && !settingsPage ? (
+        <AppSettingsView
+          onOpenProfile={() => go({ tab: 'settings', page: 'profile' })}
+          onOpenAssets={() => go({ tab: 'settings', page: 'assets' })}
+          tabBar={tabBar}
+        />
       ) : tab === 'friends' ? (
         <FriendsView
           friends={friends}
@@ -344,7 +392,8 @@ export function App() {
             })
           }
           onLeave={() => setError({ message: '탈퇴는 Google 로그인을 붙인 뒤에 열어요.' })}
-          onBack={() => setProfileOpen(false)}
+          onBack={back}
+          tabBar={tabBar}
         />
       )}
       {sheet?.type === 'entry' && (
@@ -445,7 +494,11 @@ export function App() {
           onLeave={() => {
             send('DELETE', `/api/ledgers/${sheet.ledger.id}/members/${data.user.id}`);
             setSheet(undefined);
-            setRoomId(undefined);
+            back();
+          }}
+          onFindFriends={() => {
+            setSheet(undefined);
+            go({ tab: 'friends' });
           }}
           onClose={() => setSheet(undefined)}
         />
@@ -481,7 +534,7 @@ export function App() {
           onCreate={({ ledger, parentIds }) => {
             saveLedger(ledger, parentIds);
             setSheet(undefined);
-            setRoomId(ledger.id);
+            go({ tab: 'ledgers', roomId: ledger.id });
           }}
           onCreateParent={(name) => {
             const id = crypto.randomUUID();

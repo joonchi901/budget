@@ -1,7 +1,23 @@
+import { useId, useState } from 'react';
 import { UgaIcon, type UgaIconName } from '../brand/Uga';
-import { Amount, ListRow } from '../ui';
-import type { Asset, AssetKind } from '../../shared/assets';
-import type { Ledger } from '../../shared/ledger';
+import { Amount, Empty, List, ListRow, Stack, won } from '../ui';
+import {
+  assetMonths,
+  assetRecords,
+  coveredLedgerIds,
+  type Asset,
+  type AssetKind,
+} from '../../shared/assets';
+import {
+  defaultStatAxis,
+  totals,
+  type KindOption,
+  type Ledger,
+  type LedgerRecord,
+} from '../../shared/ledger';
+import { monthLabel } from './format';
+import { SummaryStrip } from './Room';
+import { StatsBreakdown } from './Stats';
 
 const kindIcons: Record<AssetKind, UgaIconName> = {
   cash: 'payments',
@@ -62,5 +78,66 @@ export function NetWorthSummary({ owned, owed }: { owned: number; owed: number }
         </dd>
       </div>
     </dl>
+  );
+}
+
+/**
+ * What moved an asset since its 기준일, from the records of the ledgers it follows: 수입·지출 and
+ * the change, each month with the balance at its end, and the records by 유형 or a field such as
+ * 카테고리.
+ */
+export function AssetAnalysis({
+  asset,
+  ledgers,
+  records,
+}: {
+  asset: Asset;
+  ledgers: Ledger[];
+  records: LedgerRecord[];
+}) {
+  const id = useId();
+  const covered = coveredLedgerIds(asset, ledgers);
+  const sources = ledgers.filter((ledger) => covered.has(ledger.id));
+  const moved = assetRecords(asset, ledgers, records);
+  const [axis, setAxis] = useState(() => defaultStatAxis(sources));
+  const [nature, setNature] = useState<KindOption['nature']>('expense');
+  if (!moved.length) return <Empty>기준일 이후 반영된 내역이 아직 없어요.</Empty>;
+  return (
+    <Stack gap={6} className="ledger-asset-analysis">
+      <SummaryStrip totals={totals(moved, sources)} balanceLabel="잔액 변화" />
+      <section aria-labelledby={`${id}-months`}>
+        <h3 id={`${id}-months`}>월별 흐름</h3>
+        <List aria-labelledby={`${id}-months`}>
+          {assetMonths(asset, ledgers, records).map((month) => (
+            <ListRow
+              key={month.month}
+              title={monthLabel(month.month)}
+              description={`수입 ${won(month.income)}원 · 지출 ${won(month.expense)}원`}
+              trailing={
+                <>
+                  <Amount
+                    value={month.balance}
+                    tone={asset.kind === 'debt' ? 'expense' : 'neutral'}
+                    size="sm"
+                  />
+                  <span>월말 잔액</span>
+                </>
+              }
+            />
+          ))}
+        </List>
+      </section>
+      <section aria-labelledby={`${id}-items`}>
+        <h3 id={`${id}-items`}>항목별</h3>
+        <StatsBreakdown
+          records={moved}
+          ledgers={sources}
+          axis={axis}
+          onAxisChange={setAxis}
+          nature={nature}
+          onNatureChange={setNature}
+        />
+      </section>
+    </Stack>
   );
 }

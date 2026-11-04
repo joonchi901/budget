@@ -93,6 +93,25 @@ export const Create: Story = {
   },
 };
 export const FirstUse: Story = { args: { ledgers: [], records: [], unseen: {} } };
+export const Archived: Story = {
+  args: {
+    ledgers: ledgers.map((ledger) =>
+      ledger.id === 'dec' ? { ...ledger, archived: true } : ledger,
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    // 12월 leaves the list and waits, folded, under 보관한 가계부.
+    await expect(
+      within(c.getByRole('list', { name: '방 목록' })).queryByRole('button', { name: /12월/ }),
+    ).toBeNull();
+    await userEvent.click(c.getByText('보관한 가계부 1개'));
+    await userEvent.click(
+      within(c.getByRole('list', { name: '보관한 가계부' })).getByRole('button', { name: /12월/ }),
+    );
+    await expect(c.getByRole('status')).toHaveTextContent('열기: 12월');
+  },
+};
 export const Tabs: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);

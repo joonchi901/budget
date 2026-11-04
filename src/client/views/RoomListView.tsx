@@ -15,7 +15,8 @@ import {
 /**
  * Home's 가계부 tab: every ledger as a room, most recent activity first, like a messenger. A
  * 하위 가계부 sits indented under each 상위 that holds it; a parent's activity includes its
- * children's. Searching lists matching rooms flat. 새 가계부 sits right of the logo.
+ * children's. Searching lists matching rooms flat. 새 가계부 sits right of the logo. Archived
+ * ledgers wait folded under 보관한 가계부 at the bottom, where they can be opened and restored.
  */
 export function RoomListView({
   ledgers,
@@ -38,8 +39,9 @@ export function RoomListView({
 }) {
   const [query, setQuery] = useState('');
   const open = ledgers.filter((room) => !room.archived);
+  const archived = ledgers.filter((room) => room.archived);
   const latest = new Map(
-    open.map((room) => [
+    ledgers.map((room) => [
       room.id,
       roomRecords(ledgers, room, records).reduce<LedgerRecord | undefined>(
         (last, record) => (!last || record.createdAt > last.createdAt ? record : last),
@@ -110,6 +112,22 @@ export function RoomListView({
         <Empty illustration={query ? 'search' : 'empty'}>
           {query ? `'${query}'와 맞는 방이 없어요.` : '아직 방이 없어요. 새로 만들어 보세요.'}
         </Empty>
+      )}
+      {archived.length > 0 && !search && (
+        <details className="view-archived">
+          <summary>보관한 가계부 {archived.length}개</summary>
+          <List aria-label="보관한 가계부">
+            {archived.sort(byActivity).map((room) => (
+              <RoomListItem
+                key={room.id}
+                room={room}
+                latest={latest.get(room.id)}
+                today={today}
+                onOpen={() => onOpenRoom(room)}
+              />
+            ))}
+          </List>
+        </details>
       )}
     </Screen>
   );

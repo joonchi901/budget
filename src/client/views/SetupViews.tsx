@@ -10,13 +10,12 @@ import {
   addMonths,
   periodLabel,
 } from '../ledger';
-import { FullScreenSheet } from '../templates';
+import { FullScreenSheet, useUnsavedGuard } from '../templates';
 import {
   Button,
   DateField,
   Field,
   Grid,
-  Inline,
   SegmentedControl,
   SelectField,
   SelectOption,
@@ -85,7 +84,7 @@ function LedgerBasics({
         onChange={(event) => onNameChange(event.target.value)}
       />
       {period && onPeriodChange && (
-        <Grid columns={2} mobileColumns={2} gap={2}>
+        <Grid columns={2} mobileColumns={2} gap={2} className="view-period">
           <Stack gap={2}>
             <Field htmlFor={`${id}-start`}>시작일</Field>
             <DateField
@@ -157,10 +156,21 @@ function spanOf(ledgers: Ledger[], childIds: Id[], fallback: { start: IsoDate; e
 
 type Role = 'records' | 'parent';
 
+/** The name a copy suggests: 12월 after 11월, 2027년 1월 after 2026년 12월; otherwise none. */
+function nextName(name: string) {
+  const found = /(?:(\d{4})년\s*)?(\d{1,2})월/.exec(name);
+  if (!found) return '';
+  const [text, year, month] = found;
+  const wraps = Number(month) === 12;
+  const next = `${year ? `${Number(year) + (wraps ? 1 : 0)}년 ` : ''}${wraps ? 1 : Number(month) + 1}월`;
+  return name.replace(text, next);
+}
+
 /**
  * Creating a ledger. One that holds records starts empty or copied from another (fields, tags
- * and kinds, period one month later). A 상위 가계부 only picks
- * its children. Either can sit under several parents.
+ * and kinds, period one month later, the next month's name and the same parents, so a new
+ * month joins its year and any asset following it). A 상위 가계부 only picks its children.
+ * Either can sit under several parents.
  */
 export function CreateLedgerView({
   ledgers,
@@ -188,14 +198,21 @@ export function CreateLedgerView({
     ledger
       ? { start: addMonths(ledger.period.start, 1), end: addMonths(ledger.period.end, 1) }
       : thisMonth;
-  const [name, setName] = useState('');
+  const parentsOf = (ledger?: Ledger) =>
+    ledger
+      ? ledgers.filter((item) => item.childIds.includes(ledger.id)).map((item) => item.id)
+      : [];
+  const suggestion = mode === 'copy' && source ? nextName(source.name) : '';
+  const [name, setName] = useState(suggestion);
   const [period, setPeriod] = useState(() => nextPeriod(mode === 'copy' ? source : undefined));
   const [icon, setIcon] = useState(source && mode === 'copy' ? source.icon : 'ledger');
   const [fields, setFields] = useState<FieldDef[]>(() =>
     mode === 'copy' && source ? copySchema(source).fields : defaultFields(),
   );
   const [childIds, setChildIds] = useState<Id[]>([]);
-  const [parentIds, setParentIds] = useState<Id[]>([]);
+  const [parentIds, setParentIds] = useState<Id[]>(() =>
+    parentsOf(mode === 'copy' ? source : undefined),
+  );
   const [nameError, setNameError] = useState<string>();
 
   const switchSource = (nextMode: 'empty' | 'copy', id = sourceId) => {
@@ -205,6 +222,9 @@ export function CreateLedgerView({
     setPeriod(nextPeriod(nextMode === 'copy' ? next : undefined));
     setFields(nextMode === 'copy' && next ? copySchema(next).fields : defaultFields());
     if (nextMode === 'copy' && next) setIcon(next.icon);
+    // A name the person typed stays; a suggested one follows the source.
+    if (name === suggestion) setName(nextMode === 'copy' && next ? nextName(next.name) : '');
+    setParentIds(parentsOf(nextMode === 'copy' ? next : undefined));
   };
   const create = () => {
     if (!name.trim()) {
@@ -240,7 +260,7 @@ export function CreateLedgerView({
   return (
     <FullScreenSheet
       title="가계부 만들기"
-      dirty={name !== ''}
+      dirty={name !== suggestion}
       onClose={onClose}
       footer={
         <Button variant="primary" onClick={create}>
@@ -318,20 +338,23 @@ export function CreateLedgerView({
 
 /**
  * A ledger's settings, shown in the room's 설정 tab. One that holds records edits basics, fields
- * and each select field's tags; a parent edits its children. Both choose their parents and can
- * be archived. 저장 turns on once something changed.
+ * and each select field's tags; a parent edits its children. Both choose their parents. 저장
+ * stays above the tab bar and turns on once something changed; leaving with changes asks first.
+ * 보관 takes a second tap, and an archived ledger offers 보관 해제.
  */
 export function LedgerSettingsView({
   ledger,
   ledgers,
   onSave,
   onArchive,
+  onRestore,
 }: {
   ledger: Ledger;
   /** All ledgers, to place this one among parents and children. */
   ledgers: Ledger[];
   onSave(result: { ledger: Ledger; parentIds: Id[] }): void;
   onArchive(ledger: Ledger): void;
+  onRestore?(ledger: Ledger): void;
 }) {
   const parent = isParent(ledger);
   const initialParents = ledgers
@@ -346,8 +369,12 @@ export function LedgerSettingsView({
   // 유형 comes first among the tags: every ledger that holds records has it.
   const [tagFieldId, setTagFieldId] = useState(KINDS);
   const tagField = selectFields.find((field) => field.id === tagFieldId);
+  // 보관 and 보관 해제 save at once, so the archive flag is never an unsaved change here.
+  const withoutArchive = ({ archived: _, ...rest }: Ledger) => JSON.stringify(rest);
   const dirty =
-    JSON.stringify(draft) !== JSON.stringify(ledger) || parentIds.join() !== initialParents.join();
+    withoutArchive(draft) !== withoutArchive(ledger) || parentIds.join() !== initialParents.join();
+  useUnsavedGuard(dirty);
+  const [confirmArchive, setConfirmArchive] = useState(false);
   return (
     <Stack gap={6} className="view-settings">
       <LedgerBasics
@@ -415,27 +442,42 @@ export function LedgerSettingsView({
         value={parentIds}
         onValueChange={setParentIds}
       />
-      <Inline gap={2} wrap={false} className="view-actions">
-        <Button className="view-danger" onClick={() => onArchive(ledger)}>
-          보관
-        </Button>
-        <Button
-          variant="primary"
-          disabled={!dirty || !draft.name.trim() || (parent && !draft.childIds.length)}
-          onClick={() =>
-            onSave({
-              ledger: {
-                ...draft,
-                name: draft.name.trim(),
-                period: parent ? spanOf(ledgers, draft.childIds, draft.period) : draft.period,
-              },
-              parentIds,
-            })
-          }
-        >
-          저장
-        </Button>
-      </Inline>
+      <Stack gap={2}>
+        <h2 className="view-section-title">보관</h2>
+        <p className="view-meta">
+          {ledger.archived
+            ? '보관한 가계부예요. 보관을 풀면 방 목록에 다시 보여요.'
+            : '보관하면 방 목록 맨 아래 "보관한 가계부"로 옮겨요. 내역은 그대로 남아요.'}
+        </p>
+        {ledger.archived ? (
+          onRestore && <Button onClick={() => onRestore(ledger)}>보관 해제</Button>
+        ) : (
+          <Button
+            className="view-danger"
+            onClick={() => (confirmArchive ? onArchive(ledger) : setConfirmArchive(true))}
+          >
+            {confirmArchive ? '한 번 더 누르면 보관' : '보관'}
+          </Button>
+        )}
+      </Stack>
+      <Button
+        variant="primary"
+        className="view-sticky-action"
+        disabled={!dirty || !draft.name.trim() || (parent && !draft.childIds.length)}
+        onClick={() =>
+          onSave({
+            ledger: {
+              ...draft,
+              archived: ledger.archived,
+              name: draft.name.trim(),
+              period: parent ? spanOf(ledgers, draft.childIds, draft.period) : draft.period,
+            },
+            parentIds,
+          })
+        }
+      >
+        저장
+      </Button>
     </Stack>
   );
 }
