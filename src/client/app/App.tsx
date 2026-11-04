@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChatThread, HomeTabBar, type RoomView } from '../ledger';
 import { addDays, addMonths, localDate } from '../ledger/format';
-import { StatusScreen } from '../templates';
+import { UgaLogo } from '../brand/Uga';
+import { AppShell, StatusScreen, useWide } from '../templates';
 import { Button, Notice } from '../ui';
 import {
   AccountView,
@@ -18,6 +19,7 @@ import {
   LoginView,
   RecordEntryView,
   RoomListView,
+  RoomPlaceholderView,
 } from '../views';
 import {
   leafLedgers,
@@ -77,7 +79,11 @@ export function App() {
   const [error, setError] = useState<{ message: string; login?: boolean; retry?(): void }>();
   const [sheet, setSheet] = useState<Sheet>();
   const { route, go, back } = useRoute();
-  const { tab, page: settingsPage, roomId } = route;
+  const { tab, roomId } = route;
+  // From 1024px a list stays beside the screen: the rooms beside a room, the 설정 menu beside
+  // its page (프로필 until another is picked).
+  const wide = useWide();
+  const settingsPage = wide && tab === 'settings' ? (route.page ?? 'profile') : route.page;
   const [roomView, setRoomView] = useState<RoomView>('records');
   const [takenHandle, setTakenHandle] = useState<string>();
   const queue = useRef(Promise.resolve());
@@ -197,6 +203,33 @@ export function App() {
       );
   };
   const thisMonth = { start: today, end: addDays(addMonths(today, 1), -1) };
+  const roomList = (
+    <RoomListView
+      ledgers={data.ledgers}
+      records={data.records}
+      unseen={data.unseen}
+      today={today}
+      currentId={roomId}
+      onOpenRoom={(ledger) => openRoom(ledger.id)}
+      onCreate={() => setSheet({ type: 'create' })}
+      tabBar={tabBar}
+    />
+  );
+  const settingsMenu = (
+    <AppSettingsView
+      current={wide ? settingsPage : undefined}
+      onOpenProfile={() => go({ tab: 'settings', page: 'profile' })}
+      onOpenAssets={() => go({ tab: 'settings', page: 'assets' })}
+      tabBar={tabBar}
+    />
+  );
+  const aside = !wide
+    ? undefined
+    : tab === 'ledgers'
+      ? { list: roomList, label: '가계부 목록' }
+      : tab === 'settings'
+        ? { list: settingsMenu, label: '설정 메뉴' }
+        : undefined;
 
   return (
     <>
@@ -220,182 +253,188 @@ export function App() {
           {error.message}
         </Notice>
       )}
-      {room ? (
-        <LedgerRoomView
-          key={room.id}
-          ledger={room}
-          ledgers={data.ledgers}
-          records={data.records}
-          today={today}
-          onBack={back}
-          onViewChange={setRoomView}
-          chat={
-            // 대화 shows once someone else shares the ledger, or messages are already there.
-            ((data.ledgerMembers?.[room.id]?.length ?? 0) > 1 ||
-              data.messages?.some((message) => message.ledgerId === room.id)) && (
-              <ChatThread
-                messages={(data.messages ?? []).filter((message) => message.ledgerId === room.id)}
-                memberId={data.user.id}
-                members={data.members}
-                onSend={(content) => {
-                  const message = {
-                    id: crypto.randomUUID(),
-                    ledgerId: room.id,
-                    authorId: data.user.id,
-                    createdAt: new Date().toISOString(),
-                    ...content,
-                  };
-                  change(
-                    (current) => ({ ...current, messages: [...(current.messages ?? []), message] }),
-                    'PUT',
-                    `/api/messages/${message.id}`,
-                    { ledgerId: room.id, ...content },
-                  );
-                }}
-              />
-            )
-          }
-          onAddRecord={(date) => {
-            const ledgers = leafLedgers(data.ledgers, room);
-            if (ledgers.length) setSheet({ type: 'entry', ledgers, date });
-          }}
-          reacting={{
-            memberId: data.user.id,
-            members: data.members,
-            onToggleReaction: (record, reaction) => {
-              const on = !record.reactions?.[reaction]?.includes(data.user.id);
-              change(
-                (current) => ({
-                  ...current,
-                  records: current.records.map((item) =>
-                    item.id === record.id ? withReaction(item, reaction, data.user.id, on) : item,
-                  ),
-                }),
-                on ? 'PUT' : 'DELETE',
-                `/api/records/${record.id}/reactions/${reaction}`,
-              );
-            },
-          }}
-          onOpenRecord={(record) =>
-            setSheet({
-              type: 'entry',
-              ledgers: data.ledgers.filter((ledger) => ledger.id === record.ledgerId),
-              record,
-            })
-          }
-          settings={
-            <LedgerSettingsView
-              key={room.id}
-              ledger={room}
-              ledgers={data.ledgers}
-              onSave={({ ledger, parentIds }) => saveLedger(ledger, parentIds)}
-              onArchive={(ledger) => {
-                saveLedger({ ...ledger, archived: true }, parentIdsOf(data.ledgers, ledger.id));
-                back();
-              }}
-              onRestore={({ archived: _, ...ledger }) =>
-                saveLedger(ledger, parentIdsOf(data.ledgers, ledger.id))
-              }
-            />
-          }
-          onCopy={() => setSheet({ type: 'create', sourceId: room.id })}
-          onOpenLedger={(ledger) => openRoom(ledger.id)}
-          onOpenMembers={() => setSheet({ type: 'members', ledger: room })}
-        />
-      ) : tab === 'ledgers' ? (
-        <RoomListView
-          ledgers={data.ledgers}
-          records={data.records}
-          unseen={data.unseen}
-          today={today}
-          onOpenRoom={(ledger) => openRoom(ledger.id)}
-          onCreate={() => setSheet({ type: 'create' })}
-          tabBar={tabBar}
-        />
-      ) : tab === 'assets' ? (
-        <AssetsView
-          assets={data.assets ?? []}
-          ledgers={data.ledgers}
-          records={data.records}
-          onManage={() => go({ tab: 'settings', page: 'assets' })}
-          tabBar={tabBar}
-        />
-      ) : tab === 'settings' && settingsPage === 'assets' ? (
-        <AssetManageView
-          assets={data.assets ?? []}
-          ledgers={data.ledgers}
-          records={data.records}
-          onAdd={() => setSheet({ type: 'asset' })}
-          onOpenAsset={(asset) => setSheet({ type: 'asset', asset })}
-          onBack={back}
-          tabBar={tabBar}
-        />
-      ) : tab === 'settings' && !settingsPage ? (
-        <AppSettingsView
-          onOpenProfile={() => go({ tab: 'settings', page: 'profile' })}
-          onOpenAssets={() => go({ tab: 'settings', page: 'assets' })}
-          tabBar={tabBar}
-        />
-      ) : tab === 'friends' ? (
-        <FriendsView
-          friends={friends}
-          invites={invites}
-          today={today}
-          signupLink={{
-            ...data.signupLink!,
-            url: new URL(data.signupLink!.url, location.origin).href,
-          }}
-          onFind={(handle) =>
-            api('GET', `/api/people?handle=${encodeURIComponent(handle)}`).then(
-              (answer) => (answer as unknown as { profile: Profile | null }).profile,
-              () => null,
-            )
-          }
-          onRequest={friendAction('request')}
-          onAccept={friendAction('accept')}
-          onDecline={friendAction('decline')}
-          onCancel={friendAction('cancel')}
-          onRemove={friendAction('remove')}
-          onBlock={friendAction('block')}
-          onUnblock={friendAction('unblock')}
-          onOpenInvite={(invite) => setSheet({ type: 'invite', invite })}
-          onCopyLink={(url) => navigator.clipboard?.writeText(url)}
-          onRenewLink={() => send('PUT', '/api/signup-link')}
-          tabBar={tabBar}
-        />
-      ) : (
-        <AccountView
-          key={`${me.handle}-${me.photo ?? me.avatar}`}
-          profile={me}
-          email={data.user.email ?? ''}
-          today={today}
-          handleChangeableFrom={data.user.handleChangeableFrom}
-          takenHandle={takenHandle}
-          onSave={(profile, photo) => {
-            setTakenHandle(undefined);
-            api('PUT', '/api/profile', profile)
-              .then(async (answer) => {
-                if (photo)
-                  answer = await api('PUT', '/api/profile/photo', await reencodePhoto(photo));
-                else if (photo === null) answer = await api('DELETE', '/api/profile/photo');
-                setData(answer);
+      <AppShell
+        nav={
+          <>
+            <UgaLogo size={120} alt="우리의 가계부" />
+            {tabBar}
+          </>
+        }
+        aside={aside?.list}
+        asideLabel={aside?.label}
+      >
+        {room ? (
+          <LedgerRoomView
+            key={room.id}
+            ledger={room}
+            ledgers={data.ledgers}
+            records={data.records}
+            today={today}
+            onBack={back}
+            onViewChange={setRoomView}
+            chat={
+              // 대화 shows once someone else shares the ledger, or messages are already there.
+              ((data.ledgerMembers?.[room.id]?.length ?? 0) > 1 ||
+                data.messages?.some((message) => message.ledgerId === room.id)) && (
+                <ChatThread
+                  messages={(data.messages ?? []).filter((message) => message.ledgerId === room.id)}
+                  memberId={data.user.id}
+                  members={data.members}
+                  onSend={(content) => {
+                    const message = {
+                      id: crypto.randomUUID(),
+                      ledgerId: room.id,
+                      authorId: data.user.id,
+                      createdAt: new Date().toISOString(),
+                      ...content,
+                    };
+                    change(
+                      (current) => ({
+                        ...current,
+                        messages: [...(current.messages ?? []), message],
+                      }),
+                      'PUT',
+                      `/api/messages/${message.id}`,
+                      { ledgerId: room.id, ...content },
+                    );
+                  }}
+                />
+              )
+            }
+            onAddRecord={(date) => {
+              const ledgers = leafLedgers(data.ledgers, room);
+              if (ledgers.length) setSheet({ type: 'entry', ledgers, date });
+            }}
+            reacting={{
+              memberId: data.user.id,
+              members: data.members,
+              onToggleReaction: (record, reaction) => {
+                const on = !record.reactions?.[reaction]?.includes(data.user.id);
+                change(
+                  (current) => ({
+                    ...current,
+                    records: current.records.map((item) =>
+                      item.id === record.id ? withReaction(item, reaction, data.user.id, on) : item,
+                    ),
+                  }),
+                  on ? 'PUT' : 'DELETE',
+                  `/api/records/${record.id}/reactions/${reaction}`,
+                );
+              },
+            }}
+            onOpenRecord={(record) =>
+              setSheet({
+                type: 'entry',
+                ledgers: data.ledgers.filter((ledger) => ledger.id === record.ledgerId),
+                record,
               })
-              .catch((failure) => {
-                if (failure instanceof ApiFailure && failure.code === 'HANDLE_TAKEN')
-                  setTakenHandle(profile.handle);
-                else report(failure);
-              });
-          }}
-          onLogout={() =>
-            setError({
-              message: '로컬 개발 계정은 로그아웃할 수 없어요. Google 로그인을 붙인 뒤에 열어요.',
-            })
-          }
-          onLeave={() => setError({ message: '탈퇴는 Google 로그인을 붙인 뒤에 열어요.' })}
-          onBack={back}
-          tabBar={tabBar}
-        />
-      )}
+            }
+            settings={
+              <LedgerSettingsView
+                key={room.id}
+                ledger={room}
+                ledgers={data.ledgers}
+                onSave={({ ledger, parentIds }) => saveLedger(ledger, parentIds)}
+                onArchive={(ledger) => {
+                  saveLedger({ ...ledger, archived: true }, parentIdsOf(data.ledgers, ledger.id));
+                  back();
+                }}
+                onRestore={({ archived: _, ...ledger }) =>
+                  saveLedger(ledger, parentIdsOf(data.ledgers, ledger.id))
+                }
+              />
+            }
+            onCopy={() => setSheet({ type: 'create', sourceId: room.id })}
+            onOpenLedger={(ledger) => openRoom(ledger.id)}
+            onOpenMembers={() => setSheet({ type: 'members', ledger: room })}
+          />
+        ) : tab === 'ledgers' ? (
+          wide ? (
+            <RoomPlaceholderView onCreate={() => setSheet({ type: 'create' })} />
+          ) : (
+            roomList
+          )
+        ) : tab === 'assets' ? (
+          <AssetsView
+            assets={data.assets ?? []}
+            ledgers={data.ledgers}
+            records={data.records}
+            onManage={() => go({ tab: 'settings', page: 'assets' })}
+            tabBar={tabBar}
+          />
+        ) : tab === 'settings' && settingsPage === 'assets' ? (
+          <AssetManageView
+            assets={data.assets ?? []}
+            ledgers={data.ledgers}
+            records={data.records}
+            onAdd={() => setSheet({ type: 'asset' })}
+            onOpenAsset={(asset) => setSheet({ type: 'asset', asset })}
+            onBack={wide ? undefined : back}
+            tabBar={tabBar}
+          />
+        ) : tab === 'settings' && !settingsPage ? (
+          settingsMenu
+        ) : tab === 'friends' ? (
+          <FriendsView
+            friends={friends}
+            invites={invites}
+            today={today}
+            signupLink={{
+              ...data.signupLink!,
+              url: new URL(data.signupLink!.url, location.origin).href,
+            }}
+            onFind={(handle) =>
+              api('GET', `/api/people?handle=${encodeURIComponent(handle)}`).then(
+                (answer) => (answer as unknown as { profile: Profile | null }).profile,
+                () => null,
+              )
+            }
+            onRequest={friendAction('request')}
+            onAccept={friendAction('accept')}
+            onDecline={friendAction('decline')}
+            onCancel={friendAction('cancel')}
+            onRemove={friendAction('remove')}
+            onBlock={friendAction('block')}
+            onUnblock={friendAction('unblock')}
+            onOpenInvite={(invite) => setSheet({ type: 'invite', invite })}
+            onCopyLink={(url) => navigator.clipboard?.writeText(url)}
+            onRenewLink={() => send('PUT', '/api/signup-link')}
+            tabBar={tabBar}
+          />
+        ) : (
+          <AccountView
+            key={`${me.handle}-${me.photo ?? me.avatar}`}
+            profile={me}
+            email={data.user.email ?? ''}
+            today={today}
+            handleChangeableFrom={data.user.handleChangeableFrom}
+            takenHandle={takenHandle}
+            onSave={(profile, photo) => {
+              setTakenHandle(undefined);
+              api('PUT', '/api/profile', profile)
+                .then(async (answer) => {
+                  if (photo)
+                    answer = await api('PUT', '/api/profile/photo', await reencodePhoto(photo));
+                  else if (photo === null) answer = await api('DELETE', '/api/profile/photo');
+                  setData(answer);
+                })
+                .catch((failure) => {
+                  if (failure instanceof ApiFailure && failure.code === 'HANDLE_TAKEN')
+                    setTakenHandle(profile.handle);
+                  else report(failure);
+                });
+            }}
+            onLogout={() =>
+              setError({
+                message: '로컬 개발 계정은 로그아웃할 수 없어요. Google 로그인을 붙인 뒤에 열어요.',
+              })
+            }
+            onLeave={() => setError({ message: '탈퇴는 Google 로그인을 붙인 뒤에 열어요.' })}
+            onBack={wide ? undefined : back}
+            tabBar={tabBar}
+          />
+        )}
+      </AppShell>
       {sheet?.type === 'entry' && (
         <RecordEntryView
           ledgers={sheet.ledgers}

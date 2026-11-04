@@ -124,9 +124,9 @@ export function FriendsView({
           <h1>친구</h1>
         </div>
       }
-      bottom={tabBar}
+      nav={tabBar}
     >
-      <Stack gap={6}>
+      <Stack gap={6} className="view-form">
         {invites.length > 0 && (
           <section className="ledger-people-section">
             <h2>

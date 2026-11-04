@@ -9,6 +9,10 @@ body {
 .ui-spec-canvas > * {
   min-width: 0;
 }
+/* The desktop shell is the whole page, edge to edge. */
+.ui-spec-canvas:has(> .ui-shell) {
+  padding: 0;
+}
 @media (max-width: 760px) {
   .ui-spec-canvas {
     padding: var(--brand-space-3);

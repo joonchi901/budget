@@ -6,14 +6,14 @@
 
 원자 컴포넌트부터 단계적으로 조립해 View까지 구성한다. 화면이 다루는 제품·데이터 기준은 [가계부 재설계 기준](./ledger-baseline.md)을 따른다.
 
-| 단계           | 역할                                                    | 가계부를 아는지 | 데이터      |
-| -------------- | ------------------------------------------------------- | --------------- | ----------- |
-| 01 Foundations | 토큰(색·글자·간격·모서리·그림자·모션), 우가 브랜드 자산 | 모름            | 없음        |
-| 02 Atoms       | 더 쪼갤 수 없는 단일 요소                               | 모름            | props만     |
-| 03 Molecules   | 원자를 묶어 기능 하나를 하는 요소                       | 모름            | props만     |
-| 04 Organisms   | 내역·필드·태그·가계부(상위·하위) 개념을 아는 블록       | 앎              | props만     |
-| 05 Templates   | 모바일 화면의 틀. 위치만 정하고 내용은 슬롯으로 비운다  | 모름            | 없음        |
-| 06 Views       | Templates에 Organisms를 넣고 합성 데이터로 완성한 화면  | 앎              | 합성 데이터 |
+| 단계           | 역할                                                            | 가계부를 아는지 | 데이터      |
+| -------------- | --------------------------------------------------------------- | --------------- | ----------- |
+| 01 Foundations | 토큰(색·글자·간격·모서리·그림자·모션), 우가 브랜드 자산         | 모름            | 없음        |
+| 02 Atoms       | 더 쪼갤 수 없는 단일 요소                                       | 모름            | props만     |
+| 03 Molecules   | 원자를 묶어 기능 하나를 하는 요소                               | 모름            | props만     |
+| 04 Organisms   | 내역·필드·태그·가계부(상위·하위) 개념을 아는 블록               | 앎              | props만     |
+| 05 Templates   | 휴대폰·데스크톱 화면의 틀. 위치만 정하고 내용은 슬롯으로 비운다 | 모름            | 없음        |
+| 06 Views       | Templates에 Organisms를 넣고 합성 데이터로 완성한 화면          | 앎              | 합성 데이터 |
 
 - 아래 단계는 위 단계를 import하지 않는다. 업무 규칙을 Atoms·Molecules 안에 넣지 않는다.
 - Views까지 API 호출·저장 로직이 없다. 서버 연결과 상태 관리는 이후 앱 연결 층이 맡는다. 그래서 모든 화면 상태(빈 값·오류·긴 이름 등)를 Storybook에서 재현한다.
@@ -29,7 +29,7 @@
 | Atoms       | Button, IconButton, Input, Textarea, Checkbox, Radio, TagBadge(→ `Tag`), Tooltip, Popover, Stack, Inline, Grid, Surface                                                                             | Amount(금액 표시), CountBadge(새 내역 수), Bar(통계 막대), Switch(켜기/끄기), Slider(범위 값)                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Molecules   | Field·TextField, SelectField, DateField, MonthField, ColorField, FileField, SegmentedControl, Tabs, Stat, Empty, Panel, Toolbar, SummaryGrid, TableScroll, FormBody·FormFooter·FormGrid·FormSection | AmountInput(큰 금액 입력), ChipSelect(단일·다중 선택과 옵션 즉석 추가), SearchField, FilterChip, Menu(드롭다운 메뉴: 트리거·항목·키보드), List·ListRow(목록과 한 줄: 아이콘·제목·보조 줄·끝 정보), StatBar(라벨·막대·금액·비율), Notice(페이지 위 알림: 저장 실패·복사 완료)                                                                                                                                                                                                                                                                                                |
 | Organisms   | —                                                                                                                                                                                                   | 방: RoomListItem, RoomHeader, RoomTabBar(하단 내역·통계·대화·설정 탭), SummaryStrip · 내역: RecordRow, RecordDayGroup, RecordList, RecordTable, RecordFilterBar(검색·조회 조건·표/캘린더 전환) · 캘린더: PeriodCalendar, DayRecords · 통계: StatsBreakdown · 입력: DynamicField(필드 정의 → 입력 위젯), RecordForm · 설정: FieldSchemaEditor, TagOptionEditor, KindOptionEditor(유형) · 상위·하위: ChildPicker, ParentPicker, LedgerPicker · 사람: PersonRow, ProfilePicture, AvatarPicker(사진 올리기·기본 우가 그림), FriendList, MemberList, FriendPicker, RoomInviteRow |
-| Templates   | Dialog(FullScreenSheet의 바탕)                                                                                                                                                                      | Screen(첫 화면 탭·방 공통 틀: 고정 상단·본문·하단 탭 막대), FullScreenSheet(입력·설정), BottomSheet(날짜별 내역 등), StatusScreen(앱 불러오는 중·불러오기 실패)                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Templates   | Dialog(FullScreenSheet의 바탕)                                                                                                                                                                      | AppShell(데스크톱 틀: 왼쪽 앱 메뉴(1440px 미만 아이콘만)·목록 칸·화면), Screen(첫 화면 탭·방 공통 틀: 고정 상단·본문·하단 탭 막대, 데스크톱에선 화면 탭이 제목 아래로), FullScreenSheet(입력·설정), BottomSheet(날짜별 내역 등), StatusScreen(앱 불러오는 중·불러오기 실패)                                                                                                                                                                                                                                                                                                 |
 | Views       | —                                                                                                                                                                                                   | RoomListView, CreateLedgerView, LedgerRoomView(표·캘린더·통계·대화, 상위는 내역마다 원본 가계부 링크), RecordEntryView(추가·수정), LedgerSettingsView, LoginView(가입 초대 포함), SignupView, FriendsView·SignupLinkSheet, LedgerMembersView(멤버·하위 전부 공유), InviteAcceptView, AccountView, LeaveAccountView                                                                                                                                                                                                                                                          |
 
 **자체 UI 원칙**: 브라우저 기본 모양이 드러나는 컨트롤을 두지 않는다. 모든 컨트롤은 디자인 토큰으로 그린다.

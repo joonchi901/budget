@@ -35,6 +35,7 @@ export function RoomListItem({
   unseen = 0,
   today,
   depth = 0,
+  current = false,
   onOpen,
 }: {
   room: Ledger;
@@ -43,10 +44,13 @@ export function RoomListItem({
   unseen?: number;
   today: IsoDate;
   depth?: number;
+  /** The room open beside the list on desktop. */
+  current?: boolean;
   onOpen(): void;
 }) {
   return (
     <ListRow
+      current={current}
       leading={
         <span className="ledger-room-leading" style={{ '--depth': depth } as CSSProperties}>
           {depth > 0 && <CornerDownRight size={16} aria-hidden="true" />}
@@ -86,11 +90,15 @@ export function RoomHeader({
   subtitle,
   onBack,
   menuItems,
+  action,
 }: {
   title: string;
   subtitle: string;
   onBack(): void;
   menuItems: MenuItem[];
+  /** The room's main action, such as 내역 추가; shown here on desktop, where nothing is pinned
+   * to the bottom. */
+  action?: ReactNode;
 }) {
   return (
     <div className="ledger-room-header-bar">
@@ -101,6 +109,7 @@ export function RoomHeader({
         <h1>{title}</h1>
         <p>{subtitle}</p>
       </div>
+      {action && <span className="ledger-room-header-action">{action}</span>}
       <Menu
         label={`${title} 메뉴`}
         items={menuItems}

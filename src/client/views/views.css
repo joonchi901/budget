@@ -34,6 +34,24 @@
 .view-home-title {
   line-height: 0;
 }
+.view-home-label {
+  display: none;
+}
+.ui-shell-aside .view-home-title {
+  font-size: var(--brand-font-size-md);
+  line-height: var(--brand-line-height-tight);
+}
+.ui-shell-aside .view-home-title > :not(.view-home-label) {
+  display: none;
+}
+.ui-shell-aside .view-home-label {
+  display: inline;
+}
+/* Desktop's room pane before a room is picked. */
+.view-pane-empty {
+  justify-content: center;
+  align-items: center;
+}
 .view-month-title {
   font-size: var(--brand-font-size-md);
 }
@@ -94,6 +112,51 @@
   flex: 1;
 }
 
+/* The room's 내역: phones show 표 or 캘린더 as chosen, the calendar filling the screen; a wide
+   body shows both, the calendar pinned beside the records, and drops the switch. */
+.view-records {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-4);
+  min-width: 0;
+}
+.view-records-list,
+.view-records-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+  min-width: 0;
+}
+.view-records-calendar {
+  flex: 1;
+}
+.view-records[data-display='list'] > .view-records-calendar,
+.view-records[data-display='calendar'] > .view-records-list {
+  display: none;
+}
+@container screen (min-width: 720px) {
+  .view-records {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+    align-items: start;
+  }
+  .view-records[data-display] > .view-records-list,
+  .view-records[data-display] > .view-records-calendar {
+    display: flex;
+  }
+  .view-records-calendar {
+    position: sticky;
+    top: 0;
+  }
+  .view-records-calendar .ledger-calendar-grid {
+    grid-auto-rows: minmax(84px, auto);
+  }
+  .ledger-filter-row > .ledger-display-toggle {
+    display: none;
+  }
+}
+
 /* The room's 내역 추가 and 설정's 저장: full width, kept just above the tab bar while the page
    scrolls. */
 .view-add-record.ui-button,
@@ -117,6 +180,49 @@
 }
 .view-archived > .ui-list {
   margin-top: var(--brand-space-2);
+}
+/* Desktop pages: forms and conversations keep a readable width; 내역 추가 moves to the title bar
+   and pinned buttons sit at the bottom edge, with no tab bar under them. */
+@media (min-width: 1024px) {
+  .ui-shell-main .view-form,
+  .ui-shell-main .view-settings,
+  .ui-shell-main .view-chat {
+    width: 100%;
+    max-width: 720px;
+  }
+  .ui-shell .view-add-record.ui-button {
+    display: none;
+  }
+  .ui-shell .view-sticky-action.ui-button,
+  .ui-shell .view-chat .ledger-chat-composer {
+    bottom: 0;
+  }
+  .ui-shell .view-chat > .ledger-chat {
+    min-height: calc(100cqh - var(--brand-space-5) - var(--brand-space-6));
+  }
+  /* An empty state's action sits under it instead of spanning the page. */
+  .ui-shell-main .empty ~ .ui-button {
+    align-self: center;
+  }
+  /* The narrow list pane keeps each row to its title and one line. */
+  .ui-shell-aside .ui-list-row-description {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+/* 자산: overview and analysis side by side when there is room. */
+.view-assets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-6);
+}
+@container screen (min-width: 840px) {
+  .view-assets {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
 }
 .view-section-title {
   font-size: var(--brand-font-size-md);

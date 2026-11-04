@@ -55,6 +55,10 @@
   --brand-line-strong: #9b8674;
   --brand-disabled-bg: #f1e9df;
   --brand-disabled-text: #817469;
+  /* Scrollbars: a warm-brown pill on a clear track, 3:1 against the surfaces it crosses. */
+  --brand-scrollbar-thumb: #a08b77;
+  --brand-scrollbar-thumb-hover: var(--brand-muted);
+  --brand-scrollbar-size: 10px;
 
   /* Financial and feedback semantics stay distinct from selection. */
   --brand-success: #38735b;

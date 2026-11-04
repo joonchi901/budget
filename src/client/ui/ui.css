@@ -1,4 +1,31 @@
 /* Reusable composition rules. App and Storybook load this same file. */
+
+/* Uga scrollbars everywhere: a slim pill inset in a clear gutter. Chrome and Safari draw it from
+   the ::-webkit-scrollbar parts; Firefox, which has none of them, takes the standard colors (set
+   only there, since Chrome ignores the parts once scrollbar-color is set). */
+::-webkit-scrollbar {
+  width: var(--brand-scrollbar-size);
+  height: var(--brand-scrollbar-size);
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  min-height: 40px;
+  border: 2px solid transparent;
+  border-radius: var(--brand-radius-pill);
+  background: var(--brand-scrollbar-thumb) padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--brand-scrollbar-thumb-hover);
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--brand-scrollbar-thumb) transparent;
+  }
+}
 .ui-button {
   display: inline-flex;
   align-items: center;

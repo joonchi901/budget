@@ -79,6 +79,9 @@ const usage = {
   'brand-disabled-bg': '비활성 컨트롤의 바탕.',
   'brand-disabled-text':
     '비활성 컨트롤의 글자. brand-disabled-bg 위에서 4.5:1이 안 돼요(비활성은 대비 기준 예외).',
+  'brand-scrollbar-thumb': '스크롤바 손잡이. 투명 트랙 위 갈색 알약, 지나는 면과 3:1.',
+  'brand-scrollbar-thumb-hover': '포인터를 올린 스크롤바 손잡이.',
+  'brand-scrollbar-size': '스크롤바 굵기. 손잡이는 안쪽 2px을 비워 더 가늘게 보여요.',
   'brand-success':
     '수입 금액과 완료 상태 글자. brand-surface와 brand-success-soft 위에서 4.5:1 이상.',
   'brand-success-soft': '완료·초대 안내의 연한 바탕.',
@@ -160,7 +163,7 @@ for (const [name, value] of declared) {
   else if (name.startsWith('brand-space-')) family = 'spacing';
   else if (name.startsWith('brand-radius-')) family = 'radius';
   else if (name.startsWith('brand-focus-')) family = 'focus';
-  else if (/brand-(control|field|icon)/.test(name)) family = 'size';
+  else if (/brand-(control|field|icon|scrollbar-size)/.test(name)) family = 'size';
   else if (name.startsWith('brand-font-size-')) family = 'fontSize';
   else if (name.startsWith('brand-font-weight-')) family = 'fontWeight';
   else if (name.startsWith('brand-line-height-')) family = 'lineHeight';

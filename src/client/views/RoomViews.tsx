@@ -49,7 +49,7 @@ type RoomActions = {
 
 /**
  * Room body: 내역 (표 or 캘린더, chosen beside the filter, with a full-width 내역 추가 above the
- * tab bar), 통계, 대화 and 설정.
+ * tab bar; on a wide screen both side by side and 내역 추가 in the title bar), 통계, 대화 and 설정.
  */
 function Room({
   title,
@@ -100,7 +100,18 @@ function Room({
     <Screen
       top={
         <>
-          <RoomHeader title={title} subtitle={subtitle} onBack={onBack} menuItems={menuItems} />
+          <RoomHeader
+            title={title}
+            subtitle={subtitle}
+            onBack={onBack}
+            menuItems={menuItems}
+            action={
+              <Button variant="primary" onClick={() => onAddRecord()}>
+                <Plus size={18} />
+                내역 추가
+              </Button>
+            }
+          />
           <SummaryStrip totals={totals(records, ledgers)} />
         </>
       }
@@ -150,8 +161,20 @@ function Room({
               {won(found.expense)}원
             </p>
           )}
-          {display === 'calendar' ? (
-            <>
+          {/* Phones show 표 or 캘린더 as chosen; a wide body shows both side by side. */}
+          <div className="view-records" data-display={display}>
+            <div className="view-records-list">
+              {wide ? (
+                <RecordTable records={shown} {...context} />
+              ) : (
+                <RecordList
+                  records={shown}
+                  emptyText={records.length ? '조건에 맞는 내역이 없어요.' : '아직 내역이 없어요.'}
+                  {...context}
+                />
+              )}
+            </div>
+            <div className="view-records-calendar">
               {calendar.navigation}
               <PeriodCalendar
                 period={calendar.period}
@@ -161,21 +184,13 @@ function Room({
                 selected={day}
                 onSelect={setDay}
               />
-            </>
-          ) : wide ? (
-            <RecordTable records={shown} {...context} />
-          ) : (
-            <RecordList
-              records={shown}
-              emptyText={records.length ? '조건에 맞는 내역이 없어요.' : '아직 내역이 없어요.'}
-              {...context}
-            />
-          )}
+            </div>
+          </div>
           <Button variant="primary" className="view-add-record" onClick={() => onAddRecord()}>
             <Plus size={18} />
             내역 추가
           </Button>
-          {display === 'calendar' && day && (
+          {day && (
             <BottomSheet title={dayLabel(day)} onClose={() => setDay(undefined)}>
               <DayRecords
                 date={day}

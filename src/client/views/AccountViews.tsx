@@ -49,8 +49,8 @@ export function AccountView({
   onSave(profile: Profile, photo?: File | null): void;
   onLogout(): void;
   onLeave(): void;
-  /** Back to 설정. */
-  onBack(): void;
+  /** Back to 설정; omitted beside the 설정 menu on desktop. */
+  onBack?(): void;
   /** The app's bottom tabs, which stay while pages open above them. */
   tabBar?: ReactNode;
 }) {
@@ -68,15 +68,17 @@ export function AccountView({
     <Screen
       top={
         <div className="view-page-header">
-          <IconButton aria-label="설정으로" onClick={onBack}>
-            <ChevronLeft size={22} />
-          </IconButton>
+          {onBack && (
+            <IconButton aria-label="설정으로" onClick={onBack}>
+              <ChevronLeft size={22} />
+            </IconButton>
+          )}
           <h1>프로필</h1>
         </div>
       }
-      bottom={tabBar}
+      nav={tabBar}
     >
-      <Stack gap={6}>
+      <Stack gap={6} className="view-form">
         <AvatarPicker
           value={draft.avatar}
           onValueChange={(avatar) => setDraft({ ...draft, avatar })}

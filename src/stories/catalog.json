@@ -424,12 +424,20 @@
     "usage": "모달·미저장 내용 확인. FullScreenSheet의 바탕"
   },
   {
+    "name": "AppShell",
+    "layer": "05 Templates",
+    "source": "src/client/templates/AppShell.tsx",
+    "story": "src/stories/templates/AppShell.stories.tsx",
+    "status": "ready",
+    "usage": "데스크톱 틀: 왼쪽 앱 메뉴(1440px 미만 아이콘만), 목록 칸, 화면. 휴대폰은 화면만"
+  },
+  {
     "name": "Screen",
     "layer": "05 Templates",
     "source": "src/client/templates/Screen.tsx",
     "story": "src/stories/templates/Screen.stories.tsx",
     "status": "ready",
-    "usage": "방 목록·방 화면의 모바일 틀: 고정 상단, 본문, 하단 고정 행동"
+    "usage": "화면 틀: 고정 상단, 본문, 휴대폰 하단 탭(화면 탭 또는 앱 메뉴). AppShell 안 데스크톱에선 화면 탭이 제목 아래로"
   },
   {
     "name": "FullScreenSheet / BottomSheet",

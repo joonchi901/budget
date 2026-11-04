@@ -110,11 +110,13 @@ export function AssetsView({
           <h1>자산</h1>
         </div>
       }
-      bottom={tabBar}
+      nav={tabBar}
     >
       {assets.length ? (
-        <Stack gap={6}>
-          <AssetOverview assets={assets} ledgers={ledgers} records={records} />
+        <div className="view-assets">
+          <Stack gap={6}>
+            <AssetOverview assets={assets} ledgers={ledgers} records={records} />
+          </Stack>
           <section aria-labelledby={`${id}-analysis`}>
             <Stack gap={4}>
               <h2 id={`${id}-analysis`} className="view-section-title">
@@ -139,7 +141,7 @@ export function AssetsView({
               )}
             </Stack>
           </section>
-        </Stack>
+        </div>
       ) : (
         <Stack gap={4}>
           <Empty>아직 자산이 없어요. 통장, 저축, 대출을 더해 보세요.</Empty>
@@ -165,7 +167,8 @@ export function AssetManageView({
   records: LedgerRecord[];
   onAdd(): void;
   onOpenAsset(asset: Asset): void;
-  onBack(): void;
+  /** Back to 설정; omitted beside the 설정 menu on desktop. */
+  onBack?(): void;
   /** The app's bottom tabs, which stay while pages open above them. */
   tabBar?: ReactNode;
 }) {
@@ -173,9 +176,11 @@ export function AssetManageView({
     <Screen
       top={
         <div className="view-page-header">
-          <IconButton aria-label="설정으로" onClick={onBack}>
-            <ChevronLeft size={22} />
-          </IconButton>
+          {onBack && (
+            <IconButton aria-label="설정으로" onClick={onBack}>
+              <ChevronLeft size={22} />
+            </IconButton>
+          )}
           <h1>자산 관리</h1>
           <Button variant="primary" onClick={onAdd}>
             <Plus size={18} />
@@ -183,10 +188,10 @@ export function AssetManageView({
           </Button>
         </div>
       }
-      bottom={tabBar}
+      nav={tabBar}
     >
       {assets.length ? (
-        <Stack gap={6}>
+        <Stack gap={6} className="view-form">
           <AssetOverview assets={assets} ledgers={ledgers} records={records} onOpen={onOpenAsset} />
         </Stack>
       ) : (

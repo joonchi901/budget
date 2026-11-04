@@ -70,6 +70,7 @@ body{margin:0}
 a{color:var(--brand-accent)}a:hover{color:var(--brand-primary)}
 .ui-spec-canvas{padding:var(--brand-space-6);min-width:0}
 .ui-spec-canvas>*{min-width:0}
+.ui-spec-canvas:has(>.ui-shell){padding:0}
 @media (max-width:760px){.ui-spec-canvas{padding:var(--brand-space-3)}}
 dialog[open]{position:absolute;inset:0;z-index:50;margin:auto}
 dialog[open].ui-sheet-bottom{inset:auto 0 0 0;margin:0}
@@ -107,9 +108,11 @@ const browser = await chromium.launch();
 const captured = [];
 const images = new Set();
 for (const entry of stories) {
-  const view = entry.title.startsWith('06');
-  const width = view ? 390 : 600;
-  const page = await browser.newPage({ viewport: { width, height: 844 } });
+  // Stories tagged desktop show the AppShell at 1440 × 900; other screens at phone width.
+  const desktop = entry.tags?.includes('desktop');
+  const view = desktop || entry.title.startsWith('06');
+  const width = desktop ? 1440 : view ? 390 : 600;
+  const page = await browser.newPage({ viewport: { width, height: desktop ? 900 : 844 } });
   await page.route('**/*', (route) =>
     route.request().url().startsWith(base) ? route.continue() : route.abort(),
   );
@@ -146,21 +149,26 @@ for (const entry of stories) {
   await page.close();
   // Images Storybook bundles (such as the sample profile photo) go beside the artboards.
   const html = result.html
-    .replace(/src="(?:https?:\/\/127\.0\.0\.1:\d+\/)?(?:\.?\/)?assets\/([^"]+\.(?:png|jpe?g|webp))"/g, (_, file) => {
-      images.add(file);
-      return `src="assets/${file}"`;
-    })
+    .replace(
+      /src="(?:https?:\/\/127\.0\.0\.1:\d+\/)?(?:\.?\/)?assets\/([^"]+\.(?:png|jpe?g|webp))"/g,
+      (_, file) => {
+        images.add(file);
+        return `src="assets/${file}"`;
+      },
+    )
     .replace(/src="\/brand\//g, 'src="ds/uga/brand/')
     .replace(/\{\{/g, '&#123;&#123;')
     .replace(
       /<dialog open=""/g,
       '<div style="position: absolute; inset: 0; z-index: 40; background: var(--brand-backdrop)"></div><dialog open=""',
     );
-  const height = view
-    ? result.dialog
-      ? 844
-      : Math.max(844, result.height)
-    : Math.max(120, result.height);
+  const height = desktop
+    ? 900
+    : view
+      ? result.dialog
+        ? 844
+        : Math.max(844, result.height)
+      : Math.max(120, result.height);
   captured.push({ entry, file: fileName(entry), view, width, height, html });
   process.stdout.write('.');
 }
@@ -170,9 +178,11 @@ server.close();
 // Layout: one canvas page per level, one row per story file, its stories left to right.
 const project = join(out, 'project');
 mkdirSync(join(project, 'assets'), { recursive: true });
-for (const file of images) copyFileSync(join(staticDir, 'assets', file), join(project, 'assets', file));
+for (const file of images)
+  copyFileSync(join(staticDir, 'assets', file), join(project, 'assets', file));
 const stray = captured.filter((item) => item.html.includes('src="blob:')).map((item) => item.file);
-if (stray.length) throw new Error(`blob: images only exist in the capturing page: ${stray.join(', ')}`);
+if (stray.length)
+  throw new Error(`blob: images only exist in the capturing page: ${stray.join(', ')}`);
 const boards = {};
 const order = [];
 const notes = {};
@@ -228,7 +238,13 @@ for (const page of pages) {
 writeFileSync(
   join(out, 'layout.json'),
   JSON.stringify(
-    { pages: pages.map(({ id, name }) => ({ id, name })), boards, order, notes, images: [...images] },
+    {
+      pages: pages.map(({ id, name }) => ({ id, name })),
+      boards,
+      order,
+      notes,
+      images: [...images],
+    },
     null,
     2,
   ),

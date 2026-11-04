@@ -195,7 +195,9 @@
   justify-content: flex-start;
   border-radius: 0;
 }
-.ui-list-row.ui-button:hover {
+/* A row lights up as one, footer (reactions, a ledger link) included, wherever the pointer is. */
+.ui-list-row.ui-button:hover,
+.ui-list-item:has(> .ui-list-row.ui-button):hover {
   background: var(--brand-surface-hover);
 }
 .ui-list-row.ui-button:focus-visible {

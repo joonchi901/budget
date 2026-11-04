@@ -7,10 +7,13 @@ import { List, ListRow } from '../ui';
 export function AppSettingsView({
   onOpenProfile,
   onOpenAssets,
+  current,
   tabBar,
 }: {
   onOpenProfile(): void;
   onOpenAssets(): void;
+  /** The page open beside this menu on desktop. */
+  current?: 'profile' | 'assets';
   /** The app's bottom tabs. */
   tabBar?: ReactNode;
 }) {
@@ -21,7 +24,7 @@ export function AppSettingsView({
           <h1>설정</h1>
         </div>
       }
-      bottom={tabBar}
+      nav={tabBar}
     >
       <List aria-label="설정 메뉴">
         <ListRow
@@ -29,6 +32,7 @@ export function AppSettingsView({
           title="프로필"
           description="사진, 표시 이름, 아이디, 로그아웃·탈퇴"
           trailing={<ChevronRight size={18} />}
+          current={current === 'profile'}
           onClick={onOpenProfile}
         />
         <ListRow
@@ -36,6 +40,7 @@ export function AppSettingsView({
           title="자산 관리"
           description="자산 추가·수정, 연동할 가계부"
           trailing={<ChevronRight size={18} />}
+          current={current === 'assets'}
           onClick={onOpenAssets}
         />
       </List>
