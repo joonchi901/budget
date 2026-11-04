@@ -12,7 +12,18 @@ import {
   type Profile,
   type RoomInvite,
 } from '../shared/people';
-import { fail, invalid, isId, isText, json, list, raw, unique, type Loaded } from './common';
+import {
+  change,
+  fail,
+  invalid,
+  isId,
+  isText,
+  json,
+  list,
+  raw,
+  unique,
+  type Loaded,
+} from './common';
 
 type UserRow = {
   id: Id;
@@ -179,14 +190,34 @@ export async function renewSignupLink(db: D1Database, me: Id) {
     expires_at: new Date(Date.now() + LINK_DAYS * DAY).toISOString().slice(0, 10),
     joined: 0,
   };
-  await db
-    .prepare(
-      `INSERT INTO signup_links (owner_id, token, expires_at, joined, created_at) VALUES (?1, ?2, ?3, 0, ?4)
-       ON CONFLICT (owner_id) DO UPDATE SET token = ?2, expires_at = ?3, joined = 0, created_at = ?4`,
-    )
-    .bind(me, link.token, link.expires_at, new Date().toISOString())
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO signup_links (owner_id, token, expires_at, joined, created_at) VALUES (?1, ?2, ?3, 0, ?4)
+         ON CONFLICT (owner_id) DO UPDATE SET token = ?2, expires_at = ?3, joined = 0, created_at = ?4`,
+      )
+      .bind(me, link.token, link.expires_at, new Date().toISOString()),
+    change(db, { kind: 'me', id: me, userId: me }),
+  ]);
   return link;
+}
+
+/** Log rows for everyone who shows this user's profile: themselves, their rooms, their friends. */
+function profileChanged(db: D1Database, me: Id) {
+  const at = new Date().toISOString();
+  return [
+    change(db, { kind: 'me', id: me, userId: me }),
+    db
+      .prepare(
+        "INSERT INTO changes (kind, id, ledger_id, at) SELECT 'members', ledger_id, ledger_id, ? FROM ledger_members WHERE user_id = ?",
+      )
+      .bind(at, me),
+    db
+      .prepare(
+        "INSERT INTO changes (kind, id, user_id, at) SELECT 'friends', user_id, user_id, ? FROM friendships WHERE other_id = ?",
+      )
+      .bind(at, me),
+  ];
 }
 
 /** Display name, picture and handle. The handle changes at most once every 30 days. */
@@ -209,13 +240,15 @@ export async function putProfile(db: D1Database, data: Loaded, body: unknown) {
     if (await db.prepare('SELECT 1 FROM users WHERE handle = ?').bind(handle).first())
       fail(409, 'HANDLE_TAKEN', '이미 쓰는 아이디예요.');
   }
-  await db
-    .prepare(
-      `UPDATE users SET name = ?, avatar = ?, handle = ?,
-         handle_changed_at = CASE WHEN ? THEN ? ELSE handle_changed_at END WHERE id = ?`,
-    )
-    .bind(name, value.avatar, handle, changing ? 1 : 0, new Date().toISOString(), data.user.id)
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE users SET name = ?, avatar = ?, handle = ?,
+           handle_changed_at = CASE WHEN ? THEN ? ELSE handle_changed_at END WHERE id = ?`,
+      )
+      .bind(name, value.avatar, handle, changing ? 1 : 0, new Date().toISOString(), data.user.id),
+    ...profileChanged(db, data.user.id),
+  ]);
 }
 
 const isPng = (bytes: Uint8Array) =>
@@ -285,6 +318,7 @@ export async function putPhoto(db: D1Database, data: Loaded, request: Request) {
       )
       .bind(data.user.id, bytes, now.toISOString()),
     db.prepare('UPDATE users SET photo_version = ? WHERE id = ?').bind(now.getTime(), data.user.id),
+    ...profileChanged(db, data.user.id),
   ]);
 }
 
@@ -292,6 +326,7 @@ export async function deletePhoto(db: D1Database, data: Loaded) {
   await db.batch([
     db.prepare('DELETE FROM photos WHERE user_id = ?').bind(data.user.id),
     db.prepare('UPDATE users SET photo_version = NULL WHERE id = ?').bind(data.user.id),
+    ...profileChanged(db, data.user.id),
   ]);
 }
 
@@ -360,7 +395,13 @@ export async function friendAction(db: D1Database, data: Loaded, otherId: Id, bo
   const [mine, theirs] = await Promise.all([status(me, otherId), status(otherId, me)]);
   if (!(await db.prepare('SELECT 1 FROM users WHERE id = ?').bind(otherId).first()))
     fail(404, 'NOT_FOUND', '없는 사람이에요.');
-  const run = (...statements: D1PreparedStatement[]) => db.batch(statements);
+  // Both lists are read again; each shows only its owner's own rows.
+  const run = (...statements: D1PreparedStatement[]) =>
+    db.batch([
+      ...statements,
+      change(db, { kind: 'friends', id: me, userId: me }),
+      change(db, { kind: 'friends', id: otherId, userId: otherId }),
+    ]);
   switch (action as FriendAction) {
     case 'request':
       if (mine === 'blocked') fail(409, 'BLOCKED', '차단을 풀어야 요청할 수 있어요.');
@@ -404,18 +445,27 @@ export async function inviteMembers(db: D1Database, data: Loaded, ledgerId: Id, 
     (leaf) => data.roles.get(leaf.id) === 'owner',
   );
   const now = new Date().toISOString();
-  const statements = targets.flatMap((target) =>
+  const invites = targets.flatMap((target) =>
     ids
       .filter((id) => !data.ledgerMembers?.[target.id]?.some((member) => member.profile.id === id))
-      .map((id) =>
-        db
-          .prepare(
-            'INSERT OR IGNORE INTO ledger_invites (id, ledger_id, invitee_id, inviter_id, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          )
-          .bind(crypto.randomUUID(), target.id, id, data.user.id, value.role, now),
-      ),
+      .map((id) => ({ ledgerId: target.id, id })),
   );
-  if (statements.length) await db.batch(statements);
+  if (!invites.length) return;
+  await db.batch([
+    ...invites.map(({ ledgerId, id }) =>
+      db
+        .prepare(
+          'INSERT OR IGNORE INTO ledger_invites (id, ledger_id, invitee_id, inviter_id, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .bind(crypto.randomUUID(), ledgerId, id, data.user.id, value.role, now),
+    ),
+    ...[...new Set(invites.map((invite) => invite.ledgerId))].map((id) =>
+      change(db, { kind: 'members', id, ledgerId: id }),
+    ),
+    ...[...new Set(invites.map((invite) => invite.id))].map((id) =>
+      change(db, { kind: 'invites', id, userId: id }),
+    ),
+  ]);
 }
 
 /** The owner changes a member's or invitee's role. */
@@ -439,6 +489,9 @@ export async function setMemberRole(
     db
       .prepare('UPDATE ledger_invites SET role = ? WHERE ledger_id = ? AND invitee_id = ?')
       .bind(role, ledgerId, userId),
+    change(db, { kind: 'members', id: ledgerId, ledgerId }),
+    change(db, { kind: 'ledger', id: ledgerId, userId }),
+    change(db, { kind: 'invites', id: userId, userId }),
   ]);
 }
 
@@ -468,6 +521,10 @@ export async function removeMember(db: D1Database, data: Loaded, ledgerId: Id, u
     db
       .prepare('DELETE FROM ledger_invites WHERE ledger_id = ? AND invitee_id = ?')
       .bind(ledgerId, userId),
+    change(db, { kind: 'members', id: ledgerId, ledgerId }),
+    // Whoever went reads the ledger as gone and drops it.
+    change(db, { kind: 'ledger', id: ledgerId, userId }),
+    change(db, { kind: 'invites', id: userId, userId }),
   ]);
 }
 
@@ -500,19 +557,32 @@ export async function acceptInvite(db: D1Database, data: Loaded, inviteId: Id, b
         .bind(parentId, invite.ledger.id),
     ),
     db.prepare('DELETE FROM ledger_invites WHERE id = ?').bind(inviteId),
+    change(db, { kind: 'ledger', id: invite.ledger.id, userId: data.user.id }),
+    change(db, { kind: 'members', id: invite.ledger.id, ledgerId: invite.ledger.id }),
+    change(db, { kind: 'invites', id: data.user.id, userId: data.user.id }),
+    ...(parentIds as Id[]).map((parentId) =>
+      change(db, { kind: 'ledger', id: parentId, ledgerId: parentId }),
+    ),
   ]);
 }
 
 export async function declineInvite(db: D1Database, data: Loaded, inviteId: Id) {
-  if (!data.invites?.some((item) => item.id === inviteId)) fail(404, 'NOT_FOUND', '없는 초대예요.');
-  await db.prepare('DELETE FROM ledger_invites WHERE id = ?').bind(inviteId).run();
+  const invite = data.invites?.find((item) => item.id === inviteId);
+  if (!invite) fail(404, 'NOT_FOUND', '없는 초대예요.');
+  await db.batch([
+    db.prepare('DELETE FROM ledger_invites WHERE id = ?').bind(inviteId),
+    change(db, { kind: 'members', id: invite.ledger.id, ledgerId: invite.ledger.id }),
+    change(db, { kind: 'invites', id: data.user.id, userId: data.user.id }),
+  ]);
 }
 
 /** Opening a room clears its new-record badge. */
 export async function markSeen(db: D1Database, data: Loaded, ledgerId: Id) {
   if (!data.roles.has(ledgerId)) fail(404, 'NOT_FOUND', '없는 가계부예요.');
-  await db
-    .prepare('UPDATE ledger_members SET seen_at = ? WHERE ledger_id = ? AND user_id = ?')
-    .bind(new Date().toISOString(), ledgerId, data.user.id)
-    .run();
+  await db.batch([
+    db
+      .prepare('UPDATE ledger_members SET seen_at = ? WHERE ledger_id = ? AND user_id = ?')
+      .bind(new Date().toISOString(), ledgerId, data.user.id),
+    change(db, { kind: 'seen', id: ledgerId, userId: data.user.id }),
+  ]);
 }

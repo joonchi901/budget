@@ -114,10 +114,10 @@ ALTER TABLE messages ADD COLUMN deleted_at TEXT;
 | `putMessage`, `deleteMessage`, `setMessageReaction` | `message` id=글 ledger_id=가계부 |
 | `putAsset`, `deleteAsset` | `asset` id=자산 user_id=소유자 |
 | `inviteMembers` | `members` id=ledger_id ledger_id=가계부; `invites` user_id=초대받은 사람마다 |
-| `acceptInvite` | `ledger` id=가계부 user_id=나(새 가계부가 보이게); `members` ledger_id=가계부; `invites` user_id=나 |
+| `acceptInvite` | `ledger` id=가계부 user_id=나(새 가계부가 보이게); `members` ledger_id=가계부; `invites` user_id=나. 수락하며 넣은 내 상위 가계부마다 `ledger`(`childIds`가 바뀜, `putLedger`와 같은 이유) |
 | `declineInvite` | `members` ledger_id=가계부; `invites` user_id=나 |
-| `setMemberRole` | `members` ledger_id=가계부; `ledger` id=가계부 user_id=대상(권한이 바뀌면 `roles`가 바뀜) |
-| `removeMember`, 탈퇴 | `members` ledger_id=가계부; `ledger` id=가계부 user_id=빠진 사람(피드에서 "사라짐"으로 받아 지운다) |
+| `setMemberRole` | `members` ledger_id=가계부; `ledger` id=가계부 user_id=대상(권한이 바뀌면 `roles`가 바뀜); `invites` user_id=대상(아직 초대 중이면 받은 초대의 권한이 바뀜) |
+| `removeMember`, 탈퇴 | `members` ledger_id=가계부; `ledger` id=가계부 user_id=빠진 사람(피드에서 "사라짐"으로 받아 지운다); `invites` user_id=빠진 사람(초대를 거둔 경우 받은 초대에서 사라짐) |
 | `friendAction` | `friends` user_id=양쪽 각각 |
 | `putProfile`, `putPhoto`, `deletePhoto` | `me` user_id=나; 내가 속한 가계부마다 `members`; 친구마다 `friends` user_id=친구 |
 | `markSeen` | `seen` id=가계부 user_id=나 (내 다른 기기의 배지) |
@@ -196,7 +196,7 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
 
 | 요청 | 범위 |
 | --- | --- |
-| `records`, `messages`, 반응 | 본문 또는 대상의 `ledgerId`. `putRecord`의 `before`는 `data.records`가 아니라 `SELECT ... FROM records WHERE id = ?`로 찾는다(다른 가계부에서 옮겨 올 수 있음). 옮길 때 양쪽 권한 확인은 `roles`로 한다 |
+| `records`, `messages`, 반응 | 내역 불필요: `scope = { records: false }`. 대상은 id로 직접 찾는다. `putRecord`의 `before`는 `data.records`가 아니라 `SELECT ... FROM records WHERE id = ?`로 찾는다(다른 가계부에서 옮겨 올 수 있음). `deleteRecord`·`setReaction`도 같은 방식으로 대상의 가계부를 찾는다. 옮길 때 양쪽 권한 확인은 `roles`로 한다. (처음 안은 "본문 또는 대상의 `ledgerId`" 범위였으나, 대상을 id로 찾고 나면 이 핸들러들은 `data.records`·`data.messages`를 전혀 쓰지 않아 그 가계부 내역을 읽는 것이 낭비라 바꿨다) |
 | `ledgers` PUT | 가계부 목록은 전체(순환 검사·상위 연결), 내역은 그 가계부만(`IN_USE`, `HAS_RECORDS`). 상위 가계부의 "내역이 있는지"는 `SELECT 1 FROM records WHERE ledger_id = ? LIMIT 1`로 |
 | `seen`, 멤버·초대·친구·프로필·자산 | 내역 불필요: `scope = { records: false }` |
 | `snapshot`, `sync` | 위 3.4·3.5 |
@@ -212,13 +212,13 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
 
 ### 3.8 로그 보관 (확정)
 
-- `wrangler.jsonc`에 `"triggers": { "crons": ["17 18 * * *"] }`(매일 03:17 KST), Worker에 `scheduled()` 핸들러. `DELETE FROM changes WHERE at < 30일 전`, 지운 뒤 `UPDATE sync_meta SET value = (SELECT COALESCE(min(seq), 0) - 1 FROM changes) WHERE key = 'pruned_to'`(로그가 비면 마지막 seq).
+- `wrangler.jsonc`에 `"triggers": { "crons": ["17 18 * * *"] }`(매일 03:17 KST), Worker에 `scheduled()` 핸들러. `DELETE FROM changes WHERE at < 30일 전 AND seq < (SELECT max(seq) FROM changes)`, 지운 뒤 `UPDATE sync_meta SET value = (SELECT COALESCE(min(seq), 1) - 1 FROM changes) WHERE key = 'pruned_to'`. 가장 최근 행 하나는 늘 남겨 로그가 비지 않게 한다: 비면 "마지막 seq"를 `sqlite_sequence`에서 읽어야 하는데 D1이 내부 테이블 읽기를 막을 수 있다. 결과는 같다(커서가 마지막 seq − 1 이상이면 이어 받고, 그보다 작으면 `resync`).
 - 30일 넘게 안 연 기기는 `resync`로 스냅숏을 다시 받는다.
 
 ### 3.9 클라이언트 (확정)
 
 - `src/client/app/api.ts`: 답 형식이 `Snapshot | Sync`가 된다. `api()`가 현재 `seq`를 `?since=`로 붙인다.
-- `src/shared/sync.ts`에 순수 함수 `applyChanges(data: AppData, sync: Sync, skip?: Set<string>): AppData`. `skip`은 `"kind:id"` 집합으로, 아직 보내지 않은 내 변경이 있는 대상은 덮어쓰지 않는다(P2에서 쓴다). `ledgerIds`에 없는 가계부의 가계부·내역·대화·멤버를 지운다. 응답에 `more`가 있으면 호출자가 다시 부른다.
+- `src/shared/sync.ts`에 순수 함수 `applyChanges(data: Snapshot, sync: Sync, skip?: Set<string>): Snapshot`. (`AppData`가 아니라 `Snapshot`을 받고 돌려준다: `seen` 변경은 `seenAt`에, 답의 `seq`는 `seq`에 적어야 하는데 둘 다 `AppData`에 없다. 클라이언트 상태가 곧 `Snapshot`이다.) `skip`은 `"kind:id"` 집합으로, 아직 보내지 않은 내 변경이 있는 대상은 덮어쓰지 않는다(P2에서 쓴다). `ledgerIds`에 없는 가계부의 가계부·내역·대화·멤버를 지운다. 응답에 `more`가 있으면 호출자가 다시 부른다.
 - `App.tsx`:
   - 시작: `GET /api/snapshot`.
   - `change()`: 낙관적 반영 → 쓰기 → 답(`Sync`)을 `applyChanges`. 실패(4xx)는 지금처럼 `confirmed`로 되돌리고, 재로드는 `GET /api/sync?since=`로.

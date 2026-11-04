@@ -22,6 +22,7 @@ import {
 } from '../shared/ledger';
 import {
   ApiError,
+  change,
   fail,
   invalid,
   isDate,
@@ -540,6 +541,14 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
 
   const now = new Date().toISOString();
   const others = parentIds.map(() => '?').join(', ');
+  // The user's own parents gaining or losing this ledger: their owner-only childIds change.
+  const wereParents = data.ledgers
+    .filter((item) => data.roles.get(item.id) === 'owner' && item.childIds.includes(id))
+    .map((item) => item.id);
+  const relinked = [
+    ...parentIds.filter((parentId) => !wereParents.includes(parentId)),
+    ...wereParents.filter((parentId) => !parentIds.includes(parentId)),
+  ];
   await db.batch([
     db
       .prepare(
@@ -592,6 +601,9 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
         .bind(parentId, id),
     ),
     ...copied.map((record) => insertRecord(db, record, data.user.id, now)),
+    change(db, { kind: 'ledger', id, ledgerId: id }),
+    ...relinked.map((parentId) => change(db, { kind: 'ledger', id: parentId, ledgerId: parentId })),
+    ...copied.map((record) => change(db, { kind: 'record', id: record.id, ledgerId: id })),
   ]);
 }
 
@@ -605,7 +617,14 @@ async function putRecord(db: D1Database, data: Loaded, id: Id, body: unknown) {
   if (record.id !== id) invalid('내역');
   if (!before && (await db.prepare('SELECT 1 FROM records WHERE id = ?').bind(id).first()))
     fail(409, 'ID_TAKEN', '이미 있는 내역이에요.');
-  await insertRecord(db, record, data.user.id, new Date().toISOString()).run();
+  await db.batch([
+    insertRecord(db, record, data.user.id, new Date().toISOString()),
+    // A moved record leaves its old ledger too.
+    ...(before && before.ledgerId !== ledger.id
+      ? [change(db, { kind: 'record', id, ledgerId: before.ledgerId })]
+      : []),
+    change(db, { kind: 'record', id, ledgerId: ledger.id }),
+  ]);
 }
 
 async function deleteRecord(db: D1Database, data: Loaded, id: Id) {
@@ -615,6 +634,7 @@ async function deleteRecord(db: D1Database, data: Loaded, id: Id) {
   await db.batch([
     db.prepare('DELETE FROM record_reactions WHERE record_id = ?').bind(id),
     db.prepare('DELETE FROM records WHERE id = ?').bind(id),
+    change(db, { kind: 'record', id, ledgerId: before.ledgerId }),
   ]);
 }
 
@@ -655,23 +675,25 @@ async function putAsset(db: D1Database, data: Loaded, id: Id, body: unknown) {
     .first<{ owner_id: Id }>();
   if (owner && owner.owner_id !== data.user.id) fail(409, 'ID_TAKEN', '이미 있는 자산이에요.');
   const now = new Date().toISOString();
-  await db
-    .prepare(
-      `INSERT INTO assets (id, owner_id, name, kind, balance, since, ledger_ids, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
-       ON CONFLICT (id) DO UPDATE SET name = ?3, kind = ?4, balance = ?5, since = ?6, ledger_ids = ?7, updated_at = ?8`,
-    )
-    .bind(
-      id,
-      data.user.id,
-      asset.name,
-      asset.kind,
-      asset.balance,
-      asset.since,
-      JSON.stringify(ledgerIds),
-      now,
-    )
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO assets (id, owner_id, name, kind, balance, since, ledger_ids, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+         ON CONFLICT (id) DO UPDATE SET name = ?3, kind = ?4, balance = ?5, since = ?6, ledger_ids = ?7, updated_at = ?8`,
+      )
+      .bind(
+        id,
+        data.user.id,
+        asset.name,
+        asset.kind,
+        asset.balance,
+        asset.since,
+        JSON.stringify(ledgerIds),
+        now,
+      ),
+    change(db, { kind: 'asset', id, userId: data.user.id }),
+  ]);
 }
 
 /** Sends a 대화 line to a ledger the user belongs to: a text of up to 1,000 characters or one sticker. */
@@ -702,10 +724,12 @@ async function putMessage(db: D1Database, data: Loaded, id: Id, body: unknown) {
     // Only its author changes a message, and only its text.
     if (before.author_id !== data.user.id || before.ledger_id !== ledgerId || !before.text || !text)
       fail(403, 'FORBIDDEN', '내가 쓴 글만 고칠 수 있어요.');
-    await db
-      .prepare('UPDATE messages SET text = ?, edited_at = ? WHERE id = ?')
-      .bind(text, new Date().toISOString(), id)
-      .run();
+    await db.batch([
+      db
+        .prepare('UPDATE messages SET text = ?, edited_at = ? WHERE id = ?')
+        .bind(text, new Date().toISOString(), id),
+      change(db, { kind: 'message', id, ledgerId }),
+    ]);
     return;
   }
   if (
@@ -716,32 +740,35 @@ async function putMessage(db: D1Database, data: Loaded, id: Id, body: unknown) {
       .first())
   )
     invalid('답장할 글');
-  await db
-    .prepare(
-      'INSERT INTO messages (id, ledger_id, author_id, text, sticker, created_at, reply_to) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    )
-    .bind(
-      id,
-      ledgerId,
-      data.user.id,
-      text ?? null,
-      (sticker as string | undefined) ?? null,
-      new Date().toISOString(),
-      (replyTo as string | undefined) ?? null,
-    )
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        'INSERT INTO messages (id, ledger_id, author_id, text, sticker, created_at, reply_to) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(
+        id,
+        ledgerId,
+        data.user.id,
+        text ?? null,
+        (sticker as string | undefined) ?? null,
+        new Date().toISOString(),
+        (replyTo as string | undefined) ?? null,
+      ),
+    change(db, { kind: 'message', id, ledgerId }),
+  ]);
 }
 
 /** Deletes a message its author wrote, with its reactions; answers to it then show it as deleted. */
 async function deleteMessage(db: D1Database, data: Loaded, id: Id) {
   const own = await db
-    .prepare('SELECT 1 FROM messages WHERE id = ? AND author_id = ?')
+    .prepare('SELECT ledger_id FROM messages WHERE id = ? AND author_id = ?')
     .bind(id, data.user.id)
-    .first();
+    .first<{ ledger_id: Id }>();
   if (!own) fail(404, 'NOT_FOUND', '내가 쓴 글만 지울 수 있어요.');
   await db.batch([
     db.prepare('DELETE FROM message_reactions WHERE message_id = ?').bind(id),
     db.prepare('DELETE FROM messages WHERE id = ?').bind(id),
+    change(db, { kind: 'message', id, ledgerId: own.ledger_id }),
   ]);
 }
 
@@ -759,7 +786,7 @@ async function setMessageReaction(
     .first<{ ledger_id: Id }>();
   if (!message || !data.roles.has(message.ledger_id)) fail(404, 'NOT_FOUND', '없는 글이에요.');
   if (!reactionIds.includes(reaction)) invalid('반응');
-  await (
+  await db.batch([
     on
       ? db
           .prepare(
@@ -770,20 +797,25 @@ async function setMessageReaction(
           .prepare(
             'DELETE FROM message_reactions WHERE message_id = ? AND reaction = ? AND user_id = ?',
           )
-          .bind(id, reaction, data.user.id)
-  ).run();
+          .bind(id, reaction, data.user.id),
+    change(db, { kind: 'message', id, ledgerId: message.ledger_id }),
+  ]);
 }
 
 async function deleteAsset(db: D1Database, data: Loaded, id: Id) {
   if (!data.assets?.some((asset) => asset.id === id)) fail(404, 'NOT_FOUND', '없는 자산이에요.');
-  await db.prepare('DELETE FROM assets WHERE id = ? AND owner_id = ?').bind(id, data.user.id).run();
+  await db.batch([
+    db.prepare('DELETE FROM assets WHERE id = ? AND owner_id = ?').bind(id, data.user.id),
+    change(db, { kind: 'asset', id, userId: data.user.id }),
+  ]);
 }
 
 /** Adds or removes the user's own reaction; any member who can see the record may react. */
 async function setReaction(db: D1Database, data: Loaded, id: Id, reaction: string, on: boolean) {
-  if (!data.records.some((item) => item.id === id)) fail(404, 'NOT_FOUND', '없는 내역이에요.');
+  const record = data.records.find((item) => item.id === id);
+  if (!record) fail(404, 'NOT_FOUND', '없는 내역이에요.');
   if (!reactionIds.includes(reaction)) invalid('반응');
-  await (
+  await db.batch([
     on
       ? db
           .prepare(
@@ -794,8 +826,9 @@ async function setReaction(db: D1Database, data: Loaded, id: Id, reaction: strin
           .prepare(
             'DELETE FROM record_reactions WHERE record_id = ? AND reaction = ? AND user_id = ?',
           )
-          .bind(id, reaction, data.user.id)
-  ).run();
+          .bind(id, reaction, data.user.id),
+    change(db, { kind: 'record', id, ledgerId: record.ledgerId }),
+  ]);
 }
 
 export default {

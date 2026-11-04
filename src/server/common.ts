@@ -52,3 +52,19 @@ export const isDate = (value: unknown): value is string =>
   !Number.isNaN(Date.parse(value));
 export const isFlag = (value: unknown) => value === undefined || typeof value === 'boolean';
 export const unique = (ids: Id[]) => new Set(ids).size === ids.length;
+
+/** What a sync log row says changed (docs/sync-plan.md §3.2–3.3). */
+export type ChangeRow = {
+  kind:
+    'ledger' | 'record' | 'message' | 'asset' | 'members' | 'friends' | 'invites' | 'seen' | 'me';
+  /** The target's id; for members/friends/invites/me, the scope id. */
+  id: Id;
+  ledgerId?: Id;
+  userId?: Id;
+};
+
+/** One sync log row, to run in the same batch as the write it records. */
+export const change = (db: D1Database, row: ChangeRow) =>
+  db
+    .prepare('INSERT INTO changes (kind, id, ledger_id, user_id, at) VALUES (?, ?, ?, ?, ?)')
+    .bind(row.kind, row.id, row.ledgerId ?? null, row.userId ?? null, new Date().toISOString());
