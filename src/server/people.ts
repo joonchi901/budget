@@ -3,7 +3,7 @@
  * friends grants nothing: a ledger opens only through membership, after the invitee accepts.
  */
 import { UGA_MOODS } from '../client/brand/icon-names';
-import { leafLedgers, type AppData, type Id, type LedgerRecord } from '../shared/ledger';
+import { leafLedgers, type AppData, type Id } from '../shared/ledger';
 import {
   handleProblem,
   type Friend,
@@ -11,6 +11,7 @@ import {
   type LedgerMember,
   type Profile,
   type RoomInvite,
+  type SignupLink,
 } from '../shared/people';
 import {
   change,
@@ -73,66 +74,77 @@ const token = () =>
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
 
-/** Friends, invitations, the signup link, each room's members and its unseen count. */
-export async function loadPeople(
-  db: D1Database,
-  data: Pick<Loaded, 'user' | 'ledgers' | 'records'>,
-): Promise<Pick<AppData, 'friends' | 'invites' | 'signupLink' | 'ledgerMembers' | 'unseen'>> {
-  const me = data.user.id;
-  const [friendRows, inviteRows, memberRows, pendingRows, seenRows] = await Promise.all([
-    db
-      .prepare(
-        'SELECT f.status, u.* FROM friendships f JOIN users u ON u.id = f.other_id WHERE f.user_id = ? ORDER BY f.created_at',
-      )
-      .bind(me)
-      .all<UserRow & { status: Friend['status'] }>(),
-    db
-      .prepare(
-        `SELECT i.id AS invite_id, i.role AS invite_role, i.created_at AS sent_at, l.id AS ledger_id,
-           l.name AS ledger_name, l.icon AS ledger_icon, l.period_start, l.period_end, u.*
-         FROM ledger_invites i JOIN ledgers l ON l.id = i.ledger_id JOIN users u ON u.id = i.inviter_id
-         WHERE i.invitee_id = ? ORDER BY i.created_at DESC`,
-      )
-      .bind(me)
-      .all<
-        UserRow & {
-          invite_id: Id;
-          invite_role: InviteRole;
-          sent_at: string;
-          ledger_id: Id;
-          ledger_name: string;
-          ledger_icon: string;
-          period_start: string;
-          period_end: string;
-        }
-      >(),
+/** The user's friend list, from their own side. */
+export async function loadFriends(db: D1Database, me: Id): Promise<Friend[]> {
+  const rows = await db
+    .prepare(
+      'SELECT f.status, u.* FROM friendships f JOIN users u ON u.id = f.other_id WHERE f.user_id = ? ORDER BY f.created_at',
+    )
+    .bind(me)
+    .all<UserRow & { status: Friend['status'] }>();
+  return rows.results.map((row) => ({ profile: toProfile(row), status: row.status }));
+}
+
+/** Ledger invitations waiting for the user's answer. */
+export async function loadInvites(db: D1Database, me: Id): Promise<RoomInvite[]> {
+  const rows = await db
+    .prepare(
+      `SELECT i.id AS invite_id, i.role AS invite_role, i.created_at AS sent_at, l.id AS ledger_id,
+         l.name AS ledger_name, l.icon AS ledger_icon, l.period_start, l.period_end, u.*
+       FROM ledger_invites i JOIN ledgers l ON l.id = i.ledger_id JOIN users u ON u.id = i.inviter_id
+       WHERE i.invitee_id = ? ORDER BY i.created_at DESC`,
+    )
+    .bind(me)
+    .all<
+      UserRow & {
+        invite_id: Id;
+        invite_role: InviteRole;
+        sent_at: string;
+        ledger_id: Id;
+        ledger_name: string;
+        ledger_icon: string;
+        period_start: string;
+        period_end: string;
+      }
+    >();
+  return rows.results.map((row) => ({
+    id: row.invite_id,
+    ledger: {
+      id: row.ledger_id,
+      name: row.ledger_name,
+      icon: row.ledger_icon,
+      period: { start: row.period_start, end: row.period_end },
+    },
+    from: toProfile(row),
+    role: row.invite_role,
+    sentAt: row.sent_at,
+  }));
+}
+
+/**
+ * Members of the user's ledgers (all, or the given ones: at most 90), with pending invitees on
+ * the ledgers the user owns.
+ */
+export async function loadLedgerMembers(db: D1Database, me: Id, ledgerIds?: Id[]) {
+  const only = ledgerIds ? ` AND m.ledger_id IN (${ledgerIds.map(() => '?').join(', ')})` : '';
+  const [memberRows, pendingRows] = await Promise.all([
     db
       .prepare(
         `SELECT o.ledger_id, o.role, u.* FROM ledger_members o
          JOIN ledger_members m ON m.ledger_id = o.ledger_id JOIN users u ON u.id = o.user_id
-         WHERE m.user_id = ?`,
+         WHERE m.user_id = ?${only}`,
       )
-      .bind(me)
+      .bind(me, ...(ledgerIds ?? []))
       .all<UserRow & { ledger_id: Id; role: LedgerMember['role'] }>(),
     db
       .prepare(
         `SELECT i.ledger_id, i.role, u.* FROM ledger_invites i
          JOIN ledger_members m ON m.ledger_id = i.ledger_id AND m.role = 'owner'
-         JOIN users u ON u.id = i.invitee_id WHERE m.user_id = ?`,
+         JOIN users u ON u.id = i.invitee_id WHERE m.user_id = ?${only}`,
       )
-      .bind(me)
+      .bind(me, ...(ledgerIds ?? []))
       .all<UserRow & { ledger_id: Id; role: InviteRole }>(),
-    db
-      .prepare('SELECT ledger_id, seen_at FROM ledger_members WHERE user_id = ?')
-      .bind(me)
-      .all<{ ledger_id: Id; seen_at: string | null }>(),
   ]);
-  let link = await db
-    .prepare('SELECT * FROM signup_links WHERE owner_id = ?')
-    .bind(me)
-    .first<{ token: string; expires_at: string; joined: number }>();
-  if (!link) link = await renewSignupLink(db, me);
-
   const ledgerMembers: NonNullable<AppData['ledgerMembers']> = {};
   for (const row of memberRows.results)
     (ledgerMembers[row.ledger_id] ??= []).push({ profile: toProfile(row), role: row.role });
@@ -142,45 +154,39 @@ export async function loadPeople(
       role: row.role,
       invited: true,
     });
+  return ledgerMembers;
+}
 
-  // A room's badge counts records others added since this user last opened it.
-  const seen = new Map(seenRows.results.map((row) => [row.ledger_id, row.seen_at]));
-  const unseen: NonNullable<AppData['unseen']> = {};
-  for (const ledger of data.ledgers) {
-    const since = seen.get(ledger.id);
-    if (!since) continue;
-    const leaves = new Set(leafLedgers(data.ledgers, ledger).map((leaf) => leaf.id));
-    const count = data.records.filter(
-      (record: LedgerRecord) =>
-        leaves.has(record.ledgerId) && record.createdBy !== me && record.createdAt > since,
-    ).length;
-    if (count) unseen[ledger.id] = count;
-  }
-
+/** The user's signup link, made on first use. */
+export async function loadSignupLink(db: D1Database, me: Id): Promise<SignupLink> {
+  const link =
+    (await db
+      .prepare('SELECT * FROM signup_links WHERE owner_id = ?')
+      .bind(me)
+      .first<{ token: string; expires_at: string; joined: number }>()) ??
+    (await renewSignupLink(db, me));
   return {
-    friends: friendRows.results.map((row) => ({ profile: toProfile(row), status: row.status })),
-    invites: inviteRows.results.map((row): RoomInvite => ({
-      id: row.invite_id,
-      ledger: {
-        id: row.ledger_id,
-        name: row.ledger_name,
-        icon: row.ledger_icon,
-        period: { start: row.period_start, end: row.period_end },
-      },
-      from: toProfile(row),
-      role: row.invite_role,
-      sentAt: row.sent_at,
-    })),
-    signupLink: {
-      // A path: the client adds its own origin.
-      url: `/join/${link.token}`,
-      expiresAt: link.expires_at,
-      joined: link.joined,
-      limit: LINK_LIMIT,
-    },
-    ledgerMembers,
-    unseen,
+    // A path: the client adds its own origin.
+    url: `/join/${link.token}`,
+    expiresAt: link.expires_at,
+    joined: link.joined,
+    limit: LINK_LIMIT,
   };
+}
+
+/** Friends, invitations, the signup link and the members of the user's ledgers. */
+export async function loadPeople(
+  db: D1Database,
+  me: Id,
+  ledgerIds?: Id[],
+): Promise<Pick<AppData, 'friends' | 'invites' | 'signupLink' | 'ledgerMembers'>> {
+  const [friends, invites, signupLink, ledgerMembers] = await Promise.all([
+    loadFriends(db, me),
+    loadInvites(db, me),
+    loadSignupLink(db, me),
+    loadLedgerMembers(db, me, ledgerIds),
+  ]);
+  return { friends, invites, signupLink, ledgerMembers };
 }
 
 /** A new signup link; the old one stops working. */
@@ -536,10 +542,16 @@ export async function acceptInvite(db: D1Database, data: Loaded, inviteId: Id, b
   if (
     !parentIds.every(isId) ||
     !unique(parentIds) ||
-    !parentIds.every(
-      (id) =>
-        data.roles.get(id) === 'owner' && !data.records.some((record) => record.ledgerId === id),
-    )
+    parentIds.length > 90 ||
+    !parentIds.every((id) => data.roles.get(id) === 'owner') ||
+    // A parent holds no records of its own.
+    (parentIds.length &&
+      (await db
+        .prepare(
+          `SELECT 1 FROM records WHERE ledger_id IN (${parentIds.map(() => '?').join(', ')}) LIMIT 1`,
+        )
+        .bind(...parentIds)
+        .first()))
   )
     invalid('상위 가계부');
   await db.batch([
