@@ -23,12 +23,15 @@ export function ChatThread({
   memberId,
   members = [],
   onSend,
+  memo = false,
 }: {
   messages: ChatMessage[];
   memberId: Id;
   /** Names for authors; unknown ids show as "알 수 없음". */
   members?: Member[];
   onSend(message: { text: string } | { sticker: string }): void;
+  /** A ledger used alone: the thread is the person's own 메모. */
+  memo?: boolean;
 }) {
   const id = useId();
   const [text, setText] = useState('');
@@ -82,7 +85,11 @@ export function ChatThread({
             </section>
           ))
         ) : (
-          <Empty>아직 대화가 없어요. 먼저 말을 건네 보세요.</Empty>
+          <Empty>
+            {memo
+              ? '아직 메모가 없어요. 이 가계부에 남겨 둘 이야기를 적어 보세요.'
+              : '아직 대화가 없어요. 먼저 말을 건네 보세요.'}
+          </Empty>
         )}
       </div>
       <form
@@ -102,8 +109,8 @@ export function ChatThread({
           )}
         />
         <Input
-          aria-label="메시지"
-          placeholder="메시지"
+          aria-label={memo ? '메모' : '메시지'}
+          placeholder={memo ? '메모' : '메시지'}
           value={text}
           maxLength={1000}
           onChange={(event) => setText(event.target.value)}

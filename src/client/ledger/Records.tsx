@@ -1,5 +1,12 @@
 import { useId, useState } from 'react';
-import { CalendarDays, ChevronRight, List as ListIcon, SlidersHorizontal } from 'lucide-react';
+import {
+  CalendarDays,
+  ChevronRight,
+  List as ListIcon,
+  Repeat,
+  SlidersHorizontal,
+  Table2,
+} from 'lucide-react';
 import {
   Amount,
   Button,
@@ -19,7 +26,9 @@ import {
   Tag,
 } from '../ui';
 import {
+  isScheduled,
   totals,
+  type IsoDate,
   type Ledger,
   type LedgerRecord,
   type TagAxis,
@@ -40,7 +49,27 @@ export type RecordContext = {
   onOpenLedger?(ledger: Ledger): void;
   /** Lets members react to records with Uga stickers. */
   reacting?: ReactionContext;
+  /** Marks 반복 내역 not yet due as 예정, and due ones whose amount needs checking. */
+  today?: IsoDate;
 };
+
+/** 예정 before a repeating record's day; 금액 확인 once due while its varying amount is unchecked. */
+export function recordState(record: LedgerRecord, today?: IsoDate) {
+  if (!today || !record.recurringId) return undefined;
+  if (isScheduled(record, today)) return 'scheduled';
+  return record.unconfirmed ? 'check' : undefined;
+}
+
+/** The 예정 or 금액 확인 mark before a record's tags. */
+function StateMark({ state }: { state: ReturnType<typeof recordState> }) {
+  if (!state) return null;
+  return (
+    <span className="ledger-record-state" data-state={state}>
+      {state === 'scheduled' && <Repeat size={12} aria-hidden="true" />}
+      {state === 'scheduled' ? '예정' : '금액 확인'}
+    </span>
+  );
+}
 
 function describe(record: LedgerRecord, ledgers: Ledger[]) {
   const ledger = ledgers.find((item) => item.id === record.ledgerId)!;
@@ -58,7 +87,7 @@ function describe(record: LedgerRecord, ledgers: Ledger[]) {
   return { ledger, kind, tags, texts };
 }
 
-/** One record: 내용 with its 유형 tag beside it, then tags and memo, and the signed amount. */
+/** One record: 내용, then tags and memo; on the right a custom 유형 tag over the signed amount. */
 export function RecordRow({
   record,
   ledgers,
@@ -66,18 +95,17 @@ export function RecordRow({
   onOpenRecord,
   onOpenLedger,
   reacting,
+  today,
 }: RecordContext & { record: LedgerRecord }) {
   const { ledger, kind, tags, texts } = describe(record, ledgers);
+  const state = recordState(record, today);
   return (
     <ListRow
-      title={
-        <span className="ledger-record-title">
-          {record.title}
-          {kind.name !== natureName[kind.nature] && <Tag name={kind.name} color={kind.color} />}
-        </span>
-      }
+      className={state ? `ledger-record ledger-record-${state}` : 'ledger-record'}
+      title={record.title}
       description={
         <span className="ledger-record-meta">
+          <StateMark state={state} />
           {showLedger && !onOpenLedger && (
             <span className="ledger-record-source">{ledger.name}</span>
           )}
@@ -91,7 +119,12 @@ export function RecordRow({
           ))}
         </span>
       }
-      trailing={<Amount value={record.amount} tone={kind.nature} signed />}
+      trailing={
+        <>
+          {kind.name !== natureName[kind.nature] && <Tag name={kind.name} color={kind.color} />}
+          <Amount value={record.amount} tone={kind.nature} signed />
+        </>
+      }
       onClick={onOpenRecord && (() => onOpenRecord(record))}
       footer={
         (reacting || (showLedger && onOpenLedger)) && (
@@ -130,8 +163,9 @@ export function RecordDayGroup({
 }: RecordContext & { date: string; records: LedgerRecord[] }) {
   const id = useId();
   const sum = totals(records, context.ledgers);
+  const planned = records.every((record) => recordState(record, context.today) === 'scheduled');
   return (
-    <section className="ledger-day" aria-labelledby={id}>
+    <section className="ledger-day" aria-labelledby={id} data-planned={planned || undefined}>
       <div className="ledger-day-heading">
         <h2 id={id}>{dayLabel(date)}</h2>
         <span className="ledger-day-totals">
@@ -185,6 +219,7 @@ export function RecordTable({
   ledgers,
   showLedger,
   onOpenRecord,
+  today,
 }: RecordContext & { records: LedgerRecord[] }) {
   if (!records.length) return <Empty>아직 내역이 없어요.</Empty>;
   const columns = [
@@ -218,14 +253,18 @@ export function RecordTable({
         <tbody>
           {sorted.map((record) => {
             const { ledger, kind } = describe(record, ledgers);
+            const state = recordState(record, today);
             return (
-              <tr key={record.id}>
-                <td>{shortDate(record.date)}</td>
+              <tr key={record.id} data-state={state}>
+                <td>
+                  {shortDate(record.date)}
+                  <StateMark state={state} />
+                </td>
                 {showLedger && <td>{ledger.name}</td>}
                 <td>
                   <Tag name={kind.name} color={kind.color} />
                 </td>
-                <th scope="row">
+                <th scope="row" className="ledger-table-text">
                   {onOpenRecord ? (
                     <Button variant="plain" onClick={() => onOpenRecord(record)}>
                       {record.title}
@@ -241,10 +280,13 @@ export function RecordTable({
                   const field = ledger.fields.find((item) => item.name === name);
                   const value = field && record.values[field.id];
                   return (
-                    <td key={name}>
+                    <td
+                      key={name}
+                      className={field?.type === 'text' ? 'ledger-table-text' : undefined}
+                    >
                       {field?.type === 'text' && typeof value === 'string' && value}
                       {field && field.type !== 'text' && Array.isArray(value) && (
-                        <Inline gap={1} wrap={false}>
+                        <Inline gap={1}>
                           {field.options
                             .filter((option) => value.includes(option.id))
                             .map((option) => (
@@ -267,7 +309,8 @@ export function RecordTable({
 /**
  * One row above the records: search, a 조회 조건 button and, in a room, the 표/캘린더 icons. The
  * panel holds tag filters (유형 covers 수입/지출) and the wide table switch; applied conditions
- * stay visible as removable chips.
+ * stay visible as removable chips. A wide room body swaps the icons and the switch for a
+ * 캘린더/테이블 toggle (views.css).
  */
 export type RecordDisplay = 'list' | 'calendar';
 export type TagCondition = { axis: string; name: string };
@@ -275,7 +318,7 @@ export type TagCondition = { axis: string; name: string };
 export function RecordFilterBar({
   query,
   onQueryChange,
-  wide,
+  wide = false,
   onWideChange,
   conditions = [],
   onRemoveCondition,
@@ -286,9 +329,9 @@ export function RecordFilterBar({
 }: {
   query: string;
   onQueryChange(query: string): void;
-  /** Wide table instead of the day list. */
-  wide: boolean;
-  onWideChange(wide: boolean): void;
+  /** Wide table instead of the day list; the panel offers it with `onWideChange`. */
+  wide?: boolean;
+  onWideChange?(wide: boolean): void;
   /** Applied tag conditions, shown as "카테고리: 장보기" chips. */
   conditions?: TagCondition[];
   onRemoveCondition?(condition: TagCondition): void;
@@ -314,7 +357,8 @@ export function RecordFilterBar({
           aria-label="조회 조건"
           aria-expanded={open}
           aria-controls={panel}
-          data-active={wide || conditions.length > 0 || undefined}
+          data-active={conditions.length > 0 || undefined}
+          data-wide={wide || undefined}
           onClick={() => setOpen(!open)}
         >
           <SlidersHorizontal size={20} />
@@ -347,6 +391,34 @@ export function RecordFilterBar({
             ]}
           />
         )}
+        {onDisplayChange && (
+          <SegmentedControl<'calendar' | 'table'>
+            aria-label="내역 보기 방식"
+            className="ledger-layout-toggle"
+            value={wide ? 'table' : 'calendar'}
+            onValueChange={(layout) => onWideChange?.(layout === 'table')}
+            options={[
+              {
+                value: 'calendar',
+                label: (
+                  <>
+                    <CalendarDays size={18} aria-hidden="true" />
+                    캘린더
+                  </>
+                ),
+              },
+              {
+                value: 'table',
+                label: (
+                  <>
+                    <Table2 size={18} aria-hidden="true" />
+                    테이블
+                  </>
+                ),
+              },
+            ]}
+          />
+        )}
       </div>
       {open && (
         <Stack id={panel} gap={3} className="ledger-filter-panel">
@@ -361,10 +433,12 @@ export function RecordFilterBar({
                 onValueChange={(names) => onConditionsChange(axis, names)}
               />
             ))}
-          <Field>
-            <Switch checked={wide} onChange={(event) => onWideChange(event.target.checked)} />
-            넓게 보기
-          </Field>
+          {onWideChange && (
+            <Field className="ledger-wide-switch">
+              <Switch checked={wide} onChange={(event) => onWideChange(event.target.checked)} />
+              넓게 보기
+            </Field>
+          )}
         </Stack>
       )}
       {conditions.length > 0 && (

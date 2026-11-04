@@ -58,11 +58,15 @@
 }
 @media (min-width: 1024px) {
   .ui-shell {
-    --ui-rail: 76px;
+    --ui-rail: 232px;
     --ui-aside: 320px;
     display: grid;
     grid-template-columns: var(--ui-rail) minmax(0, 1fr);
     height: 100dvh;
+    transition: grid-template-columns var(--brand-motion-normal) var(--brand-ease);
+  }
+  .ui-shell[data-rail='folded'] {
+    --ui-rail: 76px;
   }
   .ui-shell[data-has-aside] {
     grid-template-columns: var(--ui-rail) var(--ui-aside) minmax(0, 1fr);
@@ -124,21 +128,43 @@
     padding-inline: var(--brand-space-4);
   }
 }
-/* Up to 1439px the rail keeps icons only, leaving the room space for records and calendar
-   together; its labels stay for screen readers. */
-@media (min-width: 1024px) and (max-width: 1439px) {
-  .ui-shell-nav {
-    align-items: center;
-    padding-inline: var(--brand-space-2);
-  }
-  .ui-shell-nav > img {
-    display: none;
-  }
-}
 @media (min-width: 1440px) {
   .ui-shell {
-    --ui-rail: 232px;
     --ui-aside: 360px;
+  }
+}
+/* The rail's top: the logo with 접기 at its right; folded, the mark that becomes 펼치기 under the
+   pointer or keyboard focus. Folded, the tabs keep icons only and their labels stay for screen
+   readers. */
+.ui-shell-nav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-2);
+  min-height: 52px;
+}
+.ui-shell[data-rail='folded'] .ui-shell-nav {
+  align-items: center;
+  padding-inline: var(--brand-space-2);
+}
+.ui-shell[data-rail='folded'] .ui-shell-nav-head {
+  justify-content: center;
+}
+.ui-shell-rail-icon,
+.ui-shell-rail-toggle:hover .ui-shell-mark,
+.ui-shell-rail-toggle:focus-visible .ui-shell-mark {
+  display: none;
+}
+.ui-shell-mark {
+  display: inline-flex;
+}
+.ui-shell-rail-toggle:hover .ui-shell-rail-icon,
+.ui-shell-rail-toggle:focus-visible .ui-shell-rail-icon {
+  display: block;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-shell {
+    transition: none;
   }
 }
 

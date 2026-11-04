@@ -219,8 +219,8 @@ export function TagOptionEditor({
 }
 
 /**
- * 유형 options, managed like tags, each counted as 수입 or 지출. The base 수입 and 지출 can be
- * renamed and recolored but never archived; others (고정지출 and so on) are added here.
+ * 유형 options, managed like tags, each counted as 수입 or 지출. The base 수입 and 지출 keep
+ * their names and are never archived, only recolored; others (고정지출 and so on) are added here.
  */
 export function KindOptionEditor({
   kinds,
@@ -259,12 +259,16 @@ export function KindOptionEditor({
                 onValueChange={(next) => update(kind.id, { color: next })}
                 disabled={kind.archived}
               />
-              <Input
-                aria-label={`${kind.name} 이름`}
-                value={kind.name}
-                disabled={kind.archived}
-                onChange={(event) => update(kind.id, { name: event.target.value })}
-              />
+              {kind.base ? (
+                <span className="ledger-kind-fixed-name">{kind.name}</span>
+              ) : (
+                <Input
+                  aria-label={`${kind.name} 이름`}
+                  value={kind.name}
+                  disabled={kind.archived}
+                  onChange={(event) => update(kind.id, { name: event.target.value })}
+                />
+              )}
               <span className="ledger-kind-nature">
                 {kind.nature === 'income' ? '수입' : '지출'}
               </span>

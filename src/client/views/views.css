@@ -112,8 +112,8 @@
   flex: 1;
 }
 
-/* The room's 내역: phones show 표 or 캘린더 as chosen, the calendar filling the screen; a wide
-   body shows both, the calendar pinned beside the records, and drops the switch. */
+/* The room's 내역: phones show 표 or 캘린더 as chosen, the calendar filling the screen. A wide
+   body chooses 캘린더 (the calendar pinned left of the records) or 테이블 (the table alone). */
 .view-records {
   flex: 1;
   display: flex;
@@ -138,7 +138,7 @@
 @container screen (min-width: 720px) {
   .view-records {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+    grid-template-columns: minmax(340px, 6fr) minmax(360px, 5fr);
     align-items: start;
   }
   .view-records[data-display] > .view-records-list,
@@ -152,8 +152,25 @@
   .view-records-calendar .ledger-calendar-grid {
     grid-auto-rows: minmax(84px, auto);
   }
-  .ledger-filter-row > .ledger-display-toggle {
+  /* 테이블 (넓게 보기) gives the table the whole width, without the calendar beside it. */
+  .view-records[data-wide] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .view-records[data-wide] > .view-records-calendar {
     display: none;
+  }
+  /* The 캘린더/테이블 toggle replaces the phone's icons and the panel's 넓게 보기 switch. */
+  .ledger-filter-row > .ledger-display-toggle,
+  .ledger-filter-panel > .ledger-wide-switch {
+    display: none;
+  }
+  .ledger-filter-row > .ledger-layout-toggle {
+    display: flex;
+  }
+  /* The toggle already shows 테이블; 조회 조건 lights up for conditions only. */
+  .ledger-filter-row > .ui-icon-button[data-wide]:not([data-active]) {
+    border-color: var(--brand-line);
+    color: var(--brand-muted);
   }
 }
 
@@ -241,4 +258,41 @@
   border-radius: var(--brand-radius-control);
   background: var(--brand-surface-glass);
   box-shadow: var(--brand-shadow-raised);
+}
+
+/* 통계: a toolbar over the charts (조건 summary, 내역 보기, 편집), then the charts, two to a row on
+   a wide body with 넓게 charts across both. */
+.view-stats-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--brand-space-2);
+}
+.view-stats-toolbar > .view-meta {
+  flex: 1 1 200px;
+  margin: 0;
+}
+.view-stat-board {
+  display: grid;
+  gap: var(--brand-space-4);
+}
+.view-stat-card-actions > .ui-icon-button {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+}
+.view-stat-add.ui-button {
+  width: 100%;
+  border-style: dashed;
+}
+@container screen (min-width: 720px) {
+  .view-stat-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .view-stat-board > [data-wide] {
+    grid-column: 1 / -1;
+  }
 }

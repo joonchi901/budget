@@ -46,3 +46,9 @@ export const LargeAmounts: Story = {
     );
   },
 };
+export const Scheduled: Story = {
+  args: { scheduled: 55000 },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('예정 55,000원')).toBeVisible();
+  },
+};

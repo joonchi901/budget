@@ -139,10 +139,13 @@ export function RoomTabBar({
   views,
   view,
   onViewChange,
+  memo = false,
 }: {
   views: RoomView[];
   view: RoomView;
   onViewChange(view: RoomView): void;
+  /** A ledger used alone calls its 대화 메모. */
+  memo?: boolean;
 }) {
   return (
     <div className="ledger-tab-bar">
@@ -156,7 +159,7 @@ export function RoomTabBar({
           label: (
             <>
               {viewIcons[value]}
-              <span>{viewLabels[value]}</span>
+              <span>{memo && value === 'chat' ? '메모' : viewLabels[value]}</span>
             </>
           ),
         }))}
@@ -215,10 +218,13 @@ export function HomeTabBar({
 export function SummaryStrip({
   totals,
   balanceLabel = '남은 금액',
+  scheduled = 0,
 }: {
   totals: Totals;
   /** Names income minus expense, such as 잔액 변화 for an asset. */
   balanceLabel?: string;
+  /** 반복 내역 still to come (예정 지출), shown under 지출 and left out of the totals. */
+  scheduled?: number;
 }) {
   const large = Math.max(totals.income, totals.expense, Math.abs(totals.balance)) >= 100_000_000;
   return (
@@ -233,6 +239,9 @@ export function SummaryStrip({
         <dt>지출</dt>
         <dd>
           <Amount value={totals.expense} tone="expense" size="sm" />
+          {scheduled > 0 && (
+            <span className="ledger-summary-scheduled">예정 {won(scheduled)}원</span>
+          )}
         </dd>
       </div>
       <div>

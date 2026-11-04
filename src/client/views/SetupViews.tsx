@@ -5,14 +5,18 @@ import {
   FieldSchemaEditor,
   KindOptionEditor,
   ParentPicker,
+  RecurringList,
+  RecurringRuleForm,
   TagOptionEditor,
   addDays,
   addMonths,
+  dayName,
   periodLabel,
 } from '../ledger';
 import { FullScreenSheet, useUnsavedGuard } from '../templates';
 import {
   Button,
+  Checkbox,
   DateField,
   Field,
   Grid,
@@ -21,8 +25,10 @@ import {
   SelectOption,
   Stack,
   TextField,
+  won,
 } from '../ui';
 import {
+  carriedRules,
   isParent,
   leafLedgers,
   type FieldDef,
@@ -30,6 +36,7 @@ import {
   type IsoDate,
   type KindOption,
   type Ledger,
+  type RecurringRule,
 } from '../../shared/ledger';
 
 const ICONS: { value: UgaIconName; label: string }[] = [
@@ -193,6 +200,8 @@ export function CreateLedgerView({
   const [mode, setMode] = useState<'empty' | 'copy'>(initialSourceId ? 'copy' : 'empty');
   const [sourceId, setSourceId] = useState(initialSourceId ?? sources[0]?.id ?? '');
   const source = sources.find((ledger) => ledger.id === sourceId);
+  /** 반복 내역 of the source left out of the copy. */
+  const [skipped, setSkipped] = useState<Id[]>([]);
   const thisMonth = { start: today, end: addDays(addMonths(today, 1), -1) };
   const nextPeriod = (ledger?: Ledger) =>
     ledger
@@ -251,10 +260,26 @@ export function CreateLedgerView({
       mode === 'copy' && source
         ? copySchema(source).kinds
         : DEFAULT_KINDS.map((kind) => ({ ...kind, id: crypto.randomUUID() }));
-    onCreate({
-      ledger: { id, name: name.trim(), icon, period, kinds, fields, childIds: [] },
-      parentIds,
-    });
+    // A copy keeps the source's 통계 charts; they name fields, which keep their names.
+    const statCards = mode === 'copy' ? source?.statCards : undefined;
+    const ledger: Ledger = {
+      id,
+      name: name.trim(),
+      icon,
+      period,
+      kinds,
+      fields,
+      childIds: [],
+      ...(statCards ? { statCards } : {}),
+    };
+    // …and the 반복 내역 kept, found again by name in the copy's new kinds and tags.
+    const kept = (mode === 'copy' && source?.recurring) || [];
+    const recurring = carriedRules(
+      kept.filter((rule) => !skipped.includes(rule.id)),
+      source!,
+      ledger,
+    );
+    onCreate({ ledger: recurring.length ? { ...ledger, recurring } : ledger, parentIds });
   };
 
   return (
@@ -301,6 +326,26 @@ export function CreateLedgerView({
                     ))}
                   </SelectField>
                 </Field>
+                {(source.recurring?.length ?? 0) > 0 && (
+                  <Stack gap={2}>
+                    <p className="view-meta">반복 내역은 새 기간의 날짜에 예정으로 넣어요.</p>
+                    {source.recurring!.map((rule) => (
+                      <Field key={rule.id}>
+                        <Checkbox
+                          checked={!skipped.includes(rule.id)}
+                          onChange={(event) =>
+                            setSkipped(
+                              event.target.checked
+                                ? skipped.filter((ruleId) => ruleId !== rule.id)
+                                : [...skipped, rule.id],
+                            )
+                          }
+                        />
+                        {rule.title} · {dayName(rule.day)} · {won(rule.amount)}원
+                      </Field>
+                    ))}
+                  </Stack>
+                )}
               </>
             )}
           </Stack>
@@ -342,9 +387,42 @@ export function CreateLedgerView({
  * stays above the tab bar and turns on once something changed; leaving with changes asks first.
  * 보관 takes a second tap, and an archived ledger offers 보관 해제.
  */
+/** One 반복 내역 to change; 적용 puts it in the settings draft that 저장 keeps. */
+function RuleSheet({
+  initial,
+  onApply,
+  onClose,
+}: {
+  initial: RecurringRule;
+  onApply(rule: RecurringRule): void;
+  onClose(): void;
+}) {
+  const [rule, setRule] = useState(initial);
+  return (
+    <FullScreenSheet
+      title="반복 내역"
+      subtitle={dayName(rule.day)}
+      dirty={JSON.stringify(rule) !== JSON.stringify(initial)}
+      onClose={onClose}
+      footer={
+        <Button
+          variant="primary"
+          disabled={!rule.title.trim() || rule.amount <= 0}
+          onClick={() => onApply({ ...rule, title: rule.title.trim() })}
+        >
+          적용
+        </Button>
+      }
+    >
+      <RecurringRuleForm rule={rule} onChange={setRule} />
+    </FullScreenSheet>
+  );
+}
+
 export function LedgerSettingsView({
   ledger,
   ledgers,
+  today = new Date().toISOString().slice(0, 10),
   onSave,
   onArchive,
   onRestore,
@@ -352,6 +430,8 @@ export function LedgerSettingsView({
   ledger: Ledger;
   /** All ledgers, to place this one among parents and children. */
   ledgers: Ledger[];
+  /** For each 반복 내역's next day. */
+  today?: IsoDate;
   onSave(result: { ledger: Ledger; parentIds: Id[] }): void;
   onArchive(ledger: Ledger): void;
   onRestore?(ledger: Ledger): void;
@@ -369,12 +449,14 @@ export function LedgerSettingsView({
   // 유형 comes first among the tags: every ledger that holds records has it.
   const [tagFieldId, setTagFieldId] = useState(KINDS);
   const tagField = selectFields.find((field) => field.id === tagFieldId);
-  // 보관 and 보관 해제 save at once, so the archive flag is never an unsaved change here.
-  const withoutArchive = ({ archived: _, ...rest }: Ledger) => JSON.stringify(rest);
+  // 보관 and 보관 해제 save at once and 통계 arranges its own charts, so neither is an unsaved
+  // change here.
+  const withoutArchive = ({ archived: _, statCards: __, ...rest }: Ledger) => JSON.stringify(rest);
   const dirty =
     withoutArchive(draft) !== withoutArchive(ledger) || parentIds.join() !== initialParents.join();
   useUnsavedGuard(dirty);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [rule, setRule] = useState<RecurringRule>();
   return (
     <Stack gap={6} className="view-settings">
       <LedgerBasics
@@ -434,6 +516,39 @@ export function LedgerSettingsView({
               />
             )}
           </Stack>
+          <Stack gap={3}>
+            <h2 className="view-section-title">반복 내역</h2>
+            <p className="view-meta">
+              바꾸거나 그만두면 아직 오지 않은 예정 내역에도 저장할 때 함께 적용돼요.
+            </p>
+            <RecurringList
+              ledger={draft}
+              rules={draft.recurring ?? []}
+              today={today}
+              onOpen={setRule}
+              onRemove={(removed) =>
+                setDraft({
+                  ...draft,
+                  recurring: (draft.recurring ?? []).filter((item) => item.id !== removed.id),
+                })
+              }
+            />
+          </Stack>
+          {rule && (
+            <RuleSheet
+              initial={rule}
+              onApply={(changed) => {
+                setDraft({
+                  ...draft,
+                  recurring: (draft.recurring ?? []).map((item) =>
+                    item.id === changed.id ? changed : item,
+                  ),
+                });
+                setRule(undefined);
+              }}
+              onClose={() => setRule(undefined)}
+            />
+          )}
         </>
       )}
       <ParentPicker
@@ -469,6 +584,7 @@ export function LedgerSettingsView({
             ledger: {
               ...draft,
               archived: ledger.archived,
+              statCards: ledger.statCards,
               name: draft.name.trim(),
               period: parent ? spanOf(ledgers, draft.childIds, draft.period) : draft.period,
             },

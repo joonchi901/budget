@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { RecordEntryView } from '../../client/views';
 import type { LedgerRecord } from '../../shared/ledger';
-import { FIXTURE_TODAY, japanTrip, november, records } from '../fixtures';
+import { FIXTURE_TODAY, japanTrip, november, records, upcoming } from '../fixtures';
 
 const meta = {
   title: '06 Views · 화면/내역 입력',
@@ -34,9 +34,9 @@ const meta = {
         {open && (
           <RecordEntryView
             {...args}
-            onSave={(record: LedgerRecord, keepOpen) => {
+            onSave={(record: LedgerRecord, keepOpen, rule) => {
               setLog(
-                `저장: ${record.title} ${record.amount} ${keepOpen ? '계속' : '닫기'}${record.notInAsset ? ' 자산 제외' : ''}`,
+                `저장: ${record.title} ${record.amount} ${keepOpen ? '계속' : '닫기'}${record.notInAsset ? ' 자산 제외' : ''}${rule ? ` 반복 ${rule.day}일${rule.variable ? ' 변동' : ''}` : ''}${record.unconfirmed ? ' 확인 전' : ''}`,
               );
               if (!keepOpen) setOpen(false);
             }}
@@ -110,5 +110,44 @@ export const InAsset: Story = {
     await expect(page.getByRole('status')).toHaveTextContent(
       '저장: 현금 인출 50000 닫기 자산 제외',
     );
+  },
+};
+export const Repeat: Story = {
+  args: { repeatable: () => true, date: '2026-11-15' },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.type(page.getByRole('textbox', { name: '금액' }), '55000');
+    await userEvent.type(page.getByRole('textbox', { name: /내용/ }), '통신비');
+    // A 고정 유형 suggests repeating on this day.
+    await userEvent.click(page.getByRole('button', { name: '고정지출' }));
+    await userEvent.click(page.getByRole('button', { name: '매달 15일에 반복할까요?' }));
+    await expect(page.getByRole('combobox', { name: '반복' })).toHaveTextContent('매달 15일');
+    await userEvent.click(page.getByRole('switch', { name: '금액이 달마다 달라요' }));
+    await userEvent.click(page.getByRole('button', { name: '저장' }));
+    await expect(page.getByRole('status')).toHaveTextContent(
+      '저장: 통신비 55000 닫기 반복 15일 변동',
+    );
+  },
+};
+export const NotOwner: Story = {
+  play: async ({ canvasElement }) => {
+    // Only the owner starts a 반복 내역.
+    await expect(
+      within(canvasElement.ownerDocument.body).queryByRole('combobox', { name: '반복' }),
+    ).toBeNull();
+  },
+};
+export const CheckAmount: Story = {
+  args: { record: upcoming[1] },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(page.getByText(/이번 금액을 확인하고 저장해 주세요/)).toBeVisible();
+    const amount = page.getByRole('textbox', { name: '금액' });
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '41200');
+    await userEvent.click(page.getByRole('button', { name: '저장' }));
+    // Saving checks it: 금액 확인 goes.
+    await expect(page.getByRole('status')).toHaveTextContent('저장: 도시가스 41200 닫기');
+    await expect(page.getByRole('status')).not.toHaveTextContent('확인 전');
   },
 };

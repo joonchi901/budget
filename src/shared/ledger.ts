@@ -50,6 +50,46 @@ export type Ledger = {
   /** Direct children; empty for a ledger that holds records. */
   childIds: Id[];
   archived?: boolean;
+  /** The 통계 tab's charts as the owner arranged them; without them, defaultStatCards(). */
+  statCards?: StatCard[];
+  /** 반복 내역: records written ahead for each month in the period (고정지출, 자동이체). */
+  recurring?: RecurringRule[];
+};
+
+/**
+ * A record a ledger repeats every month. Its records are written ahead on the rule's day of each
+ * month in the period (when the rule is made, and when a copy makes the next ledger) and stay 예정
+ * until that day.
+ */
+export type RecurringRule = {
+  id: Id;
+  title: string;
+  kindId: Id;
+  amount: number;
+  values: { [fieldId: Id]: FieldValue };
+  /** Day of the month, 1–31; past a month's end it falls on the last day (31 = 마지막 날). */
+  day: number;
+  /** The amount differs each month (관리비): each record asks for it once due. */
+  variable?: true;
+};
+
+export const STAT_CHARTS = ['total', 'rank', 'donut', 'trend'] as const;
+export const STAT_BUCKETS = ['day', 'week', 'month'] as const;
+
+/**
+ * One chart on a room's 통계 tab: 요약 (totals), 순위 (bars per tag), 비율 (a donut) or 추이
+ * (columns per day, week or month). It names its axis, so a copied ledger keeps its charts.
+ */
+export type StatCard = {
+  id: Id;
+  chart: (typeof STAT_CHARTS)[number];
+  nature: KindOption['nature'];
+  /** 유형, 가계부 or a field name: 순위 and 비율 group by it, 추이 stacks by it. */
+  axis?: string;
+  /** 추이 only: one column per day, week (from Sunday) or month. */
+  bucket?: (typeof STAT_BUCKETS)[number];
+  /** Takes a whole row where charts sit two to a row. */
+  wide?: boolean;
 };
 
 /** Text fields hold a string; select fields hold option ids (at most one for `select`). */
@@ -73,7 +113,132 @@ export type LedgerRecord = {
   reactions?: Reactions;
   /** Kept out of the linked asset's balance (자산에 반영 off). */
   notInAsset?: true;
+  /** The 반복 내역 rule that wrote it ahead. */
+  recurringId?: Id;
+  /** Written by a rule whose amount varies, and not yet checked (금액 확인). */
+  unconfirmed?: true;
 };
+
+/** A repeating record not yet due: shown as 예정 and kept out of every total. */
+export const isScheduled = (record: LedgerRecord, today: IsoDate) =>
+  Boolean(record.recurringId) && record.date > today;
+
+/** The days a rule falls on within a period: its day each month, or that month's last day. */
+export function recurringDates(day: number, period: { start: IsoDate; end: IsoDate }): IsoDate[] {
+  const dates: IsoDate[] = [];
+  let [year, month] = period.start.split('-').map(Number);
+  for (;;) {
+    const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const date = `${year}-${String(month).padStart(2, '0')}-${String(Math.min(day, last)).padStart(2, '0')}`;
+    if (date > period.end) return dates;
+    if (date >= period.start) dates.push(date);
+    [year, month] = month === 12 ? [year + 1, 1] : [year, month + 1];
+  }
+}
+
+/** The records a rule writes in a ledger's period after `after` (all of them by default). */
+export function writeAhead(
+  ledger: Ledger,
+  rule: RecurringRule,
+  createdBy: Id,
+  after: IsoDate = '',
+): LedgerRecord[] {
+  return recurringDates(rule.day, ledger.period)
+    .filter((date) => date > after)
+    .map((date) => ({
+      id: crypto.randomUUID(),
+      ledgerId: ledger.id,
+      date,
+      kindId: rule.kindId,
+      title: rule.title,
+      amount: rule.amount,
+      values: rule.values,
+      createdBy,
+      createdAt: new Date().toISOString(),
+      recurringId: rule.id,
+      ...(rule.variable ? { unconfirmed: true as const } : {}),
+    }));
+}
+
+/**
+ * What changing a ledger's rules does to its 예정 records: those of a stopped rule go; those of a
+ * changed rule take its title, amount and tags and move, in order, onto its upcoming days in the
+ * period (a month skipped by deleting its record stays skipped). Due records stay as they are.
+ */
+export function rescheduled(
+  before: Ledger,
+  after: Ledger,
+  records: LedgerRecord[],
+  today: IsoDate,
+) {
+  const changed: LedgerRecord[] = [];
+  const removed: Id[] = [];
+  for (const old of before.recurring ?? []) {
+    const rule = after.recurring?.find((item) => item.id === old.id);
+    const ahead = records
+      .filter(
+        (record) =>
+          record.ledgerId === after.id &&
+          record.recurringId === old.id &&
+          isScheduled(record, today),
+      )
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (!rule) {
+      removed.push(...ahead.map((record) => record.id));
+      continue;
+    }
+    if (JSON.stringify(rule) === JSON.stringify(old)) continue;
+    const dates = recurringDates(rule.day, after.period).filter((date) => date > today);
+    ahead.forEach((record, index) => {
+      if (!dates[index]) return removed.push(record.id);
+      const { unconfirmed: _, ...rest } = record;
+      changed.push({
+        ...rest,
+        date: dates[index],
+        kindId: rule.kindId,
+        title: rule.title,
+        amount: rule.amount,
+        values: rule.values,
+        ...(rule.variable ? { unconfirmed: true as const } : {}),
+      });
+    });
+  }
+  return { changed, removed };
+}
+
+/**
+ * A ledger's rules carried into a copy: kinds, fields and options are found by name, since the
+ * copy gives them new ids. A rule whose 유형 is gone is left behind; a missing tag is dropped.
+ */
+export function carriedRules(
+  rules: RecurringRule[],
+  source: Ledger,
+  copy: Ledger,
+): RecurringRule[] {
+  return rules.flatMap((rule) => {
+    const kindName = source.kinds.find((kind) => kind.id === rule.kindId)?.name;
+    const kind = copy.kinds.find((item) => item.name === kindName);
+    if (!kind) return [];
+    const values: RecurringRule['values'] = {};
+    for (const [fieldId, value] of Object.entries(rule.values)) {
+      const from = source.fields.find((field) => field.id === fieldId);
+      const to = copy.fields.find((field) => field.name === from?.name && field.type === from.type);
+      if (!from || !to) continue;
+      if (from.type === 'text' || to.type === 'text') {
+        values[to.id] = value;
+        continue;
+      }
+      const names = from.options
+        .filter((option) => value.includes(option.id))
+        .map((option) => option.name);
+      const ids = to.options
+        .filter((option) => names.includes(option.name))
+        .map((option) => option.id);
+      if (ids.length) values[to.id] = ids;
+    }
+    return [{ ...rule, kindId: kind.id, values }];
+  });
+}
 
 export type Member = { id: Id; name: string };
 
@@ -233,6 +398,49 @@ export function defaultStatAxis(ledgers: Ledger[]): string {
       if (field.type === 'select' && !field.hidden && field.options.length > (best?.options ?? 0))
         best = { name: field.name, options: field.options.length };
   return best?.name ?? KIND_AXIS;
+}
+
+/** Axes whose shares add up to the whole (no multi-select), for a donut or a stacked trend. */
+export function partAxes(ledgers: Ledger[]): string[] {
+  const multiple = new Set(
+    ledgers.flatMap((ledger) =>
+      ledger.fields.filter((field) => field.type === 'multiSelect').map((field) => field.name),
+    ),
+  );
+  return statAxes(ledgers).filter((axis) => !multiple.has(axis));
+}
+
+/**
+ * The charts a room starts with: 요약, 순위 by the most detailed field, 비율 by the field with
+ * the fewest options (such as 결제방식), and 추이 sized to the period. A parent's 추이 stacks by
+ * 가계부.
+ */
+export function defaultStatCards(
+  ledgers: Ledger[],
+  period: { start: IsoDate; end: IsoDate },
+): StatCard[] {
+  const rank = defaultStatAxis(ledgers);
+  const fewest = ledgers
+    .flatMap((ledger) => ledger.fields)
+    .filter(
+      (field): field is Extract<FieldDef, { options: TagOption[] }> =>
+        field.type === 'select' && !field.hidden && field.name !== rank && field.options.length > 1,
+    )
+    .sort((a, b) => a.options.length - b.options.length)[0];
+  const days = (Date.parse(period.end) - Date.parse(period.start)) / 86400000 + 1;
+  return [
+    { id: 'total', chart: 'total', nature: 'expense', wide: true },
+    { id: 'rank', chart: 'rank', nature: 'expense', axis: rank },
+    { id: 'donut', chart: 'donut', nature: 'expense', axis: fewest?.name ?? KIND_AXIS },
+    {
+      id: 'trend',
+      chart: 'trend',
+      nature: 'expense',
+      bucket: days > 92 ? 'month' : days > 35 ? 'week' : 'day',
+      ...(ledgers.length > 1 ? { axis: LEDGER_AXIS } : {}),
+      wide: true,
+    },
+  ];
 }
 
 export type Share = { name: string; color: string; value: number };

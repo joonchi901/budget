@@ -559,6 +559,8 @@ const tall = {
   RecordTable: 420,
   PeriodCalendar: 520,
   StatsBreakdown: 620,
+  StatCardView: 1400,
+  RecurringList: 520,
   RecordForm: 860,
   TagOptionEditor: 420,
   ParentPicker: 160,

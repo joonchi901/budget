@@ -74,25 +74,28 @@
   position: static;
   margin-left: auto;
 }
-@media (max-width: 1439px) {
-  .ui-shell-nav .ledger-tab-bar .ui-choice-group > .ui-button {
-    justify-content: center;
-    width: 52px;
-    padding: 0;
-  }
-  .ui-shell-nav .ledger-tab-bar .ui-choice-group > .ui-button > span:not(.ui-count-badge) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-  .ui-shell-nav .ledger-tab-bar .ui-count-badge {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-  }
+.ui-shell[data-rail='folded'] .ui-shell-nav .ledger-tab-bar .ui-choice-group > .ui-button {
+  justify-content: center;
+  width: 52px;
+  padding: 0;
+}
+.ui-shell[data-rail='folded']
+  .ui-shell-nav
+  .ledger-tab-bar
+  .ui-choice-group
+  > .ui-button
+  > span:not(.ui-count-badge) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.ui-shell[data-rail='folded'] .ui-shell-nav .ledger-tab-bar .ui-count-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
 }
 .ledger-room-header-action {
   display: none;
@@ -141,6 +144,12 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+/* 예정 지출: the 반복 내역 still to come, under 지출 and outside it. */
+.ledger-summary-scheduled {
+  display: block;
+  color: var(--brand-muted);
+  font-size: var(--brand-font-size-xs);
+}
 /* Three amounts share a phone's width: shrink with the viewport instead of wrapping the unit. */
 .ledger-summary .ui-amount {
   font-size: clamp(0.75rem, 3.6vw, 0.875rem);
@@ -166,39 +175,58 @@
 }
 
 /* The 유형 tag beside 내용 stays a little shorter than the title line (about 19px against 24px). */
-.ledger-record-title .tag-badge.custom-tag {
+/* One record keeps a 6px rhythm: 내용 over its tags, the 유형 tag over the amount, reactions and
+   the source link in a footer of 30px controls just under them. */
+.ledger-record .ui-list-row-main,
+.ledger-record .ui-list-row-trailing {
+  gap: 6px;
+}
+.ledger-record .ui-list-row-trailing > .tag-badge.custom-tag {
   min-height: 0;
-  margin-inline-start: var(--brand-space-2);
   padding: 1px 7px;
   font-size: var(--brand-font-size-xs);
   line-height: 1.45;
-  vertical-align: 0.1em;
 }
 .ledger-record-meta {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 6px;
+  gap: 6px;
 }
 .ledger-record-source {
   font-weight: var(--brand-font-weight-semibold);
   color: var(--brand-text);
 }
-/* Under a record: reactions on the left, the source ledger link under the amount on the right. */
+/* Under a record: reactions wrap on the left as they grow, like Slack's; the source ledger link
+   stays on the first line under the amount. */
+.ledger-record > .ui-list-row-footer {
+  padding-bottom: var(--brand-space-2);
+}
 .ledger-record-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--brand-space-2);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 6px var(--brand-space-2);
 }
 .ledger-record-source-link.ui-button {
+  grid-column: 2;
   gap: 2px;
   min-height: 30px;
-  margin-inline-start: auto;
+  height: 30px;
   padding: 0 var(--brand-space-1) 0 var(--brand-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-pill);
   color: var(--brand-text-secondary);
   font-size: var(--brand-font-size-sm);
   font-weight: var(--brand-font-weight-semibold);
+}
+/* The footer's buttons lift off the lit row under the pointer, so they read as their own. */
+.ledger-record-source-link.ui-button:hover:not(:disabled),
+.ledger-reaction-add.ui-icon-button:hover:not(:disabled) {
+  border-color: var(--brand-line);
+  background: var(--brand-surface);
+  color: var(--brand-text);
+  box-shadow: var(--brand-shadow-card);
 }
 .ledger-record-note {
   color: var(--brand-muted);
@@ -245,18 +273,33 @@
   border-radius: var(--brand-radius-control);
   background: var(--brand-surface);
 }
-.ledger-filter-row > .ledger-display-toggle {
+.ledger-filter-row > .ledger-display-toggle,
+.ledger-filter-row > .ledger-layout-toggle {
   flex: none;
 }
 /* As tall as the 조회 조건 button beside it: 4 + 36 + 4. */
-.ledger-display-toggle > button {
+.ledger-display-toggle > button,
+.ledger-layout-toggle > button {
   width: 36px;
   min-height: 0;
   height: 36px;
   padding: 0;
   border-radius: 10px;
 }
-.ledger-filter-row > .ui-icon-button[data-active] {
+/* 캘린더/테이블 for a wide room body (views.css shows it there). */
+.ledger-filter-row > .ledger-layout-toggle {
+  display: none;
+}
+.ledger-layout-toggle > button {
+  width: auto;
+  gap: 6px;
+  padding: 0 var(--brand-space-3);
+  font-size: var(--brand-font-size-sm);
+  font-weight: var(--brand-font-weight-semibold);
+  white-space: nowrap;
+}
+.ledger-filter-row > .ui-icon-button[data-active],
+.ledger-filter-row > .ui-icon-button[data-wide] {
   border-color: var(--brand-primary);
   color: var(--brand-primary);
 }
@@ -269,15 +312,17 @@
   border-radius: var(--brand-radius-card);
   background: var(--brand-surface);
 }
+/* The table fits its width: 내용 and 비고 wrap and tag cells wrap their chips, so it scrolls
+   sideways only where even that cannot fit (a phone). */
 .ledger-table {
-  min-width: 100%;
+  width: 100%;
   border-collapse: collapse;
   font-size: var(--brand-font-size-sm);
   background: var(--brand-surface);
 }
 .ledger-table th,
 .ledger-table td {
-  padding: var(--brand-space-2) var(--brand-space-3);
+  padding: var(--brand-space-2);
   border-bottom: 1px solid var(--brand-line);
   text-align: left;
   vertical-align: top;
@@ -292,6 +337,30 @@
 }
 .ledger-table tbody th {
   font-weight: var(--brand-font-weight-medium);
+}
+.ledger-table :is(th, td):first-child {
+  padding-inline-start: var(--brand-space-3);
+}
+.ledger-table :is(th, td):last-child {
+  padding-inline-end: var(--brand-space-3);
+}
+/* Chips keep their words whole and wrap as a set; only 내용 and 비고 break their text. */
+.ledger-table .tag-badge {
+  min-height: 22px;
+  padding: 0 6px;
+  font-size: var(--brand-font-size-xs);
+  white-space: nowrap;
+}
+.ledger-table td:has(> .ui-inline),
+.ledger-table .ledger-table-text {
+  white-space: normal;
+}
+.ledger-table .ledger-table-text {
+  min-width: 6em;
+  overflow-wrap: anywhere;
+}
+.ledger-table .ledger-table-text > .ui-button {
+  text-align: left;
 }
 .ledger-table tbody tr:last-child > * {
   border-bottom: 0;
@@ -364,6 +433,11 @@
 .ledger-calendar-expense {
   color: var(--brand-danger);
   font-variant-numeric: tabular-nums;
+}
+/* Signed short amounts ("−2.1만") still fit a 320px phone's day. */
+.ledger-calendar-expense,
+.ledger-calendar-income-amount {
+  letter-spacing: -0.03em;
 }
 .ledger-calendar-income {
   position: absolute;
@@ -442,6 +516,260 @@
   outline-offset: calc(var(--brand-focus-width) * -1);
 }
 
+/* 통계: each chart is a card; views.css sets two to a row on a wide body. */
+.ledger-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+  min-width: 0;
+  padding: var(--brand-space-4);
+  border-radius: var(--brand-radius-card);
+  background: var(--brand-surface);
+  box-shadow: var(--brand-shadow-card);
+}
+.ledger-stat-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  min-height: 36px;
+}
+.ledger-stat-card-head > h2 {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--brand-font-size-body);
+  font-weight: var(--brand-font-weight-bold);
+}
+.ledger-stat-axis.ui-field {
+  flex: none;
+  width: auto;
+}
+.ledger-stat-axis button.ui-control-trigger {
+  min-height: 36px;
+  gap: 4px;
+  padding: 0 10px 0 12px;
+  border-radius: var(--brand-radius-pill);
+  font-size: var(--brand-font-size-sm);
+  font-weight: var(--brand-font-weight-semibold);
+}
+.ledger-stat-save-axis.ui-button {
+  align-self: flex-start;
+  min-height: 32px;
+  margin-top: calc(-1 * var(--brand-space-2));
+  padding: 0;
+  font-size: var(--brand-font-size-sm);
+}
+/* Rows run to the card's edges, as in a list of their own. */
+.ledger-stat-card .ui-list {
+  margin-inline: calc(-1 * var(--brand-space-4));
+  border-radius: 0;
+}
+
+/* 요약: the total leads; average, count and the largest record follow in a row. */
+.ledger-stat-total {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: var(--brand-space-3) var(--brand-space-4);
+  margin: 0;
+}
+/* The total is the card's one large figure, on a row of its own. */
+.ledger-stat-total > div:first-child {
+  grid-column: 1 / -1;
+}
+.ledger-stat-total > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ledger-stat-total dt {
+  color: var(--brand-muted);
+  font-size: var(--brand-font-size-sm);
+}
+.ledger-stat-total dd {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font-weight: var(--brand-font-weight-semibold);
+}
+.ledger-stat-total-title {
+  overflow: hidden;
+  font-size: var(--brand-font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 비율: a thin ring with a 2px gap between parts, the legend listing every value. */
+.ledger-donut {
+  display: grid;
+  gap: var(--brand-space-3);
+}
+.ledger-donut-figure {
+  position: relative;
+  justify-self: center;
+  width: 168px;
+  aspect-ratio: 1;
+}
+.ledger-donut-figure svg {
+  display: block;
+  width: 100%;
+  transform: rotate(-90deg);
+}
+.ledger-donut-figure circle {
+  fill: none;
+  stroke-width: 18;
+  cursor: pointer;
+  transition: stroke-width 0.15s;
+}
+.ledger-donut-figure circle[data-active] {
+  stroke-width: 22;
+}
+.ledger-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 36px;
+  text-align: center;
+}
+.ledger-donut-center > span {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--brand-muted);
+  font-size: var(--brand-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ledger-donut-center > strong {
+  font-size: var(--brand-font-size-sm);
+}
+.ledger-donut-row,
+.ledger-donut-row.ui-button {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--brand-space-2);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--brand-space-2) var(--brand-space-4);
+  border-radius: 0;
+  text-align: left;
+}
+.ledger-donut-row.ui-button:hover,
+.ui-list-item:hover > .ledger-donut-row {
+  background: var(--brand-surface-hover);
+}
+.ledger-donut-row.ui-button:focus-visible {
+  outline-offset: calc(var(--brand-focus-width) * -1);
+}
+.ledger-donut-name {
+  overflow: hidden;
+  font-weight: var(--brand-font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ledger-donut-percent {
+  color: var(--brand-muted);
+  font-size: var(--brand-font-size-sm);
+}
+.ledger-legend-key {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 3px;
+}
+
+/* 추이: thin columns from one baseline; the readout above names the column under the pointer
+   or key (the largest by default). */
+.ledger-trend-readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--brand-space-2);
+  min-height: 1.5em;
+  font-size: var(--brand-font-size-sm);
+}
+.ledger-trend-readout > span:first-child {
+  color: var(--brand-muted);
+}
+.ledger-trend-parts {
+  flex-basis: 100%;
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-xs);
+}
+.ledger-trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 140px;
+  border-bottom: 1px solid var(--brand-line);
+  border-radius: 4px;
+}
+.ledger-trend:focus-visible {
+  outline: var(--brand-focus-width) solid var(--focus-ring);
+  outline-offset: 4px;
+}
+.ledger-trend-column {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 0;
+  height: 100%;
+}
+.ledger-trend-bar {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  width: 100%;
+  max-width: 24px;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 4px 4px 0 0;
+}
+.ledger-trend-bar > span {
+  flex-basis: 0;
+  min-height: 1px;
+}
+.ledger-trend-column[data-active] .ledger-trend-bar {
+  filter: brightness(1.12);
+}
+.ledger-trend-column[data-active] {
+  background: var(--brand-surface-hover);
+  border-radius: 4px 4px 0 0;
+}
+.ledger-trend-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--brand-space-2);
+  margin-top: calc(-1 * var(--brand-space-2));
+  color: var(--brand-muted);
+  font-size: var(--brand-font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+.ledger-stat-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-1) var(--brand-space-3);
+  margin: 0;
+  padding: 0;
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-xs);
+  list-style: none;
+}
+.ledger-stat-legend > li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ledger-donut-figure circle {
+    transition: none;
+  }
+}
+
 .ledger-add-box {
   padding: var(--brand-space-4);
   border: 1px dashed var(--brand-line-strong);
@@ -454,6 +782,13 @@
 .ledger-option-row > .ui-input,
 .ledger-option-new > .ui-input {
   flex: 1;
+}
+/* 수입 and 지출 keep their names, so they read as text where other 유형 have a name field. */
+.ledger-kind-fixed-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0 15px;
+  font-weight: var(--brand-font-weight-semibold);
 }
 .ledger-option-archive.ui-button {
   min-width: 64px;
@@ -587,6 +922,8 @@
   height: 30px;
   min-width: 30px;
   min-height: 30px;
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-pill);
   color: var(--brand-text-secondary);
 }
 .ledger-reaction-picker {
@@ -711,4 +1048,38 @@
 .ledger-chat-composer > .ui-input {
   flex: 1;
   min-width: 0;
+}
+
+/* 반복 내역: a 예정 record (not yet due) reads quieter with a dashed mark; one whose varying amount
+   is due but unchecked asks for it (금액 확인). Muted ink, not opacity, keeps the text readable. */
+.ledger-record-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px dashed var(--brand-line-strong);
+  border-radius: var(--brand-radius-pill);
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-xs);
+  font-weight: var(--brand-font-weight-semibold);
+  white-space: nowrap;
+}
+.ledger-record-state[data-state='check'] {
+  border-style: solid;
+  border-color: var(--brand-warning);
+  background: var(--brand-warning-soft);
+  color: var(--brand-warning);
+}
+.ledger-table td > .ledger-record-state {
+  margin-left: var(--brand-space-1);
+}
+.ledger-day[data-planned] .ledger-day-totals .ui-amount[data-tone],
+.ledger-record-scheduled .ui-list-row-title,
+.ledger-record-scheduled .ui-amount[data-tone],
+.ledger-table tr[data-state='scheduled'] .ui-amount[data-tone],
+.ledger-calendar-day[data-planned] .ledger-calendar-expense,
+.ledger-calendar-day[data-planned] .ledger-calendar-titles {
+  color: var(--brand-muted);
 }

@@ -86,7 +86,46 @@ const monthLedger = (id: string, name: string, start: string, end: string): Ledg
   childIds: [],
 });
 
-export const november = monthLedger('nov', '11월', '2026-10-23', '2026-11-22');
+/** 11월 repeats its 고정지출: 관리비 and 도시가스 vary, 청약저축 and 통신비 do not. */
+export const november: Ledger = {
+  ...monthLedger('nov', '11월', '2026-10-23', '2026-11-22'),
+  recurring: [
+    {
+      id: 'rule-house',
+      title: '아파트 관리비',
+      kindId: 'nov-k-fixed',
+      amount: 263820,
+      values: { 'nov-f-pay': ['nov-pay-kb'], 'nov-f-cat': ['nov-cat-house'] },
+      day: 27,
+      variable: true,
+    },
+    {
+      id: 'rule-saving',
+      title: '청약저축',
+      kindId: 'nov-k-fixed',
+      amount: 20000,
+      values: { 'nov-f-pay': ['nov-pay-auto'], 'nov-f-cat': ['nov-cat-saving'] },
+      day: 1,
+    },
+    {
+      id: 'rule-phone',
+      title: '통신비',
+      kindId: 'nov-k-fixed',
+      amount: 55000,
+      values: { 'nov-f-pay': ['nov-pay-auto'], 'nov-f-cat': ['nov-cat-phone'] },
+      day: 15,
+    },
+    {
+      id: 'rule-gas',
+      title: '도시가스',
+      kindId: 'nov-k-fixed',
+      amount: 38000,
+      values: { 'nov-f-pay': ['nov-pay-auto'], 'nov-f-cat': ['nov-cat-house'] },
+      day: 1,
+      variable: true,
+    },
+  ],
+};
 export const december = monthLedger('dec', '12월', '2026-11-23', '2026-12-22');
 export const japanTrip: Ledger = {
   id: 'trip',
@@ -434,3 +473,21 @@ export const signupLink: SignupLink = {
   joined: 1,
   limit: 20,
 };
+
+/**
+ * Records 11월's 반복 내역 wrote ahead, kept out of `records` so other stories keep their numbers:
+ * 통신비 not yet due (예정) and 도시가스 due with its amount unchecked (금액 확인).
+ */
+export const upcoming: LedgerRecord[] = [
+  {
+    ...record(n, '2026-11-15', 'fixed', '통신비', 55000, { pay: 'auto', cat: 'phone' }),
+    id: 'up-phone',
+    recurringId: 'rule-phone',
+  },
+  {
+    ...record(n, '2026-11-01', 'fixed', '도시가스', 38000, { pay: 'auto', cat: 'house' }),
+    id: 'up-gas',
+    recurringId: 'rule-gas',
+    unconfirmed: true,
+  },
+];

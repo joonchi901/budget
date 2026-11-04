@@ -178,6 +178,9 @@
   background: var(--brand-surface);
   overflow: hidden;
 }
+.ui-list-item {
+  position: relative;
+}
 .ui-list-item + .ui-list-item {
   border-top: 1px solid var(--brand-line);
 }
@@ -200,10 +203,16 @@
 .ui-list-item:has(> .ui-list-row.ui-button):hover {
   background: var(--brand-surface-hover);
 }
+/* The whole item is the row: its focus ring and selection cover the footer too. */
 .ui-list-row.ui-button:focus-visible {
+  outline: none;
+}
+.ui-list-item:has(> .ui-list-row.ui-button:focus-visible) {
+  outline: var(--brand-focus-width) solid var(--focus-ring);
   outline-offset: calc(var(--brand-focus-width) * -1);
 }
-.ui-list-row[aria-current] {
+.ui-list-row[aria-current],
+.ui-list-item:has(> .ui-list-row[aria-current]) {
   background: var(--brand-surface-subtle);
 }
 .ui-list-row-leading {
@@ -217,9 +226,28 @@
   gap: 2px;
   min-width: 0;
 }
+/* A footer (reactions, a ledger link) belongs to the row: the row's button stretches over the
+   whole item, so a tap anywhere opens it, and the footer's own buttons sit on top. */
 .ui-list-row-footer {
   margin-top: calc(-1 * var(--brand-space-2));
   padding: 0 var(--brand-space-4) var(--brand-space-3);
+}
+.ui-list-item:has(> .ui-list-row-footer) > .ui-list-row.ui-button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+/* A pressed button dims with a filter, which would anchor the stretched area to the button
+   mid-click; the item dims instead. */
+.ui-list-item:has(> .ui-list-row-footer) > .ui-list-row.ui-button:active {
+  filter: none;
+}
+.ui-list-item:has(> .ui-list-row-footer):has(> .ui-list-row.ui-button:active) {
+  filter: brightness(0.97);
+}
+.ui-list-row-footer .ui-button {
+  position: relative;
+  z-index: 1;
 }
 .ui-list-row-title {
   font-weight: var(--brand-font-weight-semibold);

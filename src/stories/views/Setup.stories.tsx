@@ -32,7 +32,7 @@ export const CopyNextMonth: Story = {
           initialSourceId="nov"
           onCreate={({ ledger, parentIds }) =>
             setLog(
-              `${ledger.name} ${ledger.period.start}~${ledger.period.end} 필드 ${ledger.fields.map((field) => field.name).join('·')} 상위 ${parentIds.join('·')}`,
+              `${ledger.name} ${ledger.period.start}~${ledger.period.end} 필드 ${ledger.fields.map((field) => field.name).join('·')} 상위 ${parentIds.join('·')} 반복 ${(ledger.recurring ?? []).map((rule) => rule.title).join('·')}`,
             )
           }
         />
@@ -53,9 +53,11 @@ export const CopyNextMonth: Story = {
     await userEvent.click(page.getByRole('button', { name: '만들기' }));
     await expect(page.getByText('이름을 입력해 주세요.')).toBeVisible();
     await userEvent.type(name, '12월');
+    // 반복 내역 carry over unless unticked.
+    await userEvent.click(page.getByRole('checkbox', { name: /^도시가스/ }));
     await userEvent.click(page.getByRole('button', { name: '만들기' }));
     await expect(page.getByRole('status')).toHaveTextContent(
-      '12월 2026-11-23~2026-12-22 필드 결제방식·카테고리·누가·비고 상위 h2',
+      '12월 2026-11-23~2026-12-22 필드 결제방식·카테고리·누가·비고 상위 h2 반복 아파트 관리비·청약저축·통신비',
     );
   },
 };
@@ -170,5 +172,47 @@ export const ParentSettings: Story = {
     await userEvent.click(page.getByRole('button', { name: /^일본여행/ }));
     await userEvent.click(page.getByRole('button', { name: '저장' }));
     await expect(page.getByRole('status')).toHaveTextContent('2026 하위 h2');
+  },
+};
+export const RecurringSettings: Story = {
+  render: function Logged() {
+    const [log, setLog] = useState('');
+    return (
+      <>
+        <LedgerSettingsView
+          ledger={november}
+          ledgers={ledgers}
+          today={FIXTURE_TODAY}
+          onSave={({ ledger }) =>
+            setLog(
+              (ledger.recurring ?? [])
+                .map((rule) => `${rule.title} ${rule.day}일 ${rule.amount}`)
+                .join(', '),
+            )
+          }
+          onArchive={() => {}}
+        />
+        <p role="status">{log}</p>
+      </>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const list = within(page.getByRole('list', { name: '반복 내역' }));
+    await expect(
+      list.getByRole('button', { name: /^통신비 매달 15일 · 다음 11\/15/ }),
+    ).toBeVisible();
+    // Change 통신비, stop 도시가스, then 저장 keeps both.
+    await userEvent.click(list.getByRole('button', { name: /^통신비 매달/ }));
+    const sheet = within(page.getByRole('dialog', { name: '반복 내역' }));
+    const amount = sheet.getByRole('textbox', { name: '금액' });
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '60000');
+    await userEvent.click(sheet.getByRole('button', { name: '적용' }));
+    await userEvent.click(list.getByRole('button', { name: '도시가스 반복 그만하기' }));
+    await userEvent.click(page.getByRole('button', { name: '저장' }));
+    await expect(page.getByRole('status')).toHaveTextContent(
+      '아파트 관리비 27일 263820, 청약저축 1일 20000, 통신비 15일 60000',
+    );
   },
 };

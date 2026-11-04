@@ -65,3 +65,11 @@ export const Conversation: Story = {
   },
 };
 export const FirstMessage: Story = { args: { messages: [] } };
+export const Memo: Story = {
+  args: { messages: [], memo: true },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await expect(c.getByText(/아직 메모가 없어요/)).toBeVisible();
+    await expect(c.getByRole('textbox', { name: '메모' })).toBeVisible();
+  },
+};

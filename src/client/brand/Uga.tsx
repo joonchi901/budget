@@ -115,13 +115,16 @@ export function UgaLogo({
   size = 170,
   className = '',
   alt = '',
-}: AssetProps & { variant?: 'primary' | 'horizontal' }) {
+}: AssetProps & { variant?: 'primary' | 'horizontal' | 'mark' }) {
+  // The mark is the square app icon, for tight spots such as the folded desktop rail.
   return (
     <img
       className={`uga-logo uga-logo-${variant} ${className}`.trim()}
-      src={`/brand/uga-logo-${variant}.svg`}
+      src={variant === 'mark' ? `/brand/uga-app-icon.svg` : `/brand/uga-logo-${variant}.svg`}
       width={size}
-      height={Math.round(size * (variant === 'primary' ? 667 / 480 : 240 / 520))}
+      height={Math.round(
+        size * (variant === 'mark' ? 1 : variant === 'primary' ? 667 / 480 : 240 / 520),
+      )}
       alt={alt}
       loading="eager"
       decoding="async"

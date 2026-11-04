@@ -5,6 +5,7 @@ import { RoomListItem } from '../ledger';
 import { Screen } from '../templates';
 import { Button, Empty, Inline, List, SearchField, Stack } from '../ui';
 import {
+  isScheduled,
   roomRecords,
   type Id,
   type IsoDate,
@@ -66,10 +67,13 @@ export function RoomListView({
   const latest = new Map(
     ledgers.map((room) => [
       room.id,
-      roomRecords(ledgers, room, records).reduce<LedgerRecord | undefined>(
-        (last, record) => (!last || record.createdAt > last.createdAt ? record : last),
-        undefined,
-      ),
+      // The latest record that has happened; 예정 ones written ahead wait for their day.
+      roomRecords(ledgers, room, records)
+        .filter((record) => !isScheduled(record, today))
+        .reduce<LedgerRecord | undefined>(
+          (last, record) => (!last || record.createdAt > last.createdAt ? record : last),
+          undefined,
+        ),
     ]),
   );
   const byActivity = (a: Ledger, b: Ledger) =>

@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { LedgerPicker, RecordForm, type RecordDraft } from '../ledger';
 import { FullScreenSheet } from '../templates';
-import { Button, Field, Stack, Switch, won } from '../ui';
+import { Button, Field, SelectField, SelectOption, Stack, Switch, won } from '../ui';
 import {
   ledgerForDate,
   recordProblems,
@@ -10,6 +10,7 @@ import {
   type IsoDate,
   type Ledger,
   type LedgerRecord,
+  type RecurringRule,
 } from '../../shared/ledger';
 
 const withinPeriod = (ledger: Ledger, date: IsoDate) =>
@@ -27,10 +28,25 @@ const draftFor = (ledger: Ledger, date: IsoDate): RecordDraft => ({
   values: {},
 });
 
+/** 반복 이 suggests itself for what is usually monthly: a 고정 유형 or a 자동이체 tag. */
+function looksMonthly(ledger: Ledger, draft: RecordDraft) {
+  const kind = ledger.kinds.find((item) => item.id === draft.kindId);
+  const chosen = ledger.fields.flatMap((field) => {
+    const value = draft.values[field.id];
+    return field.type === 'text' || !Array.isArray(value)
+      ? []
+      : field.options.filter((option) => value.includes(option.id));
+  });
+  return Boolean(
+    kind?.name.includes('고정') || chosen.some((option) => option.name.includes('자동이체')),
+  );
+}
+
 /**
  * Adding or editing a record. From a group room it first asks which ledger the record belongs
  * to, suggesting the one whose period has the date. New tag options are added to the ledger
- * on the spot and reported with onLedgerChange.
+ * on the spot and reported with onLedgerChange. A new record may repeat every month (반복); one
+ * a 반복 내역 wrote says so, and asks for its amount when that varies.
  */
 export function RecordEntryView({
   ledgers,
@@ -43,6 +59,7 @@ export function RecordEntryView({
   onDelete,
   onLedgerChange,
   assetNameFor,
+  repeatable,
   onClose,
 }: {
   /** Ledgers the record may go to: one in a ledger room, the group's in a group room. */
@@ -53,8 +70,13 @@ export function RecordEntryView({
   today: IsoDate;
   memberId: Id;
   suggestions?: string[];
-  /** keepOpen: 저장하고 계속, which keeps 유형·날짜·태그 for the next record and says it saved. */
-  onSave(record: LedgerRecord, keepOpen: boolean): void;
+  /**
+   * keepOpen: 저장하고 계속, which keeps 유형·날짜·태그 for the next record and says it saved. With
+   * 반복, the rule the record starts; the app writes its next records ahead.
+   */
+  onSave(record: LedgerRecord, keepOpen: boolean, rule?: RecurringRule): void;
+  /** Whether a new record in this ledger may start a 반복 내역 (the owner's ledgers). */
+  repeatable?(ledgerId: Id): boolean;
   onDelete?(record: LedgerRecord): void;
   onLedgerChange?(ledger: Ledger): void;
   /** The asset a ledger's records go to, if one follows it; shows 자산에 반영. */
@@ -91,10 +113,28 @@ export function RecordEntryView({
   /** The record 저장하고 계속 just sent, so the person sees it went. */
   const [sent, setSent] = useState<LedgerRecord>();
   const form = useRef<HTMLDivElement>(null);
+  const repeatId = useId();
+  /** 반복: 매달 this date's day, or the month's last day. */
+  const [repeat, setRepeat] = useState<'' | 'date' | 'last'>('');
+  const [variable, setVariable] = useState(false);
+  const day = Number(draft.date.slice(8));
   const dirty =
-    JSON.stringify(draft) !== JSON.stringify(initial) || inAsset === Boolean(record?.notInAsset);
+    JSON.stringify(draft) !== JSON.stringify(initial) ||
+    inAsset === Boolean(record?.notInAsset) ||
+    repeat !== '';
 
   const save = (keepOpen: boolean) => {
+    const rule: RecurringRule | undefined = repeat
+      ? {
+          id: crypto.randomUUID(),
+          title: draft.title.trim(),
+          kindId: draft.kindId,
+          amount: draft.amount ?? 0,
+          values: draft.values,
+          day: repeat === 'last' ? 31 : day,
+          ...(variable ? { variable: true as const } : {}),
+        }
+      : undefined;
     const candidate: LedgerRecord = {
       id: record?.id ?? crypto.randomUUID(),
       ledgerId,
@@ -107,13 +147,19 @@ export function RecordEntryView({
       createdAt: record?.createdAt ?? new Date().toISOString(),
       ...(record?.reactions ? { reactions: record.reactions } : {}),
       ...(assetName && !inAsset ? { notInAsset: true as const } : {}),
+      // Saving checks a varying amount, so 금액 확인 goes.
+      ...((record?.recurringId ?? rule?.id)
+        ? { recurringId: record?.recurringId ?? rule!.id }
+        : {}),
     };
     const found = recordProblems(ledger, candidate);
     setProblems(found);
     if (found.length) return;
-    onSave(candidate, keepOpen);
+    onSave(candidate, keepOpen, rule);
     if (!keepOpen) return;
     setDraft({ ...draft, title: '', amount: null });
+    setRepeat('');
+    setVariable(false);
     setSent(candidate);
     // Ready for the next one: back on 금액, with the number pad.
     form.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
@@ -201,6 +247,54 @@ export function RecordEntryView({
             autoFocusAmount={!record}
           />
         </div>
+        {record?.recurringId && (
+          <p className="view-meta">
+            {record.unconfirmed
+              ? '금액이 달마다 다른 반복 내역이에요. 이번 금액을 확인하고 저장해 주세요.'
+              : '반복 내역이 미리 넣은 내역이에요.'}{' '}
+            반복은 설정 → 반복 내역에서 바꿔요.
+          </p>
+        )}
+        {!record && repeatable?.(ledgerId) && (
+          <Stack gap={2}>
+            <Field htmlFor={repeatId}>반복</Field>
+            <SelectField
+              id={repeatId}
+              value={repeat}
+              onValueChange={(value) => setRepeat(value as typeof repeat)}
+            >
+              <SelectOption value="">안 함</SelectOption>
+              {day < 31 && <SelectOption value="date">매달 {day}일</SelectOption>}
+              <SelectOption value="last">매달 마지막 날</SelectOption>
+            </SelectField>
+            {repeat ? (
+              <>
+                <Field>
+                  <Switch
+                    checked={variable}
+                    onChange={(event) => setVariable(event.target.checked)}
+                  />
+                  금액이 달마다 달라요
+                </Field>
+                <p className="small muted">
+                  이 가계부 기간의 다음 날짜에 예정으로 넣고, 복사해서 만드는 다음 가계부에도
+                  이어져요.
+                  {variable && ' 그날이 되면 금액을 확인해 달라고 표시해요.'}
+                </p>
+              </>
+            ) : (
+              looksMonthly(ledger, draft) && (
+                <Button
+                  variant="text"
+                  className="view-repeat-suggestion"
+                  onClick={() => setRepeat(day < 31 ? 'date' : 'last')}
+                >
+                  매달 {day < 31 ? `${day}일` : '마지막 날'}에 반복할까요?
+                </Button>
+              )
+            )}
+          </Stack>
+        )}
         {assetName && (
           <Field>
             <Switch checked={inAsset} onChange={(event) => setInAsset(event.target.checked)} />

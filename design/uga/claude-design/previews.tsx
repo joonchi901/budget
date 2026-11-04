@@ -64,11 +64,13 @@ import {
   RecordForm,
   RecordList,
   RecordTable,
+  RecurringList,
   RoomHeader,
   RoomInviteRow,
   HomeTabBar,
   RoomListItem,
   RoomTabBar,
+  StatCardView,
   StatsBreakdown,
   SummaryStrip,
   TagOptionEditor,
@@ -79,6 +81,7 @@ import {
 import { UgaIcon } from '../../../src/client/brand/Uga';
 import {
   defaultStatAxis,
+  defaultStatCards,
   roomRecords,
   totals,
   type FieldDef,
@@ -618,6 +621,40 @@ export const previews: Record<string, () => ReactNode> = {
           selected={selected}
           onSelect={setSelected}
         />
+      </Phone>
+    );
+  },
+  RecurringList: function RecurringPreview() {
+    return (
+      <Phone>
+        <RecurringList
+          ledger={november}
+          rules={november.recurring ?? []}
+          today={FIXTURE_TODAY}
+          onOpen={() => {}}
+          onRemove={() => {}}
+        />
+      </Phone>
+    );
+  },
+  StatCardView: function StatCardsPreview() {
+    const [axisFor, setAxisFor] = useState<{ [id: string]: string }>({});
+    return (
+      <Phone>
+        <Stack gap={4}>
+          {defaultStatCards([november], november.period).map((card) => (
+            <StatCardView
+              key={card.id}
+              card={card}
+              records={novemberRecords}
+              ledgers={[november]}
+              period={november.period}
+              today={FIXTURE_TODAY}
+              axis={axisFor[card.id]}
+              onAxisChange={(axis) => setAxisFor({ ...axisFor, [card.id]: axis })}
+            />
+          ))}
+        </Stack>
       </Phone>
     );
   },

@@ -6,6 +6,8 @@
 import { UGA_ICON_NAMES, UGA_REACTIONS } from '../client/brand/icon-names';
 import { ASSET_KINDS, assetProblems, type Asset, type AssetKind } from '../shared/assets';
 import {
+  STAT_BUCKETS,
+  STAT_CHARTS,
   canNest,
   recordProblems,
   type AppData,
@@ -14,6 +16,8 @@ import {
   type KindOption,
   type Ledger,
   type LedgerRecord,
+  type RecurringRule,
+  type StatCard,
   type TagOption,
 } from '../shared/ledger';
 import {
@@ -86,6 +90,8 @@ type LedgerRow = {
   kinds: string;
   fields: string;
   archived: number;
+  stat_cards: string | null;
+  recurring: string | null;
   role: Role;
 };
 type RecordRow = {
@@ -99,6 +105,8 @@ type RecordRow = {
   created_by: Id;
   created_at: string;
   not_in_asset: number;
+  recurring_id: string | null;
+  unconfirmed: number;
 };
 type MessageRow = {
   id: Id;
@@ -187,6 +195,8 @@ async function load(db: D1Database, user: AppData['user']): Promise<Loaded> {
       period: { start: row.period_start, end: row.period_end },
       kinds: JSON.parse(row.kinds),
       fields: JSON.parse(row.fields),
+      ...(row.stat_cards ? { statCards: JSON.parse(row.stat_cards) } : {}),
+      ...(row.recurring ? { recurring: JSON.parse(row.recurring) } : {}),
       // A child the user can no longer open drops out of their parents.
       childIds: edgeRows.results
         .filter((edge) => edge.parent_id === row.id && visible.has(edge.child_id))
@@ -205,6 +215,8 @@ async function load(db: D1Database, user: AppData['user']): Promise<Loaded> {
       createdAt: row.created_at,
       ...(reactions.has(row.id) ? { reactions: reactions.get(row.id) } : {}),
       ...(row.not_in_asset ? { notInAsset: true as const } : {}),
+      ...(row.recurring_id ? { recurringId: row.recurring_id } : {}),
+      ...(row.unconfirmed ? { unconfirmed: true as const } : {}),
     })),
     members: memberRows.results,
     assets: assetRows.results.map((row) => ({
@@ -245,7 +257,31 @@ function cleanOption(input: unknown): TagOption {
   };
 }
 
+/** A 통계 chart; its axis is a name the client looks up, falling back when it is gone. */
+function cleanStatCard(input: unknown): StatCard {
+  const card = raw(input);
+  if (
+    !isId(card.id) ||
+    !STAT_CHARTS.includes(card.chart as never) ||
+    (card.nature !== 'income' && card.nature !== 'expense') ||
+    (card.axis !== undefined && !isText(card.axis, 40)) ||
+    (card.bucket !== undefined && !STAT_BUCKETS.includes(card.bucket as never)) ||
+    !isFlag(card.wide)
+  )
+    invalid('통계 차트');
+  return {
+    id: card.id,
+    chart: card.chart as StatCard['chart'],
+    nature: card.nature,
+    ...(card.axis ? { axis: card.axis as string } : {}),
+    ...(card.bucket ? { bucket: card.bucket as StatCard['bucket'] } : {}),
+    ...(card.wide ? { wide: true } : {}),
+  };
+}
+
 /** Rebuilds a ledger from known keys only, so stored JSON holds nothing else (§8.9). */
+const BASE_KIND_NAMES = { income: '수입', expense: '지출' } as const;
+
 function cleanLedger(input: unknown): Ledger {
   const value = raw(input);
   const period = raw(value.period);
@@ -264,8 +300,9 @@ function cleanLedger(input: unknown): Ledger {
     if (nature !== 'income' && nature !== 'expense') invalid('유형');
     if (!isFlag(base)) invalid('유형');
     const kind: KindOption = { ...cleanOption(item), nature, ...(base ? { base: true } : {}) };
-    // 수입 and 지출 are always there to choose; they can be renamed but never archived.
-    if (kind.base && kind.archived) invalid('기본 유형');
+    // 수입 and 지출 are always there to choose, under those names, and never archived.
+    if (kind.base && (kind.archived || kind.name !== BASE_KIND_NAMES[kind.nature]))
+      invalid('기본 유형');
     return kind;
   });
   const fields = list(value.fields).map((item): FieldDef => {
@@ -287,13 +324,17 @@ function cleanLedger(input: unknown): Ledger {
     };
   });
   const childIds = list(value.childIds).map((id) => (isId(id) ? id : invalid('하위 가계부')));
+  // Left out, the stored charts stay as they are.
+  const statCards =
+    value.statCards === undefined ? undefined : list(value.statCards).map(cleanStatCard);
   if (
     !unique(kinds.map((kind) => kind.id)) ||
     !unique(fields.map((field) => field.id)) ||
-    !unique(childIds)
+    !unique(childIds) ||
+    (statCards && (statCards.length > 12 || !unique(statCards.map((card) => card.id))))
   )
     invalid('가계부');
-  return {
+  const ledger: Ledger = {
     id: value.id,
     name: value.name.trim(),
     icon: value.icon as string,
@@ -302,6 +343,38 @@ function cleanLedger(input: unknown): Ledger {
     fields,
     childIds,
     ...(value.archived ? { archived: true } : {}),
+    ...(statCards ? { statCards } : {}),
+  };
+  // Left out, the stored rules stay as they are.
+  if (value.recurring === undefined) return ledger;
+  const recurring = list(value.recurring).map((item) => cleanRule(item, ledger));
+  if (recurring.length > 50 || !unique(recurring.map((rule) => rule.id))) invalid('반복 내역');
+  return { ...ledger, recurring };
+}
+
+/** A 반복 내역 rule the ledger accepts: what one of its records would hold, plus its day. */
+function cleanRule(input: unknown, ledger: Ledger): RecurringRule {
+  const value = raw(input);
+  if (
+    !isId(value.id) ||
+    !Number.isInteger(value.day) ||
+    (value.day as number) < 1 ||
+    (value.day as number) > 31 ||
+    !isFlag(value.variable)
+  )
+    invalid('반복 내역');
+  const { id, title, kindId, amount, values } = cleanRecord(
+    { ...value, ledgerId: ledger.id, date: ledger.period.start },
+    ledger,
+  );
+  return {
+    id,
+    title,
+    kindId,
+    amount,
+    values,
+    day: value.day as number,
+    ...(value.variable ? { variable: true } : {}),
   };
 }
 
@@ -316,6 +389,8 @@ function cleanRecord(input: unknown, ledger: Ledger): LedgerRecord {
     typeof value.amount !== 'number' ||
     value.amount > 1e12 ||
     !isFlag(value.notInAsset) ||
+    !isFlag(value.unconfirmed) ||
+    (value.recurringId !== undefined && !isId(value.recurringId)) ||
     Object.values(values).some((item) => typeof item === 'string' && item.length > 500)
   )
     invalid('내역');
@@ -330,6 +405,8 @@ function cleanRecord(input: unknown, ledger: Ledger): LedgerRecord {
     createdBy: '',
     createdAt: '',
     ...(value.notInAsset ? { notInAsset: true } : {}),
+    ...(value.recurringId ? { recurringId: value.recurringId } : {}),
+    ...(value.unconfirmed ? { unconfirmed: true } : {}),
   } as LedgerRecord;
   const problems = recordProblems(ledger, record);
   if (problems.length) fail(400, 'INVALID_RECORD', `확인해 주세요: ${problems.join(', ')}`);
@@ -342,10 +419,10 @@ const writable = (data: Loaded, ledgerId: Id) =>
 const insertRecord = (db: D1Database, record: LedgerRecord, userId: Id, now: string) =>
   db
     .prepare(
-      `INSERT INTO records (id, ledger_id, date, kind_id, title, amount, field_values, created_by, created_at, updated_at, not_in_asset)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10)
+      `INSERT INTO records (id, ledger_id, date, kind_id, title, amount, field_values, created_by, created_at, updated_at, not_in_asset, recurring_id, unconfirmed)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10, ?11, ?12)
        ON CONFLICT (id) DO UPDATE SET ledger_id = ?2, date = ?3, kind_id = ?4, title = ?5, amount = ?6,
-         field_values = ?7, updated_at = ?9, not_in_asset = ?10`,
+         field_values = ?7, updated_at = ?9, not_in_asset = ?10, recurring_id = ?11, unconfirmed = ?12`,
     )
     .bind(
       record.id,
@@ -358,9 +435,14 @@ const insertRecord = (db: D1Database, record: LedgerRecord, userId: Id, now: str
       userId,
       now,
       record.notInAsset ? 1 : 0,
+      record.recurringId ?? null,
+      record.unconfirmed ? 1 : 0,
     );
 
-/** Creates or changes a ledger, its links, and optionally the records copied into a new one. */
+/**
+ * Creates or changes a ledger, its links, and optionally records that come with it: a copy's, or
+ * the 예정 records its 반복 내역 write or change.
+ */
 async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
   const input = raw(body);
   const ledger = cleanLedger(input.ledger);
@@ -384,7 +466,21 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
   const copied = (input.records === undefined ? [] : list(input.records)).map((item) =>
     cleanRecord(item, ledger),
   );
-  if (before && copied.length) invalid('복사할 내역');
+  // Each is new, or already this ledger's; none may take over a record elsewhere.
+  const unknown = copied.filter((record) => !data.records.some((item) => item.id === record.id));
+  if (
+    copied.length > 100 ||
+    !unique(copied.map((record) => record.id)) ||
+    copied.some((record) =>
+      data.records.some((item) => item.id === record.id && item.ledgerId !== id),
+    ) ||
+    (unknown.length &&
+      (await db
+        .prepare(`SELECT 1 FROM records WHERE id IN (${unknown.map(() => '?').join(', ')})`)
+        .bind(...unknown.map((record) => record.id))
+        .first()))
+  )
+    invalid('함께 저장할 내역');
   if (ledger.childIds.length && (holdsRecords(id) || copied.length))
     fail(400, 'HAS_RECORDS', '내역이 있는 가계부에는 하위 가계부를 둘 수 없어요.');
   if (ledger.childIds.some((childId) => !data.roles.has(childId)))
@@ -422,10 +518,11 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
   await db.batch([
     db
       .prepare(
-        `INSERT INTO ledgers (id, name, icon, period_start, period_end, kinds, fields, archived, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
+        `INSERT INTO ledgers (id, name, icon, period_start, period_end, kinds, fields, archived, created_at, updated_at, stat_cards, recurring)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?10, ?11)
          ON CONFLICT (id) DO UPDATE SET name = ?2, icon = ?3, period_start = ?4, period_end = ?5,
-           kinds = ?6, fields = ?7, archived = ?8, updated_at = ?9`,
+           kinds = ?6, fields = ?7, archived = ?8, updated_at = ?9, stat_cards = COALESCE(?10, stat_cards),
+           recurring = COALESCE(?11, recurring)`,
       )
       .bind(
         id,
@@ -437,6 +534,8 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
         JSON.stringify(ledger.fields),
         ledger.archived ? 1 : 0,
         now,
+        ledger.statCards ? JSON.stringify(ledger.statCards) : null,
+        ledger.recurring ? JSON.stringify(ledger.recurring) : null,
       ),
     ...(before
       ? []

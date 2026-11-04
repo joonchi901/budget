@@ -12,6 +12,7 @@ import {
   november,
   records,
   travel,
+  upcoming,
   year2026,
 } from '../fixtures';
 
@@ -25,7 +26,7 @@ const meta = {
     docs: {
       description: {
         component:
-          '가계부 하나의 방. 상단에 방 이름·기간·요약, 하단에 내역·통계·설정 탭이 있습니다. 내역 탭은 위쪽 조회 도구 옆에서 표/캘린더를 바꾸고, 탭 막대 바로 위에 가로 전체 내역 추가 버튼이 늘 보입니다. 설정은 탭 안에서 바로 고칩니다. 하위 가계부가 있으면(상위 가계부) 아래 모든 내역을 한 번씩 모으고 금액 아래에 원본 가계부로 가는 링크("11월 →")를 두며, 캘린더는 월 단위로 넘깁니다. 하위 탭은 없고 이 링크로 하위 방에 들어갑니다. 통계 항목을 누르면 그 조건의 표로 이동합니다. 내역마다 우가 스티커로 반응할 수 있습니다. 내역을 적는 가계부에는 설정 왼쪽에 대화 탭이 있습니다.',
+          '가계부 하나의 방. 상단에 방 이름·기간·요약, 하단에 내역·통계·설정 탭이 있습니다. 내역 탭은 위쪽 조회 도구 옆에서 표/캘린더를 바꾸고, 탭 막대 바로 위에 가로 전체 내역 추가 버튼이 늘 보입니다. 설정은 탭 안에서 바로 고칩니다. 하위 가계부가 있으면(상위 가계부) 아래 모든 내역을 한 번씩 모으고 금액 아래에 원본 가계부로 가는 링크("11월 →")를 두며, 캘린더는 월 단위로 넘깁니다. 하위 탭은 없고 이 링크로 하위 방에 들어갑니다. 통계 탭은 내역과 같은 조회 조건을 쓰고 그 아래 차트(요약·순위·비율·추이)를 보여 줍니다. 차트의 태그를 누르면 모든 차트가 그 조건으로 좁혀지고 "이 조건으로 내역 보기"로 표로 갑니다. 기준은 차트마다 잠깐 바꿔 볼 수 있고, 소유자는 그 기준을 기본으로 저장하거나 편집에서 차트를 더하고 빼고 순서를 바꿉니다. 내역마다 우가 스티커로 반응할 수 있습니다. 내역을 적는 가계부에는 설정 왼쪽에 대화 탭이 있습니다.',
       },
     },
   },
@@ -43,10 +44,17 @@ const meta = {
   },
   render: function Logged(args) {
     const [log, setLog] = useState('');
+    // 통계's charts save onto the ledger, as the app does for an owner.
+    const [ledger, setLedger] = useState(args.ledger);
     return (
       <>
         <LedgerRoomView
           {...args}
+          ledger={ledger}
+          onSaveStatCards={(statCards) => {
+            setLedger({ ...ledger, statCards });
+            setLog(`통계 저장: ${statCards.map((card) => card.chart).join(', ')}`);
+          }}
           onAddRecord={(date) => setLog(`추가: ${date ?? '오늘'}`)}
           onOpenRecord={(record) => setLog(`열기: ${record.title}`)}
           reacting={{
@@ -124,21 +132,52 @@ export const CalendarDay: Story = {
     await expect(c.getByRole('status')).toHaveTextContent('추가: 2026-10-31');
   },
 };
-export const StatsToTable: Story = {
+export const Stats: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);
     await userEvent.click(c.getByRole('button', { name: '통계' }));
+    // A room starts with 요약, 순위, 비율 and 추이.
+    for (const name of ['지출 요약', '지출 순위', '지출 비율', '날짜별 지출'])
+      await expect(c.getByRole('heading', { level: 2, name })).toBeVisible();
+    // Choosing 용돈 narrows every chart to it and stays on 통계.
     await userEvent.click(c.getByRole('button', { name: /^용돈/ }));
     await expect(c.getByRole('button', { name: '카테고리: 용돈 필터 해제' })).toBeVisible();
-    // 통계의 지출 쪽에서 골랐으니 지출 유형 태그가 함께 걸려요.
-    await expect(c.getByRole('button', { name: '유형: 지출 필터 해제' })).toBeVisible();
+    await expect(
+      within(c.getByRole('region', { name: '지출 요약' })).getAllByText(/500,000/)[0],
+    ).toBeVisible();
+    await userEvent.click(c.getByRole('button', { name: '이 조건으로 내역 보기' }));
     await expect(c.getAllByRole('heading', { level: 2 })[0]).toHaveTextContent('11월 1일');
-    // The 유형 tag beside 내용 is a little shorter than the title line.
+    await expect(c.getByRole('button', { name: '카테고리: 용돈 필터 해제' })).toBeVisible();
+    // The 유형 tag over the amount is a little shorter than the title line.
     const title = canvasElement.querySelector('.ui-list-row-title')!;
-    const tag = title.querySelector('.tag-badge')!;
+    const tag = canvasElement.querySelector('.ui-list-row-trailing > .tag-badge')!;
     await expect(tag.getBoundingClientRect().height).toBeLessThan(
       parseFloat(getComputedStyle(title).lineHeight),
     );
+  },
+};
+export const StatsEdit: Story = {
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(c.getByRole('button', { name: '통계' }));
+    // A 기준 picked for now; the owner keeps it as the chart's own.
+    await userEvent.click(c.getByRole('combobox', { name: '지출 순위 기준' }));
+    await userEvent.click(c.getByRole('option', { name: '누가별' }));
+    await userEvent.click(c.getByRole('button', { name: '이 기준을 기본으로 저장' }));
+    await expect(c.getByRole('status')).toHaveTextContent('통계 저장: total, rank, donut, trend');
+    await expect(c.queryByRole('button', { name: '이 기준을 기본으로 저장' })).toBeNull();
+    // 편집: drop 비율, move 추이 up, add a 수입 순위, then 완료 saves them together.
+    await userEvent.click(c.getByRole('button', { name: '편집' }));
+    await userEvent.click(c.getByRole('button', { name: '결제방식별 지출 비율 삭제' }));
+    await userEvent.click(c.getByRole('button', { name: '날짜별 지출 위로' }));
+    await userEvent.click(c.getByRole('button', { name: '차트 추가' }));
+    const sheet = within(page.getByRole('dialog', { name: '차트 추가' }));
+    await userEvent.click(sheet.getByRole('button', { name: '수입' }));
+    await userEvent.click(sheet.getByRole('button', { name: '추가' }));
+    await userEvent.click(c.getByRole('button', { name: '완료' }));
+    await expect(c.getByRole('status')).toHaveTextContent('통계 저장: total, trend, rank, rank');
+    await expect(c.getByRole('heading', { level: 2, name: '수입 순위' })).toBeVisible();
   },
 };
 export const Reactions: Story = {
@@ -198,5 +237,28 @@ export const MembersMenu: Story = {
     await userEvent.click(c.getByRole('button', { name: '11월 메뉴' }));
     await userEvent.click(page.getByRole('menuitem', { name: '멤버' }));
     await expect(c.getByRole('status')).toHaveTextContent('멤버');
+  },
+};
+export const Recurring: Story = {
+  args: { records: [...records, ...upcoming] },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    // 예정 stays out of 지출 and shows under it; the list leads with it, faded.
+    await expect(c.getByText('예정 55,000원')).toBeVisible();
+    await expect(c.getByRole('button', { name: /^통신비 예정/ })).toBeVisible();
+    await expect(c.getByRole('button', { name: /^도시가스 금액 확인/ })).toBeVisible();
+    await userEvent.click(c.getByRole('button', { name: '캘린더' }));
+    await expect(
+      c.getByRole('button', { name: /^11월 15일 \(일\), 예정 지출 55,000원/ }),
+    ).toBeVisible();
+  },
+};
+export const Memo: Story = {
+  args: { memo: true },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    // Used alone, the ledger's 대화 is its owner's 메모.
+    await userEvent.click(c.getByRole('button', { name: '메모' }));
+    await expect(c.getByRole('textbox', { name: '메시지' })).toBeVisible();
   },
 };

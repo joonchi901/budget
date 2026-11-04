@@ -22,7 +22,10 @@ import {
   RoomPlaceholderView,
 } from '../views';
 import {
+  isScheduled,
   leafLedgers,
+  rescheduled,
+  writeAhead,
   type AppData,
   type Id,
   type IsoDate,
@@ -113,7 +116,9 @@ export function App() {
   // Each room opens on 내역.
   useEffect(() => setRoomView('records'), [roomId]);
   // While a room's 대화 is open, look for new messages; queued after any change being sent.
-  const chatting = Boolean(roomId) && roomView === 'chat';
+  // Only a shared ledger's 대화 can change under the person; a 메모 needs no polling.
+  const chatting =
+    Boolean(roomId) && roomView === 'chat' && (data?.ledgerMembers?.[roomId!]?.length ?? 0) > 1;
   useEffect(() => {
     if (!chatting) return;
     const timer = setInterval(() => {
@@ -153,7 +158,11 @@ export function App() {
     change(
       (current) => {
         const next = withLedger(current, ledger, parentIds);
-        return { ...next, records: [...next.records, ...records] };
+        const sent = new Set(records.map((record) => record.id));
+        return {
+          ...next,
+          records: [...next.records.filter((record) => !sent.has(record.id)), ...records],
+        };
       },
       'PUT',
       `/api/ledgers/${ledger.id}`,
@@ -175,6 +184,15 @@ export function App() {
     );
 
   const room = data.ledgers.find((ledger) => ledger.id === roomId);
+  /** Only owners change a ledger: its 통계 charts and 반복 내역 included. */
+  const owns = (ledgerId: Id) =>
+    Boolean(
+      data.ledgerMembers?.[ledgerId]?.some(
+        (member) => member.profile.id === data.user.id && member.role === 'owner',
+      ),
+    );
+  // 자산 count what has happened; 예정 records join once due.
+  const dueRecords = data.records.filter((record) => !isScheduled(record, today));
   const friends = data.friends ?? [];
   const invites = data.invites ?? [];
   const me: Profile = {
@@ -254,12 +272,9 @@ export function App() {
         </Notice>
       )}
       <AppShell
-        nav={
-          <>
-            <UgaLogo size={120} alt="우리의 가계부" />
-            {tabBar}
-          </>
-        }
+        logo={<UgaLogo size={120} alt="우리의 가계부" />}
+        mark={<UgaLogo variant="mark" size={36} />}
+        nav={tabBar}
         aside={aside?.list}
         asideLabel={aside?.label}
       >
@@ -272,11 +287,12 @@ export function App() {
             today={today}
             onBack={back}
             onViewChange={setRoomView}
+            // Alone, the 대화 tab is the owner's 메모; it turns into 대화 once someone joins.
+            memo={(data.ledgerMembers?.[room.id]?.length ?? 0) <= 1}
             chat={
-              // 대화 shows once someone else shares the ledger, or messages are already there.
-              ((data.ledgerMembers?.[room.id]?.length ?? 0) > 1 ||
-                data.messages?.some((message) => message.ledgerId === room.id)) && (
+              !room.childIds.length && (
                 <ChatThread
+                  memo={(data.ledgerMembers?.[room.id]?.length ?? 0) <= 1}
                   messages={(data.messages ?? []).filter((message) => message.ledgerId === room.id)}
                   memberId={data.user.id}
                   members={data.members}
@@ -334,7 +350,21 @@ export function App() {
                 key={room.id}
                 ledger={room}
                 ledgers={data.ledgers}
-                onSave={({ ledger, parentIds }) => saveLedger(ledger, parentIds)}
+                today={today}
+                onSave={({ ledger, parentIds }) => {
+                  // Changed or stopped 반복 내역 carry over to their 예정 records.
+                  const { changed, removed } = rescheduled(room, ledger, data.records, today);
+                  saveLedger(ledger, parentIds, changed);
+                  for (const id of removed)
+                    change(
+                      (current) => ({
+                        ...current,
+                        records: current.records.filter((record) => record.id !== id),
+                      }),
+                      'DELETE',
+                      `/api/records/${id}`,
+                    );
+                }}
                 onArchive={(ledger) => {
                   saveLedger({ ...ledger, archived: true }, parentIdsOf(data.ledgers, ledger.id));
                   back();
@@ -345,6 +375,12 @@ export function App() {
               />
             }
             onCopy={() => setSheet({ type: 'create', sourceId: room.id })}
+            onSaveStatCards={
+              owns(room.id)
+                ? (statCards) =>
+                    saveLedger({ ...room, statCards }, parentIdsOf(data.ledgers, room.id))
+                : undefined
+            }
             onOpenLedger={(ledger) => openRoom(ledger.id)}
             onOpenMembers={() => setSheet({ type: 'members', ledger: room })}
           />
@@ -358,7 +394,7 @@ export function App() {
           <AssetsView
             assets={data.assets ?? []}
             ledgers={data.ledgers}
-            records={data.records}
+            records={dueRecords}
             onManage={() => go({ tab: 'settings', page: 'assets' })}
             tabBar={tabBar}
           />
@@ -366,7 +402,7 @@ export function App() {
           <AssetManageView
             assets={data.assets ?? []}
             ledgers={data.ledgers}
-            records={data.records}
+            records={dueRecords}
             onAdd={() => setSheet({ type: 'asset' })}
             onOpenAsset={(asset) => setSheet({ type: 'asset', asset })}
             onBack={wide ? undefined : back}
@@ -443,18 +479,28 @@ export function App() {
           today={today}
           memberId={data.user.id}
           suggestions={data.records.map((record) => record.title)}
-          onSave={(record, keepOpen) => {
-            change(
-              (current) => ({
-                ...current,
-                records: [...current.records.filter((item) => item.id !== record.id), record],
-              }),
-              'PUT',
-              `/api/records/${record.id}`,
-              record,
-            );
+          onSave={(record, keepOpen, rule) => {
+            if (rule) {
+              // A new 반복 내역: the rule joins its ledger with this record and the 예정 ones after it.
+              const ledger = data.ledgers.find((item) => item.id === record.ledgerId)!;
+              saveLedger(
+                { ...ledger, recurring: [...(ledger.recurring ?? []), rule] },
+                parentIdsOf(data.ledgers, ledger.id),
+                [record, ...writeAhead(ledger, rule, data.user.id, record.date)],
+              );
+            } else
+              change(
+                (current) => ({
+                  ...current,
+                  records: [...current.records.filter((item) => item.id !== record.id), record],
+                }),
+                'PUT',
+                `/api/records/${record.id}`,
+                record,
+              );
             if (!keepOpen) setSheet(undefined);
           }}
+          repeatable={owns}
           onDelete={(record) => {
             change(
               (current) => ({
@@ -571,7 +617,12 @@ export function App() {
           today={today}
           initialSourceId={sheet.sourceId}
           onCreate={({ ledger, parentIds }) => {
-            saveLedger(ledger, parentIds);
+            // A copy's 반복 내역 write the new period's 예정 records with it.
+            saveLedger(
+              ledger,
+              parentIds,
+              (ledger.recurring ?? []).flatMap((rule) => writeAhead(ledger, rule, data.user.id)),
+            );
             setSheet(undefined);
             go({ tab: 'ledgers', roomId: ledger.id });
           }}

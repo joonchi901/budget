@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { RecordList } from '../../client/ledger';
 import { roomRecords, type LedgerRecord } from '../../shared/ledger';
-import { ledgers, november, records, year2026 } from '../fixtures';
+import { FIXTURE_TODAY, ledgers, november, records, upcoming, year2026 } from '../fixtures';
 
 const novemberRecords = records.filter((record) => record.ledgerId === november.id);
 
@@ -46,3 +46,13 @@ export const GroupRoom: Story = {
   args: { records: roomRecords(ledgers, year2026, records), showLedger: true, order: 'oldest' },
 };
 export const Empty: Story = { args: { records: [] } };
+export const Recurring: Story = {
+  args: { records: [...novemberRecords, ...upcoming], today: FIXTURE_TODAY },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    // 통신비 is written ahead for 11/15 (예정); 도시가스 is due and asks for its amount.
+    await expect(c.getAllByRole('heading', { level: 2 })[0]).toHaveTextContent('11월 15일');
+    await expect(c.getByRole('button', { name: /^통신비 예정/ })).toBeVisible();
+    await expect(c.getByRole('button', { name: /^도시가스 금액 확인/ })).toBeVisible();
+  },
+};

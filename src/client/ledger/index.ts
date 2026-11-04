@@ -17,8 +17,16 @@ export {
   type TagCondition,
 } from './Records';
 export { PeriodCalendar, DayRecords } from './Calendar';
-export { StatsBreakdown } from './Stats';
+export {
+  StatCardForm,
+  StatCardView,
+  StatsBreakdown,
+  chartAxis,
+  fittedCard,
+  statCardTitle,
+} from './Stats';
 export { DynamicField, RecordForm, type RecordDraft } from './RecordForm';
+export { RecurringList, RecurringRuleForm, dayName } from './Recurring';
 export { FieldSchemaEditor, TagOptionEditor, KindOptionEditor } from './Settings';
 export { ChildPicker, ParentPicker, LedgerPicker, ledgerMeta } from './Hierarchy';
 export { addDays, addMonths, dayLabel, monthLabel, periodLabel, whenLabel } from './format';
