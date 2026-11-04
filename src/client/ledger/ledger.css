@@ -198,9 +198,11 @@
   color: var(--brand-text);
 }
 /* Under a record: reactions wrap on the left as they grow, like Slack's; the source ledger link
-   stays on the first line under the amount. */
+   stays on the first line under the amount. The 30px buttons sit 6px under the tags and 6px over
+   the row's edge. */
 .ledger-record > .ui-list-row-footer {
-  padding-bottom: var(--brand-space-2);
+  margin-top: -6px;
+  padding-bottom: 6px;
 }
 .ledger-record-footer {
   display: grid;
