@@ -1,10 +1,12 @@
 /**
  * The ledger API (docs/ledger-baseline.md §6–8). Every request resolves the user and reads
  * their current memberships first; the client never decides what may be seen or changed.
- * Each change answers with the user's whole data so the client simply replaces its state.
+ * The client reads the whole data once (snapshot), then what changed since its cursor: the feed
+ * answers polling and every change alike (docs/sync-plan.md §3.4).
  */
 import { UGA_ICON_NAMES, UGA_REACTIONS } from '../client/brand/icon-names';
 import { ASSET_KINDS, assetProblems, type Asset, type AssetKind } from '../shared/assets';
+import type { Snapshot } from '../shared/sync';
 import {
   STAT_BUCKETS,
   STAT_CHARTS,
@@ -22,6 +24,7 @@ import {
 } from '../shared/ledger';
 import {
   ApiError,
+  change,
   fail,
   invalid,
   isDate,
@@ -34,7 +37,6 @@ import {
   unique,
   type Env,
   type Loaded,
-  type Role,
 } from './common';
 import {
   acceptInvite,
@@ -53,6 +55,22 @@ import {
   renewSignupLink,
   setMemberRole,
 } from './people';
+import {
+  MESSAGE_REACTIONS,
+  RECORD_REACTIONS,
+  byIds,
+  feed,
+  latestSeq,
+  marks,
+  toAsset,
+  toLedger,
+  toMessage,
+  toRecord,
+  type Edge,
+  type LedgerRow,
+  type MessageRow,
+  type RecordRow,
+} from './sync';
 
 const LOOPBACK = ['localhost', '127.0.0.1', '[::1]'];
 const DEV_USER = { id: 'dev', handle: 'dev', name: '개발자', email: 'dev@localhost' };
@@ -62,15 +80,20 @@ const devAuth = (request: Request, env: Env) =>
 // shortcut: the dev account is the only way in until Google login lands; everything else gets 401.
 async function signedIn(request: Request, env: Env): Promise<AppData['user']> {
   if (!devAuth(request, env)) fail(401, 'LOGIN_REQUIRED', '로그인이 필요해요.');
+  // Loopback only, like the dev account: a second local account for checking sharing (§8).
+  const other = request.headers.get('X-Dev-User') ?? '';
+  const account = /^[a-z0-9_]{4,20}$/.test(other)
+    ? { id: other, handle: other, name: other, email: `${other}@localhost` }
+    : DEV_USER;
   await env.DB.prepare(
     'INSERT OR IGNORE INTO users (id, handle, name, created_at, email) VALUES (?, ?, ?, ?, ?)',
   )
-    .bind(DEV_USER.id, DEV_USER.handle, DEV_USER.name, new Date().toISOString(), DEV_USER.email)
+    .bind(account.id, account.handle, account.name, new Date().toISOString(), account.email)
     .run();
   await env.DB.prepare('UPDATE users SET email = ? WHERE id = ? AND email IS NULL')
-    .bind(DEV_USER.email, DEV_USER.id)
+    .bind(account.email, account.id)
     .run();
-  return loadUser(env.DB, DEV_USER.id);
+  return loadUser(env.DB, account.id);
 }
 
 /** Changes must come from this app's page (§8.7); the dev client runs on another loopback port. */
@@ -81,67 +104,28 @@ function checkOrigin(request: Request, env: Env) {
   fail(403, 'ORIGIN_DENIED', '허용되지 않은 요청이에요.');
 }
 
-type LedgerRow = {
-  id: Id;
-  name: string;
-  icon: string;
-  period_start: string;
-  period_end: string;
-  kinds: string;
-  fields: string;
-  archived: number;
-  stat_cards: string | null;
-  recurring: string | null;
-  role: Role;
-};
-type RecordRow = {
-  id: Id;
-  ledger_id: Id;
-  date: string;
-  kind_id: Id;
-  title: string;
-  amount: number;
-  field_values: string;
-  created_by: Id;
-  created_at: string;
-  not_in_asset: number;
-  recurring_id: string | null;
-  unconfirmed: number;
-};
-type MessageRow = {
-  id: Id;
-  ledger_id: Id;
-  author_id: Id;
-  text: string | null;
-  sticker: string | null;
-  created_at: string;
-  reply_to: string | null;
-  edited_at: string | null;
-};
-type AssetRow = {
-  id: Id;
-  name: string;
-  kind: AssetKind;
-  balance: number;
-  since: string;
-  ledger_ids: string;
+/** What a request reads beyond the user's ledgers, roles, assets and people (§3.6). */
+/** What a request reads besides the user's ledgers, roles and assets (docs/sync-plan.md §3.6). */
+type Scope = {
+  /** Records: all the user's, these ledgers' only (at most 90), or none. */
+  records: 'all' | Id[] | false;
+  /** The records' reactions, as the snapshot shows them; no check looks at them. */
+  reactions?: true;
+  /** Friends, invitations, members and the signup link; of the changes, invitations use them. */
+  people?: true;
 };
 
-// shortcut: loads every visible ledger and record at once; page records by period once data grows.
-async function load(db: D1Database, user: AppData['user']): Promise<Loaded> {
-  const [
-    ledgerRows,
-    edgeRows,
-    recordRows,
-    reactionRows,
-    memberRows,
-    assetRows,
-    messageRows,
-    messageReactionRows,
-  ] = await Promise.all([
+async function load(
+  db: D1Database,
+  user: AppData['user'],
+  scope: Scope,
+): Promise<Loaded & Pick<Snapshot, 'seenAt'>> {
+  const ledgerIds = Array.isArray(scope.records) ? scope.records : undefined;
+  const only = ledgerIds ? ` AND r.ledger_id IN (${marks(ledgerIds)})` : '';
+  const [ledgerRows, edgeRows, recordRows, assetRows, people] = await Promise.all([
     db
       .prepare(
-        'SELECT l.*, m.role FROM ledgers l JOIN ledger_members m ON m.ledger_id = l.id WHERE m.user_id = ?',
+        'SELECT l.*, m.role, m.seen_at FROM ledgers l JOIN ledger_members m ON m.ledger_id = l.id WHERE m.user_id = ?',
       )
       .bind(user.id)
       .all<LedgerRow>(),
@@ -151,117 +135,117 @@ async function load(db: D1Database, user: AppData['user']): Promise<Loaded> {
         "SELECT c.parent_id, c.child_id FROM ledger_children c JOIN ledger_members m ON m.ledger_id = c.parent_id AND m.role = 'owner' WHERE m.user_id = ? ORDER BY c.position",
       )
       .bind(user.id)
-      .all<{ parent_id: Id; child_id: Id }>(),
-    db
-      .prepare(
-        'SELECT r.* FROM records r JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ? ORDER BY r.date, r.created_at',
-      )
-      .bind(user.id)
-      .all<RecordRow>(),
-    db
-      .prepare(
-        'SELECT x.record_id, x.reaction, x.user_id FROM record_reactions x JOIN records r ON r.id = x.record_id JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ? ORDER BY x.created_at',
-      )
-      .bind(user.id)
-      .all<{ record_id: Id; reaction: string; user_id: Id }>(),
-    // People who share a ledger with the user, or wrote or reacted to a visible record.
-    db
-      .prepare(
-        `SELECT id, name FROM users WHERE id IN (
-           SELECT o.user_id FROM ledger_members o JOIN ledger_members m ON m.ledger_id = o.ledger_id WHERE m.user_id = ?1
-           UNION SELECT r.created_by FROM records r JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ?1
-           UNION SELECT x.user_id FROM record_reactions x JOIN records r ON r.id = x.record_id
-             JOIN ledger_members m ON m.ledger_id = r.ledger_id WHERE m.user_id = ?1)`,
-      )
-      .bind(user.id)
-      .all<{ id: Id; name: string }>(),
+      .all<Edge>(),
+    scope.records === false
+      ? undefined
+      : db
+          .prepare(
+            `SELECT r.*, ${scope.reactions ? RECORD_REACTIONS : "'[]' AS reactions"} FROM records r
+             JOIN ledger_members m ON m.ledger_id = r.ledger_id
+             WHERE m.user_id = ?${only} ORDER BY r.date, r.created_at`,
+          )
+          .bind(user.id, ...(ledgerIds ?? []))
+          .all<RecordRow>(),
     db
       .prepare('SELECT * FROM assets WHERE owner_id = ? ORDER BY created_at')
       .bind(user.id)
-      .all<AssetRow>(),
-    // shortcut: the latest 500 messages across rooms; page per room once 대화 grows.
-    db
-      .prepare(
-        `SELECT * FROM (SELECT x.* FROM messages x JOIN ledger_members m ON m.ledger_id = x.ledger_id
-             WHERE m.user_id = ? ORDER BY x.created_at DESC LIMIT 500) ORDER BY created_at`,
-      )
-      .bind(user.id)
-      .all<MessageRow>(),
-    db
-      .prepare(
-        'SELECT x.message_id, x.reaction, x.user_id FROM message_reactions x JOIN messages g ON g.id = x.message_id JOIN ledger_members m ON m.ledger_id = g.ledger_id WHERE m.user_id = ? ORDER BY x.created_at',
-      )
-      .bind(user.id)
-      .all<{ message_id: Id; reaction: string; user_id: Id }>(),
+      .all<Parameters<typeof toAsset>[0]>(),
+    scope.people ? loadPeople(db, user.id, ledgerIds) : {},
   ]);
-  const reactions = new Map<Id, Record<string, Id[]>>();
-  for (const row of reactionRows.results) {
-    const byReaction = reactions.get(row.record_id) ?? {};
-    byReaction[row.reaction] = [...(byReaction[row.reaction] ?? []), row.user_id];
-    reactions.set(row.record_id, byReaction);
-  }
-  const messageReactions = new Map<Id, Record<string, Id[]>>();
-  for (const row of messageReactionRows.results) {
-    const byReaction = messageReactions.get(row.message_id) ?? {};
-    byReaction[row.reaction] = [...(byReaction[row.reaction] ?? []), row.user_id];
-    messageReactions.set(row.message_id, byReaction);
-  }
   const visible = new Set(ledgerRows.results.map((row) => row.id));
-  const loaded: Loaded = {
+  return {
     user,
     roles: new Map(ledgerRows.results.map((row) => [row.id, row.role])),
-    ledgers: ledgerRows.results.map((row) => ({
-      id: row.id,
-      name: row.name,
-      icon: row.icon,
-      period: { start: row.period_start, end: row.period_end },
-      kinds: JSON.parse(row.kinds),
-      fields: JSON.parse(row.fields),
-      ...(row.stat_cards ? { statCards: JSON.parse(row.stat_cards) } : {}),
-      ...(row.recurring ? { recurring: JSON.parse(row.recurring) } : {}),
-      // A child the user can no longer open drops out of their parents.
-      childIds: edgeRows.results
-        .filter((edge) => edge.parent_id === row.id && visible.has(edge.child_id))
-        .map((edge) => edge.child_id),
-      ...(row.archived ? { archived: true } : {}),
-    })),
-    records: recordRows.results.map((row) => ({
-      id: row.id,
-      ledgerId: row.ledger_id,
-      date: row.date,
-      kindId: row.kind_id,
-      title: row.title,
-      amount: row.amount,
-      values: JSON.parse(row.field_values),
-      createdBy: row.created_by,
-      createdAt: row.created_at,
-      ...(reactions.has(row.id) ? { reactions: reactions.get(row.id) } : {}),
-      ...(row.not_in_asset ? { notInAsset: true as const } : {}),
-      ...(row.recurring_id ? { recurringId: row.recurring_id } : {}),
-      ...(row.unconfirmed ? { unconfirmed: true as const } : {}),
-    })),
-    members: memberRows.results,
-    assets: assetRows.results.map((row) => ({
-      id: row.id,
-      name: row.name,
-      kind: row.kind,
-      balance: row.balance,
-      since: row.since,
-      ledgerIds: JSON.parse(row.ledger_ids),
-    })),
-    messages: messageRows.results.map((row) => ({
-      id: row.id,
-      ledgerId: row.ledger_id,
-      authorId: row.author_id,
-      ...(row.text ? { text: row.text } : {}),
-      ...(row.sticker ? { sticker: row.sticker } : {}),
-      createdAt: row.created_at,
-      ...(row.reply_to ? { replyTo: row.reply_to } : {}),
-      ...(row.edited_at ? { editedAt: row.edited_at } : {}),
-      ...(messageReactions.has(row.id) ? { reactions: messageReactions.get(row.id) } : {}),
-    })),
+    seenAt: Object.fromEntries(
+      ledgerRows.results.flatMap((row) => (row.seen_at ? [[row.id, row.seen_at]] : [])),
+    ),
+    ledgers: ledgerRows.results.map((row) => toLedger(row, edgeRows.results, visible)),
+    records: recordRows?.results.map(toRecord) ?? [],
+    assets: assetRows.results.map(toAsset),
+    ...people,
   };
-  return { ...loaded, ...(await loadPeople(db, loaded)) };
+}
+
+/**
+ * The whole data with the feed's cursor: all the user's ledgers, or only the given ones (at most
+ * 90) that the user belongs to.
+ */
+async function snapshot(
+  db: D1Database,
+  user: AppData['user'],
+  ledgerIds?: Id[],
+): Promise<Snapshot> {
+  // The cursor first: whatever changes while the rest is read comes again by the feed.
+  const seq = await latestSeq(db);
+  const { roles: _, ...data } = await load(db, user, {
+    records: ledgerIds ?? 'all',
+    reactions: true,
+    people: true,
+  });
+  const ledgers = ledgerIds
+    ? data.ledgers.filter((ledger) => ledgerIds.includes(ledger.id))
+    : data.ledgers;
+  // shortcut: each room's latest 200 messages; older ones come by "이전 글" (GET /api/messages).
+  const messages = ledgers.length
+    ? (
+        await db.batch<MessageRow>(
+          ledgers.map((ledger) =>
+            db
+              .prepare(
+                `SELECT g.*, ${MESSAGE_REACTIONS} FROM messages g WHERE g.ledger_id = ? ORDER BY g.created_at DESC LIMIT 200`,
+              )
+              .bind(ledger.id),
+          ),
+        )
+      )
+        .flatMap((result) => result.results.map(toMessage))
+        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
+    : [];
+  // Names for whoever wrote or reacted: members are known; anyone else is looked up by id.
+  const names = new Map([[user.id, user.name]]);
+  for (const list of Object.values(data.ledgerMembers ?? {}))
+    for (const member of list) names.set(member.profile.id, member.profile.name);
+  const shown = [...data.records, ...messages].flatMap((item) => [
+    'createdBy' in item ? item.createdBy : item.authorId,
+    ...Object.values(item.reactions ?? {}).flat(),
+  ]);
+  const unknown = [...new Set(shown)].filter((id) => !names.has(id));
+  for (const row of await byIds<{ id: Id; name: string }>(
+    db,
+    unknown,
+    (list) => `SELECT id, name FROM users WHERE id IN (${list})`,
+  ))
+    names.set(row.id, row.name);
+  const seenAt = ledgerIds
+    ? Object.fromEntries(Object.entries(data.seenAt).filter(([id]) => ledgerIds.includes(id)))
+    : data.seenAt;
+  return {
+    ...data,
+    ledgers,
+    messages,
+    members: [...names].map(([id, name]) => ({ id, name })),
+    seq,
+    seenAt,
+  };
+}
+
+/** A room's 100 messages before the given time, oldest first, for 이전 글. */
+async function olderMessages(db: D1Database, user: AppData['user'], ledgerId: Id, before: string) {
+  if (
+    !(await db
+      .prepare('SELECT 1 FROM ledger_members WHERE ledger_id = ? AND user_id = ?')
+      .bind(ledgerId, user.id)
+      .first())
+  )
+    fail(404, 'NOT_FOUND', '없는 가계부예요.');
+  const rows = await db
+    .prepare(
+      `SELECT g.*, ${MESSAGE_REACTIONS} FROM messages g WHERE g.ledger_id = ? AND g.created_at < ?
+       ORDER BY g.created_at DESC LIMIT 100`,
+    )
+    .bind(ledgerId, before)
+    .all<MessageRow>();
+  return rows.results.map(toMessage).reverse();
 }
 
 function cleanOption(input: unknown): TagOption {
@@ -482,8 +466,16 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
   if (!before && (await db.prepare('SELECT 1 FROM ledgers WHERE id = ?').bind(id).first()))
     fail(409, 'ID_TAKEN', '이미 있는 가계부예요.');
 
-  const holdsRecords = (ledgerId: Id) =>
-    data.records.some((record) => record.ledgerId === ledgerId);
+  // Only this ledger's records are loaded; a parent's are looked up.
+  const holdsRecords = async (ledgerId: Id) =>
+    ledgerId === id
+      ? data.records.length > 0
+      : Boolean(
+          await db
+            .prepare('SELECT 1 FROM records WHERE ledger_id = ? LIMIT 1')
+            .bind(ledgerId)
+            .first(),
+        );
   if (
     data.records.some((record) => record.ledgerId === id && recordProblems(ledger, record).length)
   )
@@ -506,14 +498,14 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
         .first()))
   )
     invalid('함께 저장할 내역');
-  if (ledger.childIds.length && (holdsRecords(id) || copied.length))
+  if (ledger.childIds.length && ((await holdsRecords(id)) || copied.length))
     fail(400, 'HAS_RECORDS', '내역이 있는 가계부에는 하위 가계부를 둘 수 없어요.');
   if (ledger.childIds.some((childId) => !data.roles.has(childId)))
     fail(403, 'FORBIDDEN', '볼 수 없는 가계부는 넣을 수 없어요.');
   for (const parentId of parentIds) {
     if (data.roles.get(parentId) !== 'owner')
       fail(403, 'FORBIDDEN', '내가 만든 상위 가계부에만 넣을 수 있어요.');
-    if (holdsRecords(parentId))
+    if (await holdsRecords(parentId))
       fail(400, 'HAS_RECORDS', '내역이 있는 가계부 아래에는 넣을 수 없어요.');
   }
   // Check the links as they will be, so no ledger ends up under itself.
@@ -540,6 +532,14 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
 
   const now = new Date().toISOString();
   const others = parentIds.map(() => '?').join(', ');
+  // The user's own parents gaining or losing this ledger: their owner-only childIds change.
+  const wereParents = data.ledgers
+    .filter((item) => data.roles.get(item.id) === 'owner' && item.childIds.includes(id))
+    .map((item) => item.id);
+  const relinked = [
+    ...parentIds.filter((parentId) => !wereParents.includes(parentId)),
+    ...wereParents.filter((parentId) => !parentIds.includes(parentId)),
+  ];
   await db.batch([
     db
       .prepare(
@@ -592,29 +592,82 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
         .bind(parentId, id),
     ),
     ...copied.map((record) => insertRecord(db, record, data.user.id, now)),
+    change(db, { kind: 'ledger', id, ledgerId: id }),
+    ...relinked.map((parentId) => change(db, { kind: 'ledger', id: parentId, ledgerId: parentId })),
+    ...copied.map((record) => change(db, { kind: 'record', id: record.id, ledgerId: id })),
   ]);
 }
 
+/** Where a record is now, read by id: it may be moving in from another ledger. */
+const ledgerOf = (db: D1Database, recordId: Id) =>
+  db
+    .prepare('SELECT ledger_id FROM records WHERE id = ?')
+    .bind(recordId)
+    .first<{ ledger_id: Id }>()
+    .then((row) => row && { ledgerId: row.ledger_id });
+
 async function putRecord(db: D1Database, data: Loaded, id: Id, body: unknown) {
   const ledger = data.ledgers.find((item) => item.id === raw(body).ledgerId);
-  const before = data.records.find((item) => item.id === id);
+  const found = await ledgerOf(db, id);
+  // A record in a ledger the user cannot see is someone else's id.
+  const before = found && data.roles.has(found.ledgerId) ? found : undefined;
   // Moving a record needs the right to write on both sides (§8.2).
   if (!ledger || !writable(data, ledger.id) || (before && !writable(data, before.ledgerId)))
     fail(403, 'FORBIDDEN', '이 가계부에 내역을 쓸 권한이 없어요.');
   const record = cleanRecord(body, ledger);
   if (record.id !== id) invalid('내역');
-  if (!before && (await db.prepare('SELECT 1 FROM records WHERE id = ?').bind(id).first()))
-    fail(409, 'ID_TAKEN', '이미 있는 내역이에요.');
-  await insertRecord(db, record, data.user.id, new Date().toISOString()).run();
+  if (found && !before) fail(409, 'ID_TAKEN', '이미 있는 내역이에요.');
+  await db.batch([
+    insertRecord(db, record, data.user.id, new Date().toISOString()),
+    // A moved record leaves its old ledger too.
+    ...(before && before.ledgerId !== ledger.id
+      ? [change(db, { kind: 'record', id, ledgerId: before.ledgerId })]
+      : []),
+    change(db, { kind: 'record', id, ledgerId: ledger.id }),
+  ]);
 }
 
-async function deleteRecord(db: D1Database, data: Loaded, id: Id) {
-  const before = data.records.find((item) => item.id === id);
-  if (!before) fail(404, 'NOT_FOUND', '없는 내역이에요.');
+/**
+ * Whether a target that is gone changed in the user's scope after their cursor: a DELETE sent
+ * again (its first answer lost) succeeds like the first (docs/sync-plan.md §1, 원칙 4). An id the
+ * user never could see leaves no such row.
+ */
+async function goneSince(
+  db: D1Database,
+  data: Loaded,
+  kind: 'record' | 'asset',
+  id: Id,
+  since: number | undefined,
+) {
+  if (since === undefined) return false;
+  const row = await (
+    kind === 'asset'
+      ? db
+          .prepare(
+            `SELECT 1 FROM changes INDEXED BY changes_user
+             WHERE user_id = ? AND seq > ? AND kind = 'asset' AND id = ? LIMIT 1`,
+          )
+          .bind(data.user.id, since, id)
+      : db
+          .prepare(
+            `SELECT 1 FROM changes INDEXED BY changes_ledger
+             WHERE ledger_id IN (SELECT ledger_id FROM ledger_members WHERE user_id = ?)
+               AND seq > ? AND kind = 'record' AND id = ? LIMIT 1`,
+          )
+          .bind(data.user.id, since, id)
+  ).first();
+  return Boolean(row);
+}
+
+async function deleteRecord(db: D1Database, data: Loaded, id: Id, since?: number) {
+  const before = await ledgerOf(db, id);
+  if (!before && (await goneSince(db, data, 'record', id, since))) return;
+  if (!before || !data.roles.has(before.ledgerId)) fail(404, 'NOT_FOUND', '없는 내역이에요.');
   if (!writable(data, before.ledgerId)) fail(403, 'FORBIDDEN', '이 내역을 지울 권한이 없어요.');
   await db.batch([
     db.prepare('DELETE FROM record_reactions WHERE record_id = ?').bind(id),
     db.prepare('DELETE FROM records WHERE id = ?').bind(id),
+    change(db, { kind: 'record', id, ledgerId: before.ledgerId }),
   ]);
 }
 
@@ -655,23 +708,25 @@ async function putAsset(db: D1Database, data: Loaded, id: Id, body: unknown) {
     .first<{ owner_id: Id }>();
   if (owner && owner.owner_id !== data.user.id) fail(409, 'ID_TAKEN', '이미 있는 자산이에요.');
   const now = new Date().toISOString();
-  await db
-    .prepare(
-      `INSERT INTO assets (id, owner_id, name, kind, balance, since, ledger_ids, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
-       ON CONFLICT (id) DO UPDATE SET name = ?3, kind = ?4, balance = ?5, since = ?6, ledger_ids = ?7, updated_at = ?8`,
-    )
-    .bind(
-      id,
-      data.user.id,
-      asset.name,
-      asset.kind,
-      asset.balance,
-      asset.since,
-      JSON.stringify(ledgerIds),
-      now,
-    )
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO assets (id, owner_id, name, kind, balance, since, ledger_ids, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+         ON CONFLICT (id) DO UPDATE SET name = ?3, kind = ?4, balance = ?5, since = ?6, ledger_ids = ?7, updated_at = ?8`,
+      )
+      .bind(
+        id,
+        data.user.id,
+        asset.name,
+        asset.kind,
+        asset.balance,
+        asset.since,
+        JSON.stringify(ledgerIds),
+        now,
+      ),
+    change(db, { kind: 'asset', id, userId: data.user.id }),
+  ]);
 }
 
 /** Sends a 대화 line to a ledger the user belongs to: a text of up to 1,000 characters or one sticker. */
@@ -695,17 +750,29 @@ async function putMessage(db: D1Database, data: Loaded, id: Id, body: unknown) {
     invalid('대화');
   if (!data.roles.has(ledgerId)) fail(403, 'FORBIDDEN', '이 가계부의 대화에 쓸 수 없어요.');
   const before = await db
-    .prepare('SELECT ledger_id, author_id, text FROM messages WHERE id = ?')
+    .prepare('SELECT ledger_id, author_id, text, sticker, deleted_at FROM messages WHERE id = ?')
     .bind(id)
-    .first<{ ledger_id: Id; author_id: Id; text: string | null }>();
+    .first<{
+      ledger_id: Id;
+      author_id: Id;
+      text: string | null;
+      sticker: string | null;
+      deleted_at: string | null;
+    }>();
   if (before) {
     // Only its author changes a message, and only its text.
-    if (before.author_id !== data.user.id || before.ledger_id !== ledgerId || !before.text || !text)
+    if (before.author_id !== data.user.id || before.ledger_id !== ledgerId)
       fail(403, 'FORBIDDEN', '내가 쓴 글만 고칠 수 있어요.');
-    await db
-      .prepare('UPDATE messages SET text = ?, edited_at = ? WHERE id = ?')
-      .bind(text, new Date().toISOString(), id)
-      .run();
+    if (before.deleted_at) fail(403, 'FORBIDDEN', '지운 글은 고칠 수 없어요.');
+    // The same message sent again changes nothing (재전송).
+    if ((before.text ?? undefined) === text && (before.sticker ?? undefined) === sticker) return;
+    if (!before.text || !text) fail(403, 'FORBIDDEN', '내가 쓴 글만 고칠 수 있어요.');
+    await db.batch([
+      db
+        .prepare('UPDATE messages SET text = ?, edited_at = ? WHERE id = ?')
+        .bind(text, new Date().toISOString(), id),
+      change(db, { kind: 'message', id, ledgerId }),
+    ]);
     return;
   }
   if (
@@ -716,32 +783,45 @@ async function putMessage(db: D1Database, data: Loaded, id: Id, body: unknown) {
       .first())
   )
     invalid('답장할 글');
-  await db
-    .prepare(
-      'INSERT INTO messages (id, ledger_id, author_id, text, sticker, created_at, reply_to) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    )
-    .bind(
-      id,
-      ledgerId,
-      data.user.id,
-      text ?? null,
-      (sticker as string | undefined) ?? null,
-      new Date().toISOString(),
-      (replyTo as string | undefined) ?? null,
-    )
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        'INSERT INTO messages (id, ledger_id, author_id, text, sticker, created_at, reply_to) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(
+        id,
+        ledgerId,
+        data.user.id,
+        text ?? null,
+        (sticker as string | undefined) ?? null,
+        new Date().toISOString(),
+        (replyTo as string | undefined) ?? null,
+      ),
+    change(db, { kind: 'message', id, ledgerId }),
+  ]);
 }
 
-/** Deletes a message its author wrote, with its reactions; answers to it then show it as deleted. */
+/**
+ * Deletes a message its author wrote, with its reactions. Its row stays without content, so the
+ * answers to it show it as deleted. Deleting it again changes nothing.
+ */
 async function deleteMessage(db: D1Database, data: Loaded, id: Id) {
   const own = await db
-    .prepare('SELECT 1 FROM messages WHERE id = ? AND author_id = ?')
+    .prepare('SELECT ledger_id, deleted_at FROM messages WHERE id = ? AND author_id = ?')
     .bind(id, data.user.id)
-    .first();
+    .first<{ ledger_id: Id; deleted_at: string | null }>();
   if (!own) fail(404, 'NOT_FOUND', '내가 쓴 글만 지울 수 있어요.');
+  // Leaving or being removed ends the right to change the room's 대화 (§8.4, §8.14).
+  if (!data.roles.has(own.ledger_id)) fail(403, 'FORBIDDEN', '이 가계부의 대화에 쓸 수 없어요.');
+  if (own.deleted_at) return;
   await db.batch([
+    db
+      .prepare(
+        'UPDATE messages SET deleted_at = ?, text = NULL, sticker = NULL WHERE id = ? AND author_id = ?',
+      )
+      .bind(new Date().toISOString(), id, data.user.id),
     db.prepare('DELETE FROM message_reactions WHERE message_id = ?').bind(id),
-    db.prepare('DELETE FROM messages WHERE id = ?').bind(id),
+    change(db, { kind: 'message', id, ledgerId: own.ledger_id }),
   ]);
 }
 
@@ -754,12 +834,13 @@ async function setMessageReaction(
   on: boolean,
 ) {
   const message = await db
-    .prepare('SELECT ledger_id FROM messages WHERE id = ?')
+    .prepare('SELECT ledger_id, deleted_at FROM messages WHERE id = ?')
     .bind(id)
-    .first<{ ledger_id: Id }>();
-  if (!message || !data.roles.has(message.ledger_id)) fail(404, 'NOT_FOUND', '없는 글이에요.');
+    .first<{ ledger_id: Id; deleted_at: string | null }>();
+  if (!message || message.deleted_at || !data.roles.has(message.ledger_id))
+    fail(404, 'NOT_FOUND', '없는 글이에요.');
   if (!reactionIds.includes(reaction)) invalid('반응');
-  await (
+  await db.batch([
     on
       ? db
           .prepare(
@@ -770,20 +851,28 @@ async function setMessageReaction(
           .prepare(
             'DELETE FROM message_reactions WHERE message_id = ? AND reaction = ? AND user_id = ?',
           )
-          .bind(id, reaction, data.user.id)
-  ).run();
+          .bind(id, reaction, data.user.id),
+    change(db, { kind: 'message', id, ledgerId: message.ledger_id }),
+  ]);
 }
 
-async function deleteAsset(db: D1Database, data: Loaded, id: Id) {
-  if (!data.assets?.some((asset) => asset.id === id)) fail(404, 'NOT_FOUND', '없는 자산이에요.');
-  await db.prepare('DELETE FROM assets WHERE id = ? AND owner_id = ?').bind(id, data.user.id).run();
+async function deleteAsset(db: D1Database, data: Loaded, id: Id, since?: number) {
+  if (!data.assets?.some((asset) => asset.id === id)) {
+    if (await goneSince(db, data, 'asset', id, since)) return;
+    fail(404, 'NOT_FOUND', '없는 자산이에요.');
+  }
+  await db.batch([
+    db.prepare('DELETE FROM assets WHERE id = ? AND owner_id = ?').bind(id, data.user.id),
+    change(db, { kind: 'asset', id, userId: data.user.id }),
+  ]);
 }
 
 /** Adds or removes the user's own reaction; any member who can see the record may react. */
 async function setReaction(db: D1Database, data: Loaded, id: Id, reaction: string, on: boolean) {
-  if (!data.records.some((item) => item.id === id)) fail(404, 'NOT_FOUND', '없는 내역이에요.');
+  const record = await ledgerOf(db, id);
+  if (!record || !data.roles.has(record.ledgerId)) fail(404, 'NOT_FOUND', '없는 내역이에요.');
   if (!reactionIds.includes(reaction)) invalid('반응');
-  await (
+  await db.batch([
     on
       ? db
           .prepare(
@@ -794,8 +883,9 @@ async function setReaction(db: D1Database, data: Loaded, id: Id, reaction: strin
           .prepare(
             'DELETE FROM record_reactions WHERE record_id = ? AND reaction = ? AND user_id = ?',
           )
-          .bind(id, reaction, data.user.id)
-  ).run();
+          .bind(id, reaction, data.user.id),
+    change(db, { kind: 'record', id, ledgerId: record.ledgerId }),
+  ]);
 }
 
 export default {
@@ -806,25 +896,50 @@ export default {
       if (api !== 'api') fail(404, 'NOT_FOUND', '없는 주소예요.');
       const user = await signedIn(request, env);
       if (request.method !== 'GET') checkOrigin(request, env);
-      // Answers that are not the whole data: a photo, and an exact ID lookup.
+      // Reads: a photo, an exact ID lookup, the snapshot, the feed and a room's older messages.
       if (request.method === 'GET' && resource === 'photos' && isId(id) && extra && !reaction)
         return getPhoto(env.DB, id);
-      if (request.method === 'GET' && resource === 'people' && id === undefined)
-        return findPerson(env.DB, { user } as Loaded, url.searchParams.get('handle') ?? '');
-      const data = await load(env.DB, user);
+      const query = (name: string) => url.searchParams.get(name) ?? undefined;
+      const since = /^\d{1,15}$/.test(query('since') ?? '') ? Number(query('since')) : undefined;
+      if (request.method === 'GET' && id === undefined) {
+        if (resource === 'people')
+          return findPerson(env.DB, { user } as Loaded, query('handle') ?? '');
+        if (resource === 'snapshot') {
+          const ledgerIds = query('ledgers')?.split(',');
+          if (ledgerIds && (!ledgerIds.every(isId) || !unique(ledgerIds) || ledgerIds.length > 90))
+            invalid('가계부 목록');
+          return json(await snapshot(env.DB, user, ledgerIds));
+        }
+        if (resource === 'sync') return json(await feed(env.DB, user.id, since));
+        if (resource === 'messages') {
+          const ledgerId = query('ledger');
+          const before = query('before') ?? '9999';
+          if (!isId(ledgerId) || before.length > 40) invalid('이전 글');
+          return json(await olderMessages(env.DB, user, ledgerId, before));
+        }
+      }
+      // A change reads only what its checks need (§3.6): a ledger's own records for its PUT,
+      // the people lists for invitations, and otherwise no records at all.
       const target = isId(id) && extra === undefined ? id : undefined;
-      if (request.method === 'GET' && resource === 'data' && id === undefined) {
-        // Fall through to answer with the data.
-      } else if (resource === 'ledgers' && request.method === 'PUT' && target)
+      const inviting = (resource === 'ledgers' && extra === 'invites') || resource === 'invites';
+      const data = await load(
+        env.DB,
+        user,
+        resource === 'ledgers' && request.method === 'PUT' && target
+          ? { records: [target] }
+          : { records: false, ...(inviting ? { people: true as const } : {}) },
+      );
+      if (request.method === 'GET') fail(404, 'NOT_FOUND', '없는 주소예요.');
+      else if (resource === 'ledgers' && request.method === 'PUT' && target)
         await putLedger(env.DB, data, target, await request.json());
       else if (resource === 'records' && request.method === 'PUT' && target)
         await putRecord(env.DB, data, target, await request.json());
       else if (resource === 'records' && request.method === 'DELETE' && target)
-        await deleteRecord(env.DB, data, target);
+        await deleteRecord(env.DB, data, target, since);
       else if (resource === 'assets' && request.method === 'PUT' && target)
         await putAsset(env.DB, data, target, await request.json());
       else if (resource === 'assets' && request.method === 'DELETE' && target)
-        await deleteAsset(env.DB, data, target);
+        await deleteAsset(env.DB, data, target, since);
       else if (resource === 'messages' && request.method === 'PUT' && target)
         await putMessage(env.DB, data, target, await request.json());
       else if (resource === 'messages' && request.method === 'DELETE' && target)
@@ -900,9 +1015,8 @@ export default {
       else if (resource === 'signup-link' && id === undefined && request.method === 'PUT')
         await renewSignupLink(env.DB, user.id);
       else fail(404, 'NOT_FOUND', '없는 주소예요.');
-      const { roles, ...answer } =
-        request.method === 'GET' ? data : await load(env.DB, await loadUser(env.DB, user.id));
-      return json(answer satisfies AppData);
+      // Every change answers with what changed since the client's cursor, its own change included.
+      return json(await feed(env.DB, user.id, since));
     } catch (error) {
       if (error instanceof ApiError)
         return json({ code: error.code, message: error.message }, error.status);
@@ -914,5 +1028,18 @@ export default {
         500,
       );
     }
+  },
+  /** Keeps 30 days of the sync log (docs/sync-plan.md §3.8); a device away longer resyncs. */
+  async scheduled(_controller, env) {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    await env.DB.batch([
+      // The newest row stays, so the log is never empty and its last seq is never lost.
+      env.DB.prepare(
+        'DELETE FROM changes WHERE at < ? AND seq < (SELECT max(seq) FROM changes)',
+      ).bind(cutoff),
+      env.DB.prepare(
+        "UPDATE sync_meta SET value = (SELECT COALESCE(min(seq), 1) - 1 FROM changes) WHERE key = 'pruned_to'",
+      ),
+    ]);
   },
 } satisfies ExportedHandler<Env>;

@@ -3,7 +3,7 @@
  * friends grants nothing: a ledger opens only through membership, after the invitee accepts.
  */
 import { UGA_MOODS } from '../client/brand/icon-names';
-import { leafLedgers, type AppData, type Id, type LedgerRecord } from '../shared/ledger';
+import { leafLedgers, type AppData, type Id } from '../shared/ledger';
 import {
   handleProblem,
   type Friend,
@@ -11,8 +11,20 @@ import {
   type LedgerMember,
   type Profile,
   type RoomInvite,
+  type SignupLink,
 } from '../shared/people';
-import { fail, invalid, isId, isText, json, list, raw, unique, type Loaded } from './common';
+import {
+  change,
+  fail,
+  invalid,
+  isId,
+  isText,
+  json,
+  list,
+  raw,
+  unique,
+  type Loaded,
+} from './common';
 
 type UserRow = {
   id: Id;
@@ -62,66 +74,77 @@ const token = () =>
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
 
-/** Friends, invitations, the signup link, each room's members and its unseen count. */
-export async function loadPeople(
-  db: D1Database,
-  data: Pick<Loaded, 'user' | 'ledgers' | 'records'>,
-): Promise<Pick<AppData, 'friends' | 'invites' | 'signupLink' | 'ledgerMembers' | 'unseen'>> {
-  const me = data.user.id;
-  const [friendRows, inviteRows, memberRows, pendingRows, seenRows] = await Promise.all([
-    db
-      .prepare(
-        'SELECT f.status, u.* FROM friendships f JOIN users u ON u.id = f.other_id WHERE f.user_id = ? ORDER BY f.created_at',
-      )
-      .bind(me)
-      .all<UserRow & { status: Friend['status'] }>(),
-    db
-      .prepare(
-        `SELECT i.id AS invite_id, i.role AS invite_role, i.created_at AS sent_at, l.id AS ledger_id,
-           l.name AS ledger_name, l.icon AS ledger_icon, l.period_start, l.period_end, u.*
-         FROM ledger_invites i JOIN ledgers l ON l.id = i.ledger_id JOIN users u ON u.id = i.inviter_id
-         WHERE i.invitee_id = ? ORDER BY i.created_at DESC`,
-      )
-      .bind(me)
-      .all<
-        UserRow & {
-          invite_id: Id;
-          invite_role: InviteRole;
-          sent_at: string;
-          ledger_id: Id;
-          ledger_name: string;
-          ledger_icon: string;
-          period_start: string;
-          period_end: string;
-        }
-      >(),
+/** The user's friend list, from their own side. */
+export async function loadFriends(db: D1Database, me: Id): Promise<Friend[]> {
+  const rows = await db
+    .prepare(
+      'SELECT f.status, u.* FROM friendships f JOIN users u ON u.id = f.other_id WHERE f.user_id = ? ORDER BY f.created_at',
+    )
+    .bind(me)
+    .all<UserRow & { status: Friend['status'] }>();
+  return rows.results.map((row) => ({ profile: toProfile(row), status: row.status }));
+}
+
+/** Ledger invitations waiting for the user's answer. */
+export async function loadInvites(db: D1Database, me: Id): Promise<RoomInvite[]> {
+  const rows = await db
+    .prepare(
+      `SELECT i.id AS invite_id, i.role AS invite_role, i.created_at AS sent_at, l.id AS ledger_id,
+         l.name AS ledger_name, l.icon AS ledger_icon, l.period_start, l.period_end, u.*
+       FROM ledger_invites i JOIN ledgers l ON l.id = i.ledger_id JOIN users u ON u.id = i.inviter_id
+       WHERE i.invitee_id = ? ORDER BY i.created_at DESC`,
+    )
+    .bind(me)
+    .all<
+      UserRow & {
+        invite_id: Id;
+        invite_role: InviteRole;
+        sent_at: string;
+        ledger_id: Id;
+        ledger_name: string;
+        ledger_icon: string;
+        period_start: string;
+        period_end: string;
+      }
+    >();
+  return rows.results.map((row) => ({
+    id: row.invite_id,
+    ledger: {
+      id: row.ledger_id,
+      name: row.ledger_name,
+      icon: row.ledger_icon,
+      period: { start: row.period_start, end: row.period_end },
+    },
+    from: toProfile(row),
+    role: row.invite_role,
+    sentAt: row.sent_at,
+  }));
+}
+
+/**
+ * Members of the user's ledgers (all, or the given ones: at most 90), with pending invitees on
+ * the ledgers the user owns.
+ */
+export async function loadLedgerMembers(db: D1Database, me: Id, ledgerIds?: Id[]) {
+  const only = ledgerIds ? ` AND m.ledger_id IN (${ledgerIds.map(() => '?').join(', ')})` : '';
+  const [memberRows, pendingRows] = await Promise.all([
     db
       .prepare(
         `SELECT o.ledger_id, o.role, u.* FROM ledger_members o
          JOIN ledger_members m ON m.ledger_id = o.ledger_id JOIN users u ON u.id = o.user_id
-         WHERE m.user_id = ?`,
+         WHERE m.user_id = ?${only}`,
       )
-      .bind(me)
+      .bind(me, ...(ledgerIds ?? []))
       .all<UserRow & { ledger_id: Id; role: LedgerMember['role'] }>(),
     db
       .prepare(
         `SELECT i.ledger_id, i.role, u.* FROM ledger_invites i
          JOIN ledger_members m ON m.ledger_id = i.ledger_id AND m.role = 'owner'
-         JOIN users u ON u.id = i.invitee_id WHERE m.user_id = ?`,
+         JOIN users u ON u.id = i.invitee_id WHERE m.user_id = ?${only}`,
       )
-      .bind(me)
+      .bind(me, ...(ledgerIds ?? []))
       .all<UserRow & { ledger_id: Id; role: InviteRole }>(),
-    db
-      .prepare('SELECT ledger_id, seen_at FROM ledger_members WHERE user_id = ?')
-      .bind(me)
-      .all<{ ledger_id: Id; seen_at: string | null }>(),
   ]);
-  let link = await db
-    .prepare('SELECT * FROM signup_links WHERE owner_id = ?')
-    .bind(me)
-    .first<{ token: string; expires_at: string; joined: number }>();
-  if (!link) link = await renewSignupLink(db, me);
-
   const ledgerMembers: NonNullable<AppData['ledgerMembers']> = {};
   for (const row of memberRows.results)
     (ledgerMembers[row.ledger_id] ??= []).push({ profile: toProfile(row), role: row.role });
@@ -131,45 +154,39 @@ export async function loadPeople(
       role: row.role,
       invited: true,
     });
+  return ledgerMembers;
+}
 
-  // A room's badge counts records others added since this user last opened it.
-  const seen = new Map(seenRows.results.map((row) => [row.ledger_id, row.seen_at]));
-  const unseen: NonNullable<AppData['unseen']> = {};
-  for (const ledger of data.ledgers) {
-    const since = seen.get(ledger.id);
-    if (!since) continue;
-    const leaves = new Set(leafLedgers(data.ledgers, ledger).map((leaf) => leaf.id));
-    const count = data.records.filter(
-      (record: LedgerRecord) =>
-        leaves.has(record.ledgerId) && record.createdBy !== me && record.createdAt > since,
-    ).length;
-    if (count) unseen[ledger.id] = count;
-  }
-
+/** The user's signup link, made on first use. */
+export async function loadSignupLink(db: D1Database, me: Id): Promise<SignupLink> {
+  const link =
+    (await db
+      .prepare('SELECT * FROM signup_links WHERE owner_id = ?')
+      .bind(me)
+      .first<{ token: string; expires_at: string; joined: number }>()) ??
+    (await renewSignupLink(db, me));
   return {
-    friends: friendRows.results.map((row) => ({ profile: toProfile(row), status: row.status })),
-    invites: inviteRows.results.map((row): RoomInvite => ({
-      id: row.invite_id,
-      ledger: {
-        id: row.ledger_id,
-        name: row.ledger_name,
-        icon: row.ledger_icon,
-        period: { start: row.period_start, end: row.period_end },
-      },
-      from: toProfile(row),
-      role: row.invite_role,
-      sentAt: row.sent_at,
-    })),
-    signupLink: {
-      // A path: the client adds its own origin.
-      url: `/join/${link.token}`,
-      expiresAt: link.expires_at,
-      joined: link.joined,
-      limit: LINK_LIMIT,
-    },
-    ledgerMembers,
-    unseen,
+    // A path: the client adds its own origin.
+    url: `/join/${link.token}`,
+    expiresAt: link.expires_at,
+    joined: link.joined,
+    limit: LINK_LIMIT,
   };
+}
+
+/** Friends, invitations, the signup link and the members of the user's ledgers. */
+export async function loadPeople(
+  db: D1Database,
+  me: Id,
+  ledgerIds?: Id[],
+): Promise<Pick<AppData, 'friends' | 'invites' | 'signupLink' | 'ledgerMembers'>> {
+  const [friends, invites, signupLink, ledgerMembers] = await Promise.all([
+    loadFriends(db, me),
+    loadInvites(db, me),
+    loadSignupLink(db, me),
+    loadLedgerMembers(db, me, ledgerIds),
+  ]);
+  return { friends, invites, signupLink, ledgerMembers };
 }
 
 /** A new signup link; the old one stops working. */
@@ -179,14 +196,34 @@ export async function renewSignupLink(db: D1Database, me: Id) {
     expires_at: new Date(Date.now() + LINK_DAYS * DAY).toISOString().slice(0, 10),
     joined: 0,
   };
-  await db
-    .prepare(
-      `INSERT INTO signup_links (owner_id, token, expires_at, joined, created_at) VALUES (?1, ?2, ?3, 0, ?4)
-       ON CONFLICT (owner_id) DO UPDATE SET token = ?2, expires_at = ?3, joined = 0, created_at = ?4`,
-    )
-    .bind(me, link.token, link.expires_at, new Date().toISOString())
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO signup_links (owner_id, token, expires_at, joined, created_at) VALUES (?1, ?2, ?3, 0, ?4)
+         ON CONFLICT (owner_id) DO UPDATE SET token = ?2, expires_at = ?3, joined = 0, created_at = ?4`,
+      )
+      .bind(me, link.token, link.expires_at, new Date().toISOString()),
+    change(db, { kind: 'me', id: me, userId: me }),
+  ]);
   return link;
+}
+
+/** Log rows for everyone who shows this user's profile: themselves, their rooms, their friends. */
+function profileChanged(db: D1Database, me: Id) {
+  const at = new Date().toISOString();
+  return [
+    change(db, { kind: 'me', id: me, userId: me }),
+    db
+      .prepare(
+        "INSERT INTO changes (kind, id, ledger_id, at) SELECT 'members', ledger_id, ledger_id, ? FROM ledger_members WHERE user_id = ?",
+      )
+      .bind(at, me),
+    db
+      .prepare(
+        "INSERT INTO changes (kind, id, user_id, at) SELECT 'friends', user_id, user_id, ? FROM friendships WHERE other_id = ?",
+      )
+      .bind(at, me),
+  ];
 }
 
 /** Display name, picture and handle. The handle changes at most once every 30 days. */
@@ -209,13 +246,15 @@ export async function putProfile(db: D1Database, data: Loaded, body: unknown) {
     if (await db.prepare('SELECT 1 FROM users WHERE handle = ?').bind(handle).first())
       fail(409, 'HANDLE_TAKEN', '이미 쓰는 아이디예요.');
   }
-  await db
-    .prepare(
-      `UPDATE users SET name = ?, avatar = ?, handle = ?,
-         handle_changed_at = CASE WHEN ? THEN ? ELSE handle_changed_at END WHERE id = ?`,
-    )
-    .bind(name, value.avatar, handle, changing ? 1 : 0, new Date().toISOString(), data.user.id)
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE users SET name = ?, avatar = ?, handle = ?,
+           handle_changed_at = CASE WHEN ? THEN ? ELSE handle_changed_at END WHERE id = ?`,
+      )
+      .bind(name, value.avatar, handle, changing ? 1 : 0, new Date().toISOString(), data.user.id),
+    ...profileChanged(db, data.user.id),
+  ]);
 }
 
 const isPng = (bytes: Uint8Array) =>
@@ -285,6 +324,7 @@ export async function putPhoto(db: D1Database, data: Loaded, request: Request) {
       )
       .bind(data.user.id, bytes, now.toISOString()),
     db.prepare('UPDATE users SET photo_version = ? WHERE id = ?').bind(now.getTime(), data.user.id),
+    ...profileChanged(db, data.user.id),
   ]);
 }
 
@@ -292,6 +332,7 @@ export async function deletePhoto(db: D1Database, data: Loaded) {
   await db.batch([
     db.prepare('DELETE FROM photos WHERE user_id = ?').bind(data.user.id),
     db.prepare('UPDATE users SET photo_version = NULL WHERE id = ?').bind(data.user.id),
+    ...profileChanged(db, data.user.id),
   ]);
 }
 
@@ -360,7 +401,13 @@ export async function friendAction(db: D1Database, data: Loaded, otherId: Id, bo
   const [mine, theirs] = await Promise.all([status(me, otherId), status(otherId, me)]);
   if (!(await db.prepare('SELECT 1 FROM users WHERE id = ?').bind(otherId).first()))
     fail(404, 'NOT_FOUND', '없는 사람이에요.');
-  const run = (...statements: D1PreparedStatement[]) => db.batch(statements);
+  // Both lists are read again; each shows only its owner's own rows.
+  const run = (...statements: D1PreparedStatement[]) =>
+    db.batch([
+      ...statements,
+      change(db, { kind: 'friends', id: me, userId: me }),
+      change(db, { kind: 'friends', id: otherId, userId: otherId }),
+    ]);
   switch (action as FriendAction) {
     case 'request':
       if (mine === 'blocked') fail(409, 'BLOCKED', '차단을 풀어야 요청할 수 있어요.');
@@ -404,18 +451,27 @@ export async function inviteMembers(db: D1Database, data: Loaded, ledgerId: Id, 
     (leaf) => data.roles.get(leaf.id) === 'owner',
   );
   const now = new Date().toISOString();
-  const statements = targets.flatMap((target) =>
+  const invites = targets.flatMap((target) =>
     ids
       .filter((id) => !data.ledgerMembers?.[target.id]?.some((member) => member.profile.id === id))
-      .map((id) =>
-        db
-          .prepare(
-            'INSERT OR IGNORE INTO ledger_invites (id, ledger_id, invitee_id, inviter_id, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          )
-          .bind(crypto.randomUUID(), target.id, id, data.user.id, value.role, now),
-      ),
+      .map((id) => ({ ledgerId: target.id, id })),
   );
-  if (statements.length) await db.batch(statements);
+  if (!invites.length) return;
+  await db.batch([
+    ...invites.map(({ ledgerId, id }) =>
+      db
+        .prepare(
+          'INSERT OR IGNORE INTO ledger_invites (id, ledger_id, invitee_id, inviter_id, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .bind(crypto.randomUUID(), ledgerId, id, data.user.id, value.role, now),
+    ),
+    ...[...new Set(invites.map((invite) => invite.ledgerId))].map((id) =>
+      change(db, { kind: 'members', id, ledgerId: id }),
+    ),
+    ...[...new Set(invites.map((invite) => invite.id))].map((id) =>
+      change(db, { kind: 'invites', id, userId: id }),
+    ),
+  ]);
 }
 
 /** The owner changes a member's or invitee's role. */
@@ -439,6 +495,9 @@ export async function setMemberRole(
     db
       .prepare('UPDATE ledger_invites SET role = ? WHERE ledger_id = ? AND invitee_id = ?')
       .bind(role, ledgerId, userId),
+    change(db, { kind: 'members', id: ledgerId, ledgerId }),
+    change(db, { kind: 'ledger', id: ledgerId, userId }),
+    change(db, { kind: 'invites', id: userId, userId }),
   ]);
 }
 
@@ -468,6 +527,10 @@ export async function removeMember(db: D1Database, data: Loaded, ledgerId: Id, u
     db
       .prepare('DELETE FROM ledger_invites WHERE ledger_id = ? AND invitee_id = ?')
       .bind(ledgerId, userId),
+    change(db, { kind: 'members', id: ledgerId, ledgerId }),
+    // Whoever went reads the ledger as gone and drops it.
+    change(db, { kind: 'ledger', id: ledgerId, userId }),
+    change(db, { kind: 'invites', id: userId, userId }),
   ]);
 }
 
@@ -479,10 +542,16 @@ export async function acceptInvite(db: D1Database, data: Loaded, inviteId: Id, b
   if (
     !parentIds.every(isId) ||
     !unique(parentIds) ||
-    !parentIds.every(
-      (id) =>
-        data.roles.get(id) === 'owner' && !data.records.some((record) => record.ledgerId === id),
-    )
+    parentIds.length > 90 ||
+    !parentIds.every((id) => data.roles.get(id) === 'owner') ||
+    // A parent holds no records of its own.
+    (parentIds.length &&
+      (await db
+        .prepare(
+          `SELECT 1 FROM records WHERE ledger_id IN (${parentIds.map(() => '?').join(', ')}) LIMIT 1`,
+        )
+        .bind(...parentIds)
+        .first()))
   )
     invalid('상위 가계부');
   await db.batch([
@@ -500,19 +569,32 @@ export async function acceptInvite(db: D1Database, data: Loaded, inviteId: Id, b
         .bind(parentId, invite.ledger.id),
     ),
     db.prepare('DELETE FROM ledger_invites WHERE id = ?').bind(inviteId),
+    change(db, { kind: 'ledger', id: invite.ledger.id, userId: data.user.id }),
+    change(db, { kind: 'members', id: invite.ledger.id, ledgerId: invite.ledger.id }),
+    change(db, { kind: 'invites', id: data.user.id, userId: data.user.id }),
+    ...(parentIds as Id[]).map((parentId) =>
+      change(db, { kind: 'ledger', id: parentId, ledgerId: parentId }),
+    ),
   ]);
 }
 
 export async function declineInvite(db: D1Database, data: Loaded, inviteId: Id) {
-  if (!data.invites?.some((item) => item.id === inviteId)) fail(404, 'NOT_FOUND', '없는 초대예요.');
-  await db.prepare('DELETE FROM ledger_invites WHERE id = ?').bind(inviteId).run();
+  const invite = data.invites?.find((item) => item.id === inviteId);
+  if (!invite) fail(404, 'NOT_FOUND', '없는 초대예요.');
+  await db.batch([
+    db.prepare('DELETE FROM ledger_invites WHERE id = ?').bind(inviteId),
+    change(db, { kind: 'members', id: invite.ledger.id, ledgerId: invite.ledger.id }),
+    change(db, { kind: 'invites', id: data.user.id, userId: data.user.id }),
+  ]);
 }
 
 /** Opening a room clears its new-record badge. */
 export async function markSeen(db: D1Database, data: Loaded, ledgerId: Id) {
   if (!data.roles.has(ledgerId)) fail(404, 'NOT_FOUND', '없는 가계부예요.');
-  await db
-    .prepare('UPDATE ledger_members SET seen_at = ? WHERE ledger_id = ? AND user_id = ?')
-    .bind(new Date().toISOString(), ledgerId, data.user.id)
-    .run();
+  await db.batch([
+    db
+      .prepare('UPDATE ledger_members SET seen_at = ? WHERE ledger_id = ? AND user_id = ?')
+      .bind(new Date().toISOString(), ledgerId, data.user.id),
+    change(db, { kind: 'seen', id: ledgerId, userId: data.user.id }),
+  ]);
 }

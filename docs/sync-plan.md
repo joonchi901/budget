@@ -33,7 +33,7 @@ Cloudflare 무료 한도(2026-11-05 공식 문서): D1 읽기 500만 행/일, �
 | 단계 | 요청당 읽는 행 | 하루 활성 사용자(무료) |
 | --- | --- | --- |
 | P0 | 읽기 8,000·쓰기 8,000·대화 폴링 ≤ 30 | 약 60명 |
-| P1 | 폴링 ≤ 30, 쓰기 ≤ 그 가계부 내역 수 + 50 | 약 250명 (한도는 Workers 요청) |
+| P1 | 변경 없는 폴링 ≈ 가계부 수 + 2, 내역 쓰기 ≈ 가계부 수 × 4 + 8 (2년치·가계부 24개 실측: 26, 약 101) | 약 250명 (한도는 Workers 요청) |
 | P2 | 새로고침·재방문 시 서버 읽기 0 | 같음, 체감 즉시 |
 | P3 | 폴링 없음 | 수천 명 |
 
@@ -114,10 +114,10 @@ ALTER TABLE messages ADD COLUMN deleted_at TEXT;
 | `putMessage`, `deleteMessage`, `setMessageReaction` | `message` id=글 ledger_id=가계부 |
 | `putAsset`, `deleteAsset` | `asset` id=자산 user_id=소유자 |
 | `inviteMembers` | `members` id=ledger_id ledger_id=가계부; `invites` user_id=초대받은 사람마다 |
-| `acceptInvite` | `ledger` id=가계부 user_id=나(새 가계부가 보이게); `members` ledger_id=가계부; `invites` user_id=나 |
+| `acceptInvite` | `ledger` id=가계부 user_id=나(새 가계부가 보이게); `members` ledger_id=가계부; `invites` user_id=나. 수락하며 넣은 내 상위 가계부마다 `ledger`(`childIds`가 바뀜, `putLedger`와 같은 이유) |
 | `declineInvite` | `members` ledger_id=가계부; `invites` user_id=나 |
-| `setMemberRole` | `members` ledger_id=가계부; `ledger` id=가계부 user_id=대상(권한이 바뀌면 `roles`가 바뀜) |
-| `removeMember`, 탈퇴 | `members` ledger_id=가계부; `ledger` id=가계부 user_id=빠진 사람(피드에서 "사라짐"으로 받아 지운다) |
+| `setMemberRole` | `members` ledger_id=가계부; `ledger` id=가계부 user_id=대상(권한이 바뀌면 `roles`가 바뀜); `invites` user_id=대상(아직 초대 중이면 받은 초대의 권한이 바뀜) |
+| `removeMember`, 탈퇴 | `members` ledger_id=가계부; `ledger` id=가계부 user_id=빠진 사람(피드에서 "사라짐"으로 받아 지운다); `invites` user_id=빠진 사람(초대를 거둔 경우 받은 초대에서 사라짐) |
 | `friendAction` | `friends` user_id=양쪽 각각 |
 | `putProfile`, `putPhoto`, `deletePhoto` | `me` user_id=나; 내가 속한 가계부마다 `members`; 친구마다 `friends` user_id=친구 |
 | `markSeen` | `seen` id=가계부 user_id=나 (내 다른 기기의 배지) |
@@ -174,51 +174,60 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
 1. members = SELECT ledger_id, role, seen_at FROM ledger_members WHERE user_id = me
 2. pruned = SELECT value FROM sync_meta WHERE key = 'pruned_to'
    since < pruned 이면 { seq: max(seq), ledgerIds, changes: [], resync: true }
-3. rows = SELECT seq, kind, id, ledger_id FROM changes
-         WHERE seq > ?since AND (user_id = ?me OR ledger_id IN (?members...))
-         ORDER BY seq LIMIT 1000
-   (members가 90개를 넘으면 IN을 나눠 두 번 조회하고 seq로 합친다: 바인딩 상한 100)
+3. 한 db.batch(한 트랜잭션)로:
+   top  = SELECT COALESCE(max(seq), 0) FROM changes
+   mine = SELECT seq, kind, id, ledger_id FROM changes INDEXED BY changes_user
+          WHERE user_id = ?me AND seq > ?since ORDER BY seq LIMIT 1000
+   room = SELECT seq, kind, id, ledger_id FROM changes INDEXED BY changes_ledger
+          WHERE ledger_id IN (?members...) AND seq > ?since ORDER BY seq LIMIT 1000
+          (members 90개마다 한 문: 바인딩 상한 100)
+   rows = mine과 room을 seq로 합치고 같은 seq를 지운 뒤 앞의 1,000개
 4. (kind, id)로 중복을 지우고 마지막 것만 남긴다
 5. kind별로 id를 모아 90개씩 IN 조회로 지금 상태를 읽고, 요청자 관점으로 payload를 만든다
    - ledger: 멤버가 아니면 data 없음. childIds는 소유자에게만(§8.1). role 포함
    - record: 행이 없거나 그 가계부 멤버가 아니면 data 없음. reactions 포함
    - message: 소프트 삭제면 text·sticker·reactions 없이 deleted: true
    - members/friends/invites/me: 그 범위의 목록을 통째로 다시 만든다(작다)
-6. seq = rows가 있으면 마지막 행의 seq, 없으면 SELECT max(seq) FROM changes (없으면 0)
+6. seq = rows가 있으면 마지막 행의 seq, 없으면 3의 top (같은 트랜잭션이라 그 사이 변경을 건너뛰지 않는다)
 7. rows가 1,000개면 more: true
 ```
 
 `EXPLAIN QUERY PLAN`으로 3의 쿼리가 두 인덱스를 OR로 쓰는지 확인한다(SQLite의 OR 최적화). 못 쓰면 `user_id = ?` 와 `ledger_id IN (...)`를 두 쿼리로 나눠 `UNION ALL` 한다.
 
+확인 결과(구현 시): 통계가 없으면 `MULTI-INDEX OR`로 두 인덱스를 쓰지만, `ANALYZE` 뒤에는(D1은 `PRAGMA optimize`로 통계를 만들 수 있다) `seq` 범위 스캔으로 바뀌어 다른 집의 변경까지 읽는다(커서가 1만 행 뒤처지면 1,980행). 그래서 두 쿼리로 나누고 각각 `INDEXED BY changes_user`·`INDEXED BY changes_ledger`로 인덱스를 고정했다. `UNION ALL` 대신 같은 `db.batch`의 별개 문으로 보내고(한 트랜잭션) 코드에서 seq로 합친다.
+
 ### 3.6 서버 검증 범위 축소 (확정)
 
-`load(db, user, scope?)`에 `scope.ledgerId`를 더한다. 주어지면 내역·반응·대화 쿼리에 `AND ledger_id = ?`를 붙인다(가계부 목록·멤버는 그대로: 수십 행). 디스패처는 자원별로 범위를 정한다.
+`load(db, user, scope)`의 `scope`는 `{ records: 'all' | Id[] | false; reactions?: true; people?: true }`다. `records`는 내역을 읽는 범위다: 전부, 주어진 가계부만(90개까지, `AND r.ledger_id IN (...)`), 또는 읽지 않음. `reactions`는 내역의 반응을 함께 읽고(스냅숏만), `people`은 친구·초대·멤버·가입 링크를 읽는다(스냅숏과 초대 핸들러만). 가계부 목록·역할·자산은 늘 읽는다(수십 행). 대화는 `load()`가 읽지 않고 스냅숏이 가계부마다 따로 읽는다. 디스패처는 자원별로 범위를 정한다.
 
 | 요청 | 범위 |
 | --- | --- |
-| `records`, `messages`, 반응 | 본문 또는 대상의 `ledgerId`. `putRecord`의 `before`는 `data.records`가 아니라 `SELECT ... FROM records WHERE id = ?`로 찾는다(다른 가계부에서 옮겨 올 수 있음). 옮길 때 양쪽 권한 확인은 `roles`로 한다 |
+| `records`, `messages`, 반응 | 내역 불필요: `scope = { records: false }`. 대상은 id로 직접 찾는다. `putRecord`의 `before`는 `data.records`가 아니라 `SELECT ... FROM records WHERE id = ?`로 찾는다(다른 가계부에서 옮겨 올 수 있음). `deleteRecord`·`setReaction`도 같은 방식으로 대상의 가계부를 찾는다. 옮길 때 양쪽 권한 확인은 `roles`로 한다. (처음 안은 "본문 또는 대상의 `ledgerId`" 범위였으나, 대상을 id로 찾고 나면 이 핸들러들은 `data.records`·`data.messages`를 전혀 쓰지 않아 그 가계부 내역을 읽는 것이 낭비라 바꿨다) |
 | `ledgers` PUT | 가계부 목록은 전체(순환 검사·상위 연결), 내역은 그 가계부만(`IN_USE`, `HAS_RECORDS`). 상위 가계부의 "내역이 있는지"는 `SELECT 1 FROM records WHERE ledger_id = ? LIMIT 1`로 |
 | `seen`, 멤버·초대·친구·프로필·자산 | 내역 불필요: `scope = { records: false }` |
 | `snapshot`, `sync` | 위 3.4·3.5 |
 
 각 핸들러가 `data.records`·`data.messages`에서 무엇을 찾는지 grep으로 확인하고, 범위 밖을 가정하는 곳을 고친다.
 
+검증용 `load()`는 내역의 반응을 읽지 않고(어떤 검사도 보지 않음), 사람 목록(친구·초대·멤버·가입 링크)은 초대 핸들러(`inviteMembers`·`acceptInvite`·`declineInvite`)만 읽는다. 측정해 보니 가계부 24개·멤버 2명에서 사람 목록이 쓰기 한 번에 약 150행이라 "내역 쓰기 ≤ 그 가계부 내역 수 + 50"을 넘겼다.
+
 ### 3.7 대화 변경 (확정)
 
-- `deleteMessage`: `UPDATE messages SET deleted_at = ?, text = NULL, sticker = NULL WHERE id = ? AND author_id = ?` + `DELETE FROM message_reactions WHERE message_id = ?`. 이미 지운 글은 성공으로 답한다(멱등).
-- `putMessage`: 같은 id가 있고 `text`가 같으면 아무것도 하지 않고 성공(재전송 멱등). 지운 글은 고칠 수 없다(`403`). 답장 대상은 지운 글이어도 된다(지금 `SELECT 1 … WHERE id = ? AND ledger_id = ?` 유지).
+- `deleteMessage`: `UPDATE messages SET deleted_at = ?, text = NULL, sticker = NULL WHERE id = ? AND author_id = ?` + `DELETE FROM message_reactions WHERE message_id = ?`. 이미 지운 글은 성공으로 답한다(멱등). 쓴 사람이라도 지금 그 가계부 멤버가 아니면 `403`(§8.4, `putMessage`와 같음).
+- `putMessage`: 같은 id가 있고 내용이 같으면(글은 `text`, 스티커는 `sticker`) 아무것도 하지 않고 성공(재전송 멱등). 지운 글은 고칠 수 없다(`403`). 답장 대상은 지운 글이어도 된다(지금 `SELECT 1 … WHERE id = ? AND ledger_id = ?` 유지).
+- `setMessageReaction`: 지운 글에는 반응할 수 없다(`404`, 없는 글과 같음).
 - 스냅숏·피드·`/api/messages` 모두 소프트 삭제 글을 `deleted: true`로 준다.
-- 화면(`src/client/ledger/Chat.tsx`): 답장 대상이 로컬에 **있고** `deleted`면 "삭제된 메시지", 로컬에 **없으면** "이전 글"(눌러서 이전 글 불러오기). 지금은 둘 다 "삭제된 메시지"로 보인다.
+- 화면(`src/client/ledger/Chat.tsx`): 답장 대상이 로컬에 **있고** `deleted`면 "삭제된 메시지", 로컬에 **없으면** 그 방에 더 받을 이전 글이 남아 있을 때 "이전 글"(눌러서 이전 글 불러오기), 남아 있지 않으면 "삭제된 메시지"(이 변경 전에 실제로 지운 글은 tombstone이 없다). 지금은 둘 다 "삭제된 메시지"로 보인다.
 
 ### 3.8 로그 보관 (확정)
 
-- `wrangler.jsonc`에 `"triggers": { "crons": ["17 18 * * *"] }`(매일 03:17 KST), Worker에 `scheduled()` 핸들러. `DELETE FROM changes WHERE at < 30일 전`, 지운 뒤 `UPDATE sync_meta SET value = (SELECT COALESCE(min(seq), 0) - 1 FROM changes) WHERE key = 'pruned_to'`(로그가 비면 마지막 seq).
+- `wrangler.jsonc`에 `"triggers": { "crons": ["17 18 * * *"] }`(매일 03:17 KST), Worker에 `scheduled()` 핸들러. `DELETE FROM changes WHERE at < 30일 전 AND seq < (SELECT max(seq) FROM changes)`, 지운 뒤 `UPDATE sync_meta SET value = (SELECT COALESCE(min(seq), 1) - 1 FROM changes) WHERE key = 'pruned_to'`. 가장 최근 행 하나는 늘 남겨 로그가 비지 않게 한다: 비면 "마지막 seq"를 `sqlite_sequence`에서 읽어야 하는데 D1이 내부 테이블 읽기를 막을 수 있다. 결과는 같다(커서가 마지막 seq − 1 이상이면 이어 받고, 그보다 작으면 `resync`).
 - 30일 넘게 안 연 기기는 `resync`로 스냅숏을 다시 받는다.
 
 ### 3.9 클라이언트 (확정)
 
 - `src/client/app/api.ts`: 답 형식이 `Snapshot | Sync`가 된다. `api()`가 현재 `seq`를 `?since=`로 붙인다.
-- `src/shared/sync.ts`에 순수 함수 `applyChanges(data: AppData, sync: Sync, skip?: Set<string>): AppData`. `skip`은 `"kind:id"` 집합으로, 아직 보내지 않은 내 변경이 있는 대상은 덮어쓰지 않는다(P2에서 쓴다). `ledgerIds`에 없는 가계부의 가계부·내역·대화·멤버를 지운다. 응답에 `more`가 있으면 호출자가 다시 부른다.
+- `src/shared/sync.ts`에 순수 함수 `applyChanges(data: Snapshot, sync: Sync, skip?: Set<string>): Snapshot`. (`AppData`가 아니라 `Snapshot`을 받고 돌려준다: `seen` 변경은 `seenAt`에, 답의 `seq`는 `seq`에 적어야 하는데 둘 다 `AppData`에 없다. 클라이언트 상태가 곧 `Snapshot`이다.) `skip`은 `"kind:id"` 집합으로, 아직 보내지 않은 내 변경이 있는 대상은 덮어쓰지 않는다(P2에서 쓴다). `ledgerIds`에 없는 가계부의 가계부·내역·대화·멤버를 지운다. 응답에 `more`가 있으면 호출자가 다시 부른다.
 - `App.tsx`:
   - 시작: `GET /api/snapshot`.
   - `change()`: 낙관적 반영 → 쓰기 → 답(`Sync`)을 `applyChanges`. 실패(4xx)는 지금처럼 `confirmed`로 되돌리고, 재로드는 `GET /api/sync?since=`로.
@@ -231,7 +240,7 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
 
 - `scripts/check-sync.mjs`(node:assert, Node 24가 `.ts`를 바로 실행): `applyChanges`의 추가·수정·삭제·가계부 사라짐·`skip`·`more` 없는 경우를 검사한다. `package.json`에 `"check:sync"` 스크립트.
 - 로컬 두 계정(§8 끝의 방식. `DEV_AUTH`가 한 계정만 주면 loopback 한정 `X-Dev-User` 헤더를 더한다)으로: A가 쓴 내역·글·반응·삭제가 B의 `sync`에 오는지, B를 내보낸 직후 B의 `sync`에서 그 가계부가 `ledgerIds`에서 빠지고 `ledger` 변경이 data 없이 오는지, B가 A의 가계부 id로 `snapshot?ledgers=`를 불러도 빈 답인지.
-- §6의 방법으로 측정: 변경이 없는 `sync` ≤ 30행, 내역 쓰기 ≤ 그 가계부 내역 수 + 50행, 스냅숏은 지금 `load()`보다 적음(UNION 스캔 제거).
+- §6의 방법으로 측정: 변경이 없는 `sync` ≈ 가계부 수 + 2행(내 멤버십 + `pruned_to` + `max(seq)`), 내역 쓰기 ≈ 가계부 수 × 4 + 8행(가계부 목록·상위 연결·답 피드가 가계부 수에 비례), 스냅숏은 지금 `load()`보다 적음(UNION 스캔 제거). 2년치·가계부 24개 실측: 26행, 약 101행, 9,844행(같은 씨앗에서 이전 `load()` 23,129행).
 - `docs/ledger-baseline.md` §8.14의 "대화 탭을 보는 동안 몇 초마다 새 글을 확인한다"를 이 문서로 연결해 고친다.
 - Storybook: `ChatThread`에 `deleted`·"이전 글" 상태 스토리. `Flow` 스토리는 메모리 상태라 그대로.
 

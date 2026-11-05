@@ -27,6 +27,7 @@ import {
   ledgerPath,
   pathBetween,
   rescheduled,
+  unseenCounts,
   writeAhead,
   type AppData,
   type ChatMessage,
@@ -37,6 +38,13 @@ import {
 } from '../../shared/ledger';
 import { assetFor, type Asset } from '../../shared/assets';
 import type { Profile, RoomInvite } from '../../shared/people';
+import {
+  applyChanges,
+  mergeSnapshot,
+  withOlder,
+  type Snapshot,
+  type Sync,
+} from '../../shared/sync';
 import { ApiFailure, api } from './api';
 import { reencodePhoto } from './photo';
 import { useRoute } from './route';
@@ -53,7 +61,7 @@ const parentIdsOf = (ledgers: Ledger[], id: Id) =>
   ledgers.filter((ledger) => ledger.childIds.includes(id)).map((ledger) => ledger.id);
 
 /** The ledger saved with its parents, for showing a change before the server answers. */
-const withLedger = (data: AppData, ledger: Ledger, parentIds: Id[]): AppData => ({
+const withLedger = <T extends AppData>(data: T, ledger: Ledger, parentIds: Id[]): T => ({
   ...data,
   ledgers: [
     ...data.ledgers
@@ -81,13 +89,19 @@ const withReaction = <T extends LedgerRecord | ChatMessage>(
   return { ...item, reactions };
 };
 
+/** Checks for others' changes start this often, and slow down to the longest while none come. */
+const POLL_FIRST = 5000;
+const POLL_LONGEST = 30000;
+
 /**
  * The app layer: loads the user's data, opens rooms and sheets, and saves through the API.
- * A change shows at once; changes are sent one at a time in order, and the server's answer to
- * the latest one replaces the state. A failure reloads the server's data.
+ * The data comes whole once (snapshot); after that every answer lists what changed since the
+ * client's cursor (docs/sync-plan.md §3.9). A change shows at once; changes are sent one at a
+ * time in order, and the server's state shows again once none is left unanswered. A failure
+ * catches up with the server.
  */
 export function App() {
-  const [data, setData] = useState<AppData>();
+  const [data, setData] = useState<Snapshot>();
   const [error, setError] = useState<{ message: string; login?: boolean; retry?(): void }>();
   const [sheet, setSheet] = useState<Sheet>();
   const { route, go, back } = useRoute();
@@ -100,14 +114,15 @@ export function App() {
   /** The 상위 가계부 a room was opened through, for its title's path. */
   const [via, setVia] = useState<{ roomId: Id; ids: Id[] }>();
   const [takenHandle, setTakenHandle] = useState<string>();
+  /** Rooms whose 대화 is loaded back to its first message. */
+  const [fullChats, setFullChats] = useState<Set<Id>>(() => new Set());
   const queue = useRef(Promise.resolve());
-  const latest = useRef(0);
-  /** The server's latest answer: what is saved for sure. */
-  const confirmed = useRef<AppData>(undefined);
-  const answered = (answer: AppData) => {
-    confirmed.current = answer;
-    setData(answer);
-  };
+  /** Changes sent and not answered yet; while any is, the screen keeps showing them. */
+  const pending = useRef(0);
+  /** The server's state as this device knows it: what is saved for sure, with the cursor. */
+  const confirmed = useRef<Snapshot>(undefined);
+  /** Brings the next check for others' changes forward, while a shared room is open. */
+  const wake = useRef<() => void>(undefined);
   const today = localDate(new Date());
 
   const report = (failure: unknown, retry?: () => void) =>
@@ -117,50 +132,120 @@ export function App() {
       retry,
     });
   const reload = () =>
-    api('GET', '/api/data').then((answer) => {
-      answered(answer);
+    api<Snapshot>('GET', '/api/snapshot').then((answer) => {
+      confirmed.current = answer;
+      setData(answer);
       setError(undefined);
     }, report);
+  /** Takes in a feed answer: ledgers newly shared with the user come whole, `more` is asked for. */
+  const accept = async (sync: Sync): Promise<void> => {
+    if (sync.resync) return reload();
+    const before = confirmed.current!;
+    let next = applyChanges(before, sync);
+    const fresh = sync.ledgerIds.filter((id) => !before.ledgers.some((ledger) => ledger.id === id));
+    // shortcut: more than 90 new ledgers at once take the whole snapshot again.
+    if (fresh.length > 90) return reload();
+    if (fresh.length)
+      next = mergeSnapshot(
+        next,
+        await api<Snapshot>('GET', `/api/snapshot?ledgers=${fresh.join(',')}`),
+      );
+    confirmed.current = next;
+    if (sync.more) return accept(await api('GET', '/api/sync', undefined, next.seq));
+    if (!pending.current) setData(next);
+  };
+  const catchUp = () =>
+    api('GET', '/api/sync', undefined, confirmed.current?.seq)
+      .then(accept)
+      .catch(() => {});
   useEffect(() => {
     reload();
   }, []);
   // Each room opens on 내역.
   useEffect(() => setRoomView('records'), [roomId]);
-  // While a room's 대화 is open, look for new messages; queued after any change being sent.
-  // Only a shared ledger's 대화 can change under the person; a 메모 needs no polling.
-  const chatting =
-    Boolean(roomId) && roomView === 'chat' && (data?.ledgerMembers?.[roomId!]?.length ?? 0) > 1;
+  // A shared ledger's room can change under the person: while it shows, check for others'
+  // changes, queued after any change being sent. Each check that finds nothing waits longer, up
+  // to POLL_LONGEST; something new, or the person's own change, starts again from POLL_FIRST. A
+  // hidden page does not check, and checks at once when it shows again. A 메모 needs none.
+  const watching = Boolean(roomId) && (data?.ledgerMembers?.[roomId!]?.length ?? 0) > 1;
   useEffect(() => {
-    if (!chatting) return;
-    const timer = setInterval(() => {
-      queue.current = queue.current.then(() => api('GET', '/api/data').then(answered, () => {}));
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [chatting]);
+    if (!watching) return;
+    let delay = POLL_FIRST;
+    let timer: number | undefined;
+    const later = () => {
+      window.clearTimeout(timer);
+      if (document.visibilityState === 'visible') timer = window.setTimeout(check, delay);
+    };
+    const check = () => {
+      window.clearTimeout(timer);
+      queue.current = queue.current.then(() =>
+        api('GET', '/api/sync', undefined, confirmed.current?.seq)
+          .then((sync) => {
+            delay = sync.changes.length ? POLL_FIRST : Math.min(delay * 2, POLL_LONGEST);
+            return accept(sync);
+          })
+          // A failed check stays quiet; the next one tries again.
+          .catch(() => {})
+          .then(() => {
+            if (wake.current === soon) later();
+          }),
+      );
+    };
+    const soon = () => {
+      delay = POLL_FIRST;
+      later();
+    };
+    const shown = () =>
+      document.visibilityState === 'visible' ? check() : window.clearTimeout(timer);
+    wake.current = soon;
+    document.addEventListener('visibilitychange', shown);
+    later();
+    return () => {
+      wake.current = undefined;
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', shown);
+    };
+  }, [watching]);
 
   const change = (
-    local: (data: AppData) => AppData,
+    local: (data: Snapshot) => Snapshot,
     method: 'PUT' | 'DELETE',
     path: string,
     body?: unknown,
   ) => {
     setData((current) => current && local(current));
-    const turn = ++latest.current;
+    pending.current += 1;
+    wake.current?.();
     queue.current = queue.current.then(() =>
-      api(method, path, body).then(
-        (answer) => {
-          confirmed.current = answer;
-          if (turn === latest.current) setData(answer);
-        },
-        (failure) => {
-          // Show only what the server holds, so nothing unsaved looks saved; 다시 시도 resends it.
-          if (confirmed.current) setData(confirmed.current);
+      api(method, path, body, confirmed.current?.seq)
+        .then(accept, (failure) => {
           report(failure, () => change(local, method, path, body));
           // Catch up with the server quietly, keeping the notice and its 다시 시도.
-          return api('GET', '/api/data').then(answered, () => {});
-        },
-      ),
+          return catchUp();
+        })
+        .catch(report)
+        .finally(() => {
+          pending.current -= 1;
+          // Show only what the server holds, so nothing unsaved looks saved.
+          if (!pending.current && confirmed.current) setData(confirmed.current);
+        }),
     );
+  };
+  /** A room's 100 messages before its oldest loaded one (이전 글). */
+  const loadOlder = (ledgerId: Id) => {
+    queue.current = queue.current.then(() => {
+      const oldest = confirmed.current?.messages?.find((message) => message.ledgerId === ledgerId);
+      return api<ChatMessage[]>(
+        'GET',
+        `/api/messages?ledger=${ledgerId}&before=${encodeURIComponent(oldest?.createdAt ?? '9999')}`,
+      )
+        .then((older) => {
+          if (older.length < 100) setFullChats((full) => new Set(full).add(ledgerId));
+          confirmed.current = withOlder(confirmed.current!, older);
+          setData((current) => current && withOlder(current, older));
+        })
+        .catch(report);
+    });
   };
   /** A change whose result only the server knows; the screen updates when it answers. */
   const send = (method: 'PUT' | 'DELETE', path: string, body?: unknown) =>
@@ -216,6 +301,8 @@ export function App() {
     avatar: data.user.avatar ?? 'happy',
     ...(data.user.photo ? { photo: data.user.photo } : {}),
   };
+  const unseen = unseenCounts(data.ledgers, data.records, data.seenAt, data.user.id);
+  const roomMessages = (data.messages ?? []).filter((message) => message.ledgerId === roomId);
   const tabBar = (
     <HomeTabBar
       tab={tab}
@@ -228,9 +315,12 @@ export function App() {
   const openRoom = (id: Id, through?: Id[]) => {
     setVia(through && { roomId: id, ids: through });
     go({ tab: 'ledgers', roomId: id });
-    if (data.unseen?.[id])
+    if (unseen[id])
       change(
-        (current) => ({ ...current, unseen: { ...current.unseen, [id]: 0 } }),
+        (current) => ({
+          ...current,
+          seenAt: { ...current.seenAt, [id]: new Date().toISOString() },
+        }),
         'PUT',
         `/api/ledgers/${id}/seen`,
       );
@@ -240,7 +330,7 @@ export function App() {
     <RoomListView
       ledgers={data.ledgers}
       records={data.records}
-      unseen={data.unseen}
+      unseen={unseen}
       today={today}
       currentId={roomId}
       currentPath={roomPath.map((ledger) => ledger.id)}
@@ -317,7 +407,10 @@ export function App() {
             chat={
               <ChatThread
                 memo={(data.ledgerMembers?.[room.id]?.length ?? 0) <= 1}
-                messages={(data.messages ?? []).filter((message) => message.ledgerId === room.id)}
+                messages={roomMessages}
+                // The snapshot holds each room's latest 200: a room with that many may have more.
+                hasOlder={roomMessages.length >= 200 && !fullChats.has(room.id)}
+                onLoadOlder={() => loadOlder(room.id)}
                 memberId={data.user.id}
                 members={data.members}
                 people={data.ledgerMembers?.[room.id]?.map((member) => member.profile)}
@@ -482,8 +575,11 @@ export function App() {
               url: new URL(data.signupLink!.url, location.origin).href,
             }}
             onFind={(handle) =>
-              api('GET', `/api/people?handle=${encodeURIComponent(handle)}`).then(
-                (answer) => (answer as unknown as { profile: Profile | null }).profile,
+              api<{ profile: Profile | null }>(
+                'GET',
+                `/api/people?handle=${encodeURIComponent(handle)}`,
+              ).then(
+                (answer) => answer.profile,
                 () => null,
               )
             }
@@ -509,18 +605,20 @@ export function App() {
             takenHandle={takenHandle}
             onSave={(profile, photo) => {
               setTakenHandle(undefined);
-              api('PUT', '/api/profile', profile)
-                .then(async (answer) => {
-                  if (photo)
-                    answer = await api('PUT', '/api/profile/photo', await reencodePhoto(photo));
-                  else if (photo === null) answer = await api('DELETE', '/api/profile/photo');
-                  setData(answer);
-                })
-                .catch((failure) => {
-                  if (failure instanceof ApiFailure && failure.code === 'HANDLE_TAKEN')
-                    setTakenHandle(profile.handle);
-                  else report(failure);
-                });
+              const save = (method: 'PUT' | 'DELETE', path: string, body?: unknown) =>
+                api(method, path, body, confirmed.current?.seq).then(accept);
+              queue.current = queue.current.then(() =>
+                save('PUT', '/api/profile', profile)
+                  .then(async () => {
+                    if (photo) await save('PUT', '/api/profile/photo', await reencodePhoto(photo));
+                    else if (photo === null) await save('DELETE', '/api/profile/photo');
+                  })
+                  .catch((failure) => {
+                    if (failure instanceof ApiFailure && failure.code === 'HANDLE_TAKEN')
+                      setTakenHandle(profile.handle);
+                    else report(failure);
+                  }),
+              );
             }}
             onLogout={() =>
               setError({
@@ -596,7 +694,19 @@ export function App() {
                 change(
                   (current) => ({
                     ...current,
-                    messages: (current.messages ?? []).filter((item) => item.id !== id),
+                    // It stays without content, as the server keeps it, for the answers to it.
+                    messages: (current.messages ?? []).map((item) =>
+                      item.id === id
+                        ? {
+                            id,
+                            ledgerId: item.ledgerId,
+                            authorId: item.authorId,
+                            createdAt: item.createdAt,
+                            ...(item.replyTo ? { replyTo: item.replyTo } : {}),
+                            deleted: true as const,
+                          }
+                        : item,
+                    ),
                   }),
                   'DELETE',
                   `/api/messages/${id}`,

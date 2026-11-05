@@ -19,6 +19,7 @@
     "build:storybook": "npm run check:ui-spec && storybook build --disable-telemetry",
     "test:storybook": "node scripts/test-storybook.mjs",
     "check:ui-spec": "node scripts/check-ui-spec.mjs",
+    "check:sync": "node scripts/check-sync.mjs",
     "check:ui": "npm run typecheck && npm run build:storybook && npm run test:storybook"
   },
   "dependencies": {

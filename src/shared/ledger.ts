@@ -257,6 +257,8 @@ export type ChatMessage = {
   editedAt?: string;
   /** Uga sticker reactions, as on records. */
   reactions?: Reactions;
+  /** Its author deleted it: no text, sticker or reactions; answers to it read 삭제된 메시지. */
+  deleted?: true;
 };
 
 /** What the API returns after every read or change: the user and only what they may see. */
@@ -285,8 +287,6 @@ export type AppData = {
   signupLink?: SignupLink;
   /** Members (and pending invitees) of each ledger that holds records the user belongs to. */
   ledgerMembers?: { [ledgerId: Id]: LedgerMember[] };
-  /** Records others added since the user last opened each room. */
-  unseen?: { [ledgerId: Id]: number };
 };
 
 export type Totals = { income: number; expense: number; balance: number };
@@ -353,6 +353,27 @@ export function descendants(ledgers: Ledger[], root: Ledger): Ledger[] {
 /** The ledgers that hold the room's records: itself, or every record-holding ledger below it. */
 export function leafLedgers(ledgers: Ledger[], root: Ledger): Ledger[] {
   return isParent(root) ? descendants(ledgers, root).filter((ledger) => !isParent(ledger)) : [root];
+}
+
+/** Each room's badge: records others added in it (or below it) since the user last opened it. */
+export function unseenCounts(
+  ledgers: Ledger[],
+  records: LedgerRecord[],
+  seenAt: { [ledgerId: Id]: string },
+  memberId: Id,
+): { [ledgerId: Id]: number } {
+  const unseen: { [ledgerId: Id]: number } = {};
+  for (const ledger of ledgers) {
+    const since = seenAt[ledger.id];
+    if (!since) continue;
+    const leaves = new Set(leafLedgers(ledgers, ledger).map((leaf) => leaf.id));
+    const count = records.filter(
+      (record) =>
+        leaves.has(record.ledgerId) && record.createdBy !== memberId && record.createdAt > since,
+    ).length;
+    if (count) unseen[ledger.id] = count;
+  }
+  return unseen;
 }
 
 /** The room's records. Each record counts once however the ledgers overlap. */

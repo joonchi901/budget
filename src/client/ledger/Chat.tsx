@@ -41,7 +41,9 @@ const sameMinute = (a?: ChatMessage, b?: ChatMessage) =>
  * with their picture and name, then the bubble with its time beside it; mine on the right. Under a
  * message, Slack-like sticker reactions. Under the pointer the name (or bubble) shows options:
  * 반응 추가, 답장 and ⋯ (복사, and on one's own 수정 and 삭제); a long press or right click opens
- * the same menu. Then a box to write and a button for Uga stickers and decorations.
+ * the same menu. Then a box to write and a button for Uga stickers and decorations. A deleted
+ * message does not show; an answer to it quotes 삭제된 메시지. An answer to a message not loaded
+ * yet, while older ones remain, quotes 이전 글, which loads them as 이전 글 보기 on top does.
  */
 export function ChatThread({
   messages,
@@ -53,7 +55,10 @@ export function ChatThread({
   people = [],
   onToggleReaction,
   memo = false,
+  hasOlder = false,
+  onLoadOlder,
 }: {
+  /** Oldest first; deleted ones are kept for the answers that quote them. */
   messages: ChatMessage[];
   memberId: Id;
   /** Names for authors; unknown ids show as "알 수 없음". */
@@ -70,6 +75,10 @@ export function ChatThread({
   onDelete?(message: ChatMessage): void;
   /** A ledger used alone: the thread is the person's own 메모. */
   memo?: boolean;
+  /** Older messages than these may be there to load. */
+  hasOlder?: boolean;
+  /** Loads the messages before the oldest shown (이전 글). */
+  onLoadOlder?(): void;
 }) {
   const id = useId();
   const [text, setText] = useState('');
@@ -174,24 +183,33 @@ export function ChatThread({
         ]
       : []),
   ];
-  const days = [...new Set(messages.map((message) => dayOf(message.createdAt)))];
+  const shown = messages.filter((message) => !message.deleted);
+  const days = [...new Set(shown.map((message) => dayOf(message.createdAt)))];
   const context = editing ?? replying;
   return (
     <div className="ledger-chat">
       <div className="ledger-chat-messages">
-        {messages.length ? (
+        {hasOlder && onLoadOlder && (
+          <Button variant="text" className="ledger-chat-older" onClick={onLoadOlder}>
+            이전 글 보기
+          </Button>
+        )}
+        {shown.length ? (
           days.map((day) => (
             <section key={day} aria-labelledby={`${id}-${day}`} className="ledger-chat-day">
               <h2 id={`${id}-${day}`} className="ledger-chat-day-label">
                 {dayLabel(day)}
               </h2>
               <ol className="ledger-chat-list" aria-labelledby={`${id}-${day}`}>
-                {messages
+                {shown
                   .filter((message) => dayOf(message.createdAt) === day)
                   .map((message, index, list) => {
                     const mine = message.authorId === memberId;
                     const quoted =
                       message.replyTo && messages.find((item) => item.id === message.replyTo);
+                    // A target not here is older while older ones remain; else it was deleted
+                    // before deleted messages were kept.
+                    const older = !quoted && hasOlder && onLoadOlder;
                     // Like KakaoTalk: picture and name start one person's run; a new minute in
                     // it starts with a pointed bubble and the minute's time follows its last one.
                     const start = !sameAuthor(list[index - 1], message);
@@ -264,18 +282,22 @@ export function ChatThread({
                             <Button
                               variant="plain"
                               className="ledger-chat-quote"
-                              disabled={!quoted}
+                              disabled={quoted ? quoted.deleted : !older}
                               onClick={() =>
-                                document
-                                  .getElementById(`${id}-${message.replyTo}`)
-                                  ?.scrollIntoView({ block: 'center' })
+                                quoted
+                                  ? document
+                                      .getElementById(`${id}-${message.replyTo}`)
+                                      ?.scrollIntoView({ block: 'center' })
+                                  : onLoadOlder?.()
                               }
                             >
                               <Reply size={14} aria-hidden="true" />
                               <span>
-                                {quoted
-                                  ? `${nameOf(quoted.authorId)} · ${summaryOf(quoted)}`
-                                  : '삭제된 메시지'}
+                                {older
+                                  ? '이전 글'
+                                  : !quoted || quoted.deleted
+                                    ? '삭제된 메시지'
+                                    : `${nameOf(quoted.authorId)} · ${summaryOf(quoted)}`}
                               </span>
                             </Button>
                           )}
