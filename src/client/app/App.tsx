@@ -113,6 +113,8 @@ const RETRY = [5000, 10000, 20000, 60000];
 type TabMessage =
   /** The syncing tab stored the copy: read it again. */
   | { type: 'state' }
+  /** The syncing tab's check found others' changes: a shared room open elsewhere checks soon. */
+  | { type: 'news' }
   /** To the syncing tab: send the outbox, and with `sync` ask the feed too. */
   | { type: 'outbox' | 'sync' }
   /** To the syncing tab: a room's 이전 글 another tab loaded, to keep in the copy. */
@@ -295,6 +297,7 @@ export function App() {
         }
         const answer = feed ? await api('GET', '/api/sync', undefined, state.current) : undefined;
         if (answer) await accept(answer);
+        if (answer?.changes.length) tell({ type: 'news' });
         retry.current.count = 0;
         return Boolean(answer?.changes.length);
       } catch (failure) {
@@ -358,6 +361,7 @@ export function App() {
         after(message.type);
       } else if (!syncing.current) {
         if (message.type === 'state') refresh();
+        else if (message.type === 'news') wake.current?.();
       } else if (message.type === 'outbox') sync();
       else if (message.type === 'sync') sync(true);
       else if (message.type === 'older' && state.current)
@@ -389,9 +393,10 @@ export function App() {
   // changes, after the outbox is empty. Each check that finds nothing waits longer, up to
   // POLL_LONGEST; something new, or the person's own change, starts again from POLL_FIRST. A
   // hidden page does not check, and checks at once when it shows again. A 메모 needs none.
+  // Another tab asks the syncing one to check, which tells every tab when something came (§4.3).
   const watching = Boolean(roomId) && (data?.ledgerMembers?.[roomId!]?.length ?? 0) > 1;
   useEffect(() => {
-    if (!watching || !leading) return;
+    if (!watching) return;
     let delay = POLL_FIRST;
     let timer: number | undefined;
     const later = () => {
@@ -400,7 +405,8 @@ export function App() {
     };
     const check = () => {
       window.clearTimeout(timer);
-      sync(true).then((news) => {
+      const asked = syncing.current ? sync(true) : (tell({ type: 'sync' }), Promise.resolve(false));
+      asked.then((news) => {
         delay = news ? POLL_FIRST : Math.min(delay * 2, POLL_LONGEST);
         if (wake.current === soon) later();
       });
@@ -419,7 +425,7 @@ export function App() {
       window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', shown);
     };
-  }, [watching, leading]);
+  }, [watching]);
 
   /**
    * A change: made on the device's copy at once, put in the outbox, then sent in turn (§4.2).
