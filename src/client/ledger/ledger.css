@@ -1057,6 +1057,10 @@
   gap: var(--brand-space-4);
   min-width: 0;
 }
+/* 이전 글 보기: above the oldest day. */
+.ledger-chat-older.ui-button {
+  justify-self: center;
+}
 .ledger-chat-day {
   display: grid;
   gap: var(--brand-space-2);

@@ -46,6 +46,7 @@ export type MessageRow = {
   created_at: string;
   reply_to: string | null;
   edited_at: string | null;
+  deleted_at: string | null;
   reactions: string;
 };
 type AssetRow = {
@@ -108,6 +109,16 @@ export function toRecord(row: RecordRow): LedgerRecord {
 
 export function toMessage(row: MessageRow): ChatMessage {
   const reactions = toReactions(row.reactions);
+  // A deleted message stays as a tombstone for the answers to it.
+  if (row.deleted_at)
+    return {
+      id: row.id,
+      ledgerId: row.ledger_id,
+      authorId: row.author_id,
+      createdAt: row.created_at,
+      ...(row.reply_to ? { replyTo: row.reply_to } : {}),
+      deleted: true,
+    };
   return {
     id: row.id,
     ledgerId: row.ledger_id,

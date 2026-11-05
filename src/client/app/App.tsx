@@ -38,7 +38,13 @@ import {
 } from '../../shared/ledger';
 import { assetFor, type Asset } from '../../shared/assets';
 import type { Profile, RoomInvite } from '../../shared/people';
-import { applyChanges, mergeSnapshot, type Snapshot, type Sync } from '../../shared/sync';
+import {
+  applyChanges,
+  mergeSnapshot,
+  withOlder,
+  type Snapshot,
+  type Sync,
+} from '../../shared/sync';
 import { ApiFailure, api } from './api';
 import { reencodePhoto } from './photo';
 import { useRoute } from './route';
@@ -108,6 +114,8 @@ export function App() {
   /** The 상위 가계부 a room was opened through, for its title's path. */
   const [via, setVia] = useState<{ roomId: Id; ids: Id[] }>();
   const [takenHandle, setTakenHandle] = useState<string>();
+  /** Rooms whose 대화 is loaded back to its first message. */
+  const [fullChats, setFullChats] = useState<Set<Id>>(() => new Set());
   const queue = useRef(Promise.resolve());
   /** Changes sent and not answered yet; while any is, the screen keeps showing them. */
   const pending = useRef(0);
@@ -223,6 +231,22 @@ export function App() {
         }),
     );
   };
+  /** A room's 100 messages before its oldest loaded one (이전 글). */
+  const loadOlder = (ledgerId: Id) => {
+    queue.current = queue.current.then(() => {
+      const oldest = confirmed.current?.messages?.find((message) => message.ledgerId === ledgerId);
+      return api<ChatMessage[]>(
+        'GET',
+        `/api/messages?ledger=${ledgerId}&before=${encodeURIComponent(oldest?.createdAt ?? '9999')}`,
+      )
+        .then((older) => {
+          if (older.length < 100) setFullChats((full) => new Set(full).add(ledgerId));
+          confirmed.current = withOlder(confirmed.current!, older);
+          setData((current) => current && withOlder(current, older));
+        })
+        .catch(report);
+    });
+  };
   /** A change whose result only the server knows; the screen updates when it answers. */
   const send = (method: 'PUT' | 'DELETE', path: string, body?: unknown) =>
     change((current) => current, method, path, body);
@@ -278,6 +302,7 @@ export function App() {
     ...(data.user.photo ? { photo: data.user.photo } : {}),
   };
   const unseen = unseenCounts(data.ledgers, data.records, data.seenAt, data.user.id);
+  const roomMessages = (data.messages ?? []).filter((message) => message.ledgerId === roomId);
   const tabBar = (
     <HomeTabBar
       tab={tab}
@@ -382,7 +407,10 @@ export function App() {
             chat={
               <ChatThread
                 memo={(data.ledgerMembers?.[room.id]?.length ?? 0) <= 1}
-                messages={(data.messages ?? []).filter((message) => message.ledgerId === room.id)}
+                messages={roomMessages}
+                // The snapshot holds each room's latest 200: a room with that many may have more.
+                hasOlder={roomMessages.length >= 200 && !fullChats.has(room.id)}
+                onLoadOlder={() => loadOlder(room.id)}
                 memberId={data.user.id}
                 members={data.members}
                 people={data.ledgerMembers?.[room.id]?.map((member) => member.profile)}
@@ -666,7 +694,19 @@ export function App() {
                 change(
                   (current) => ({
                     ...current,
-                    messages: (current.messages ?? []).filter((item) => item.id !== id),
+                    // It stays without content, as the server keeps it, for the answers to it.
+                    messages: (current.messages ?? []).map((item) =>
+                      item.id === id
+                        ? {
+                            id,
+                            ledgerId: item.ledgerId,
+                            authorId: item.authorId,
+                            createdAt: item.createdAt,
+                            ...(item.replyTo ? { replyTo: item.replyTo } : {}),
+                            deleted: true as const,
+                          }
+                        : item,
+                    ),
                   }),
                   'DELETE',
                   `/api/messages/${id}`,

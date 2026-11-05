@@ -708,13 +708,23 @@ async function putMessage(db: D1Database, data: Loaded, id: Id, body: unknown) {
     invalid('대화');
   if (!data.roles.has(ledgerId)) fail(403, 'FORBIDDEN', '이 가계부의 대화에 쓸 수 없어요.');
   const before = await db
-    .prepare('SELECT ledger_id, author_id, text FROM messages WHERE id = ?')
+    .prepare('SELECT ledger_id, author_id, text, sticker, deleted_at FROM messages WHERE id = ?')
     .bind(id)
-    .first<{ ledger_id: Id; author_id: Id; text: string | null }>();
+    .first<{
+      ledger_id: Id;
+      author_id: Id;
+      text: string | null;
+      sticker: string | null;
+      deleted_at: string | null;
+    }>();
   if (before) {
     // Only its author changes a message, and only its text.
-    if (before.author_id !== data.user.id || before.ledger_id !== ledgerId || !before.text || !text)
+    if (before.author_id !== data.user.id || before.ledger_id !== ledgerId)
       fail(403, 'FORBIDDEN', '내가 쓴 글만 고칠 수 있어요.');
+    if (before.deleted_at) fail(403, 'FORBIDDEN', '지운 글은 고칠 수 없어요.');
+    // The same message sent again changes nothing (재전송).
+    if ((before.text ?? undefined) === text && (before.sticker ?? undefined) === sticker) return;
+    if (!before.text || !text) fail(403, 'FORBIDDEN', '내가 쓴 글만 고칠 수 있어요.');
     await db.batch([
       db
         .prepare('UPDATE messages SET text = ?, edited_at = ? WHERE id = ?')
@@ -749,16 +759,24 @@ async function putMessage(db: D1Database, data: Loaded, id: Id, body: unknown) {
   ]);
 }
 
-/** Deletes a message its author wrote, with its reactions; answers to it then show it as deleted. */
+/**
+ * Deletes a message its author wrote, with its reactions. Its row stays without content, so the
+ * answers to it show it as deleted. Deleting it again changes nothing.
+ */
 async function deleteMessage(db: D1Database, data: Loaded, id: Id) {
   const own = await db
-    .prepare('SELECT ledger_id FROM messages WHERE id = ? AND author_id = ?')
+    .prepare('SELECT ledger_id, deleted_at FROM messages WHERE id = ? AND author_id = ?')
     .bind(id, data.user.id)
-    .first<{ ledger_id: Id }>();
+    .first<{ ledger_id: Id; deleted_at: string | null }>();
   if (!own) fail(404, 'NOT_FOUND', '내가 쓴 글만 지울 수 있어요.');
+  if (own.deleted_at) return;
   await db.batch([
+    db
+      .prepare(
+        'UPDATE messages SET deleted_at = ?, text = NULL, sticker = NULL WHERE id = ? AND author_id = ?',
+      )
+      .bind(new Date().toISOString(), id, data.user.id),
     db.prepare('DELETE FROM message_reactions WHERE message_id = ?').bind(id),
-    db.prepare('DELETE FROM messages WHERE id = ?').bind(id),
     change(db, { kind: 'message', id, ledgerId: own.ledger_id }),
   ]);
 }
@@ -772,10 +790,11 @@ async function setMessageReaction(
   on: boolean,
 ) {
   const message = await db
-    .prepare('SELECT ledger_id FROM messages WHERE id = ?')
+    .prepare('SELECT ledger_id, deleted_at FROM messages WHERE id = ?')
     .bind(id)
-    .first<{ ledger_id: Id }>();
-  if (!message || !data.roles.has(message.ledger_id)) fail(404, 'NOT_FOUND', '없는 글이에요.');
+    .first<{ ledger_id: Id; deleted_at: string | null }>();
+  if (!message || message.deleted_at || !data.roles.has(message.ledger_id))
+    fail(404, 'NOT_FOUND', '없는 글이에요.');
   if (!reactionIds.includes(reaction)) invalid('반응');
   await db.batch([
     on

@@ -5,6 +5,15 @@ import { ChatThread } from '../../client/ledger';
 import type { ChatMessage } from '../../shared/ledger';
 import { me, members, messages, yedi } from '../fixtures';
 
+/** What 이전 글 brings in the stories: a message from before the thread's first. */
+const october: ChatMessage = {
+  id: 'october',
+  ledgerId: 'nov',
+  authorId: 'u1',
+  text: '10월 관리비 냈어',
+  createdAt: '2026-10-31T09:00:00.000Z',
+};
+
 const meta = {
   title: '04 Organisms · 유기체/ChatThread',
   component: ChatThread,
@@ -13,13 +22,14 @@ const meta = {
     docs: {
       description: {
         component:
-          '가계부 방의 대화. 메신저처럼 날짜별로 묶고, 다른 멤버 글은 왼쪽에 프로필 사진과 이름, 그 아래 말풍선, 말풍선 옆에 시간이 보입니다. 카카오톡처럼 같은 사람이 이어 쓰면 사진·이름은 처음 한 번만 붙고, 그 사이 분이 바뀌면 분마다 마지막 말풍선 옆에 시간을 붙이고 다음 분의 첫 말풍선은 꼬리 모양 모서리로 시작합니다. 내 글은 오른쪽에 사진·이름 없이 보입니다. 말풍선 아래에는 Slack처럼 우가 스티커 반응이 붙고, 누르면 내 반응을 넣고 뺍니다. 마우스를 올리면 이름 옆(이어 쓴 글은 말풍선 옆)에 반응 추가·답장·⋯가 나타나고, 휴대폰은 길게 누르면 같은 메뉴(반응 추가·답장·복사, 내 글이면 수정·삭제)가 열립니다. 글 또는 우가 스티커·장식 하나를 보내고, 웃는 얼굴 버튼은 반응과 같은 고르기(대화·감정 스티커와 장식)를 엽니다. 답장은 원래 글을 인용하고(지워지면 \"삭제된 메시지\"), 수정한 글에는 \"수정됨\"이 붙고, 삭제는 앱이 한 번 묻습니다. 대화 탭을 보는 동안 앱이 몇 초마다 새 글을 확인합니다.',
+          '가계부 방의 대화. 메신저처럼 날짜별로 묶고, 다른 멤버 글은 왼쪽에 프로필 사진과 이름, 그 아래 말풍선, 말풍선 옆에 시간이 보입니다. 카카오톡처럼 같은 사람이 이어 쓰면 사진·이름은 처음 한 번만 붙고, 그 사이 분이 바뀌면 분마다 마지막 말풍선 옆에 시간을 붙이고 다음 분의 첫 말풍선은 꼬리 모양 모서리로 시작합니다. 내 글은 오른쪽에 사진·이름 없이 보입니다. 말풍선 아래에는 Slack처럼 우가 스티커 반응이 붙고, 누르면 내 반응을 넣고 뺍니다. 마우스를 올리면 이름 옆(이어 쓴 글은 말풍선 옆)에 반응 추가·답장·⋯가 나타나고, 휴대폰은 길게 누르면 같은 메뉴(반응 추가·답장·복사, 내 글이면 수정·삭제)가 열립니다. 글 또는 우가 스티커·장식 하나를 보내고, 웃는 얼굴 버튼은 반응과 같은 고르기(대화·감정 스티커와 장식)를 엽니다. 답장은 원래 글을 인용하고(지워지면 \"삭제된 메시지\", 아직 불러오지 않은 글이면 눌러서 불러오는 \"이전 글\"), 수정한 글에는 \"수정됨\"이 붙고, 삭제는 앱이 한 번 묻습니다. 지운 글은 목록에서 빠집니다. 맨 위 \"이전 글 보기\"는 더 오래된 글 100개를 불러옵니다. 공유 가계부 방이 열려 있는 동안 앱이 새 글을 확인합니다(docs/sync-plan.md).',
       },
     },
   },
   args: { messages, memberId: 'u1', members, people: [me, yedi], onSend: () => {} },
   render: function Controlled(args) {
     const [list, setList] = useState<ChatMessage[]>(args.messages);
+    const [hasOlder, setHasOlder] = useState(args.hasOlder);
     const [log, setLog] = useState('');
     return (
       <div style={{ maxWidth: 390 }}>
@@ -29,6 +39,12 @@ const meta = {
         <ChatThread
           {...args}
           messages={list}
+          hasOlder={hasOlder}
+          onLoadOlder={() => {
+            setList((all) => [october, ...all]);
+            setHasOlder(false);
+            setLog('이전 글');
+          }}
           onToggleReaction={(message, reaction) => {
             setList((all) =>
               all.map((item) => {
@@ -51,7 +67,14 @@ const meta = {
             setLog(`수정: ${text}`);
           }}
           onDelete={(message) => {
-            setList((all) => all.filter((item) => item.id !== message.id));
+            // Like the app: it stays without content for the answers to it.
+            setList((all) =>
+              all.map((item) =>
+                item.id === message.id
+                  ? { ...item, text: undefined, sticker: undefined, deleted: true }
+                  : item,
+              ),
+            );
             setLog(`삭제: ${message.text ?? message.sticker}`);
           }}
           onSend={(content) =>
@@ -179,5 +202,60 @@ export const Messenger: Story = {
       }),
     );
     await expect(c.getByRole('button', { name: '좋아요 1명' })).toBeVisible();
+  },
+};
+/** A deleted message does not show; an answer to it quotes 삭제된 메시지, which goes nowhere. */
+export const DeletedMessage: Story = {
+  args: {
+    messages: [
+      {
+        id: 'gone',
+        ledgerId: 'nov',
+        authorId: 'u2',
+        createdAt: '2026-11-01T00:01:00.000Z',
+        deleted: true,
+      },
+      {
+        id: 'answer',
+        ledgerId: 'nov',
+        authorId: 'u1',
+        text: '그거 내가 넣을게',
+        createdAt: '2026-11-01T00:03:00.000Z',
+        replyTo: 'gone',
+      },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await expect(c.getAllByRole('listitem')).toHaveLength(1);
+    await expect(c.getByRole('button', { name: '삭제된 메시지' })).toBeDisabled();
+  },
+};
+/**
+ * More messages than the room loaded: 이전 글 보기 on top, and an answer to one not loaded yet
+ * quotes 이전 글. Either loads older messages.
+ */
+export const OlderMessages: Story = {
+  args: {
+    hasOlder: true,
+    messages: [
+      {
+        id: 'answer',
+        ledgerId: 'nov',
+        authorId: 'u2',
+        text: '지난달 것도 넣었어',
+        createdAt: '2026-11-01T00:03:00.000Z',
+        replyTo: 'october',
+      },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await expect(c.getByRole('button', { name: '이전 글' })).toBeEnabled();
+    await userEvent.click(c.getByRole('button', { name: '이전 글 보기' }));
+    await expect(c.getByRole('status')).toHaveTextContent('이전 글');
+    await expect(c.getByText('10월 관리비 냈어')).toBeVisible();
+    await expect(c.getByRole('button', { name: /· 10월 관리비 냈어$/ })).toBeEnabled();
+    await expect(c.queryByRole('button', { name: '이전 글 보기' })).toBeNull();
   },
 };

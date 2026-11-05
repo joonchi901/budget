@@ -257,6 +257,8 @@ export type ChatMessage = {
   editedAt?: string;
   /** Uga sticker reactions, as on records. */
   reactions?: Reactions;
+  /** Its author deleted it: no text, sticker or reactions; answers to it read 삭제된 메시지. */
+  deleted?: true;
 };
 
 /** What the API returns after every read or change: the user and only what they may see. */
