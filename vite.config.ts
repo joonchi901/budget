@@ -21,6 +21,10 @@ export default defineConfig({
       // public/manifest.webmanifest, linked from index.html.
       manifest: false,
       workbox: {
+        // autoUpdate turns these on only with injectRegister 'auto'; without them a new version
+        // waits until every window closes. Safe here: the app is one bundle, no chunk loads late.
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: [
           'index.html',
           'manifest.webmanifest',
