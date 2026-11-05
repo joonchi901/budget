@@ -226,10 +226,11 @@ export function App() {
   };
   /**
    * The changes still in the outbox made over `data` (§4.3): this page's own made again, others'
-   * (another tab's, an earlier page's) from what they did.
+   * (another tab's, an earlier page's) from what they did. Another account's are only sent (§4.5).
    */
   const unsent = (data: Snapshot, queued: Outgoing[]) =>
     queued.reduce((next, item) => {
+      if (item.userId !== data.user.id) return next;
       const local = locals.current.get(item.key);
       return local ? local(next) : patched(next, item.patch);
     }, data);
