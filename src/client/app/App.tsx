@@ -1006,7 +1006,10 @@ export function App() {
           invite={sheet.invite}
           ledgers={data.ledgers}
           onAccept={({ parentIds }) => {
-            send('PUT', `/api/invites/${sheet.invite.id}`, { parentIds });
+            send('PUT', `/api/invites/${sheet.invite.id}`, {
+              ledgerId: sheet.invite.ledger.id,
+              parentIds,
+            });
             setSheet(undefined);
           }}
           onDecline={() => {

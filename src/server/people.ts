@@ -418,6 +418,7 @@ export async function friendAction(db: D1Database, data: Loaded, otherId: Id, bo
         ? run(set(me, otherId, 'outgoing'))
         : run(set(me, otherId, 'outgoing'), set(otherId, me, 'incoming'));
     case 'accept':
+      if (mine === 'friend') return; // sent again after it went through (docs/sync-plan.md §4.2)
       if (mine !== 'incoming') fail(409, 'NOT_REQUESTED', '받은 요청이 없어요.');
       return run(set(me, otherId, 'friend'), set(otherId, me, 'friend'));
     case 'decline':
@@ -521,7 +522,8 @@ export async function setMemberRole(
 export async function removeMember(db: D1Database, data: Loaded, ledgerId: Id, userId: Id) {
   const leaving = userId === data.user.id;
   const role = data.roles.get(ledgerId);
-  if (leaving ? !role || role === 'owner' : role !== 'owner')
+  if (leaving && !role) return; // gone already: sent again after it went through (§4.2)
+  if (leaving ? role === 'owner' : role !== 'owner')
     fail(
       403,
       'FORBIDDEN',
@@ -548,9 +550,14 @@ export async function removeMember(db: D1Database, data: Loaded, ledgerId: Id, u
   ]);
 }
 
-/** Accepting joins the ledger with the invited role, optionally under the user's own parents. */
+/**
+ * Accepting joins the ledger with the invited role, optionally under the user's own parents. The
+ * body names the ledger too, so a resend after it went through (the invitation gone, the user in
+ * the ledger) does nothing (docs/sync-plan.md §4.2).
+ */
 export async function acceptInvite(db: D1Database, data: Loaded, inviteId: Id, body: unknown) {
   const invite = data.invites?.find((item) => item.id === inviteId);
+  if (!invite && data.roles.has(raw(body).ledgerId as Id)) return;
   if (!invite) fail(404, 'NOT_FOUND', '없는 초대예요.');
   const parentIds = list(raw(body).parentIds ?? []);
   if (
