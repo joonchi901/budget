@@ -302,6 +302,11 @@ export function App() {
   };
   /** The data from the server whole, then any changes left in the outbox. */
   const start = () => reload().then(() => sync(), report);
+  /** Starts again in every tab: the syncing one takes the snapshot, the others wait for it. */
+  const again = () => {
+    tell({ type: 'reset' });
+    after('reset');
+  };
   // A stored copy shows at once. The syncing tab reads it again when it takes over and catches
   // up behind it; without one it takes the snapshot first, and the other tabs wait for it.
   useEffect(() => {
@@ -465,17 +470,13 @@ export function App() {
   if (error?.login)
     return (
       <LoginView
-        // Every tab starts again; the syncing one takes the snapshot.
-        onLogin={() => {
-          tell({ type: 'reset' });
-          after('reset');
-        }}
+        onLogin={again}
         error="로그인은 아직 연결 전이에요. 로컬 개발 서버(npm run dev)에서 열어 주세요."
       />
     );
   if (!data)
     return (
-      <StatusScreen busy={!error} action={<Button onClick={start}>다시 시도</Button>}>
+      <StatusScreen busy={!error} action={<Button onClick={again}>다시 시도</Button>}>
         {error ? error.message : '불러오는 중이에요'}
       </StatusScreen>
     );

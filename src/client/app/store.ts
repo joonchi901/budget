@@ -78,7 +78,8 @@ let unstoredKey = 0;
 /** Puts a change in the outbox; resolves its key. */
 export const pushOutbox = (item: Omit<Outgoing, 'key'>) =>
   run('outbox', 'readwrite', (store) => store.add(item) as IDBRequest<number>).catch(() => {
-    // shortcut: one kept in memory goes after the stored ones; fine while IndexedDB fails as a whole.
+    // shortcut: one kept in memory goes after the stored ones, and only from this tab once it
+    // syncs; fine while IndexedDB fails as a whole (every tab then syncs for itself).
     const key = --unstoredKey; // below zero: never an IndexedDB key
     unstored.push({ ...item, key });
     return key;
