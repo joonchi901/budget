@@ -158,6 +158,8 @@ export function App() {
   const tell = (message: TabMessage) => channel.current?.postMessage(message);
   const storing = useRef<number>(undefined);
   const retry = useRef({ timer: 0, count: 0 });
+  /** What the server last refused in the outbox, told once the data is taken whole again. */
+  const refusal = useRef<string>(undefined);
   /** Counts the copies forgotten, so a snapshot asked for before cannot bring one back. */
   const epoch = useRef(0);
   /** Brings the next check for others' changes forward, while a shared room is open. */
@@ -170,6 +172,7 @@ export function App() {
     window.clearTimeout(storing.current);
     window.clearTimeout(retry.current.timer);
     state.current = undefined;
+    refusal.current = undefined;
     locals.current.clear();
     setData(undefined);
     setFullChats(new Set());
@@ -264,9 +267,9 @@ export function App() {
   };
   /**
    * The way to the server for changes and checks: sends the outbox in order, then with `feed`
-   * asks what changed; resolves whether anything came. A change the server refuses is reported
-   * and the data taken whole again. While the server cannot be reached it tries again after
-   * RETRY, and when the device is online or the page shows again.
+   * asks what changed; resolves whether anything came. After changes the server refused, the data
+   * is taken whole once and the last refusal told. While the server cannot be reached it tries
+   * again after RETRY, and when the device is online or the page shows again.
    */
   const sync = (feed = false) => {
     window.clearTimeout(retry.current.timer);
@@ -281,11 +284,15 @@ export function App() {
             return removeOutbox(key);
           },
           accept,
-          refused: (failure) =>
-            leave(failure) ?? (setError({ message: (failure as Error).message }), reload()),
+          refused: (failure) => leave(failure) ?? (refusal.current = (failure as Error).message),
         });
         if (!state.current) return false; // forgotten meanwhile
         if (!sent) throw new ApiFailure(0, '서버에 연결하지 못했어요.');
+        if (refusal.current) {
+          await reload();
+          if (refusal.current) setError({ message: refusal.current }); // unless forgotten meanwhile
+          refusal.current = undefined;
+        }
         const answer = feed ? await api('GET', '/api/sync', undefined, state.current) : undefined;
         if (answer) await accept(answer);
         retry.current.count = 0;

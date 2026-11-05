@@ -228,7 +228,7 @@ export async function replay(io: {
   send(item: Outgoing): Promise<Sync>;
   remove(key: number): Promise<void>;
   accept(answer: Sync, skip: Set<string>): Promise<void>;
-  refused(failure: unknown): Promise<void>;
+  refused(failure: unknown): unknown;
 }): Promise<boolean> {
   for (let queued = await io.read(); queued.length; queued = await io.read()) {
     const [item] = queued;
