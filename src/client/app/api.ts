@@ -1,4 +1,4 @@
-import type { AppData } from '../../shared/ledger';
+import type { Sync } from '../../shared/sync';
 
 export class ApiFailure extends Error {
   constructor(
@@ -11,10 +11,20 @@ export class ApiFailure extends Error {
   }
 }
 
-/** Every API call answers with the user's whole data (src/server/index.ts). A Blob goes as is. */
-export async function api(method: 'GET' | 'PUT' | 'DELETE', path: string, body?: unknown) {
+/**
+ * Calls the API (src/server/index.ts). A change, and `GET /api/sync`, answer with what changed since
+ * `since`, the client's cursor (docs/sync-plan.md §3.4); other reads say their own type. A Blob
+ * goes as is.
+ */
+export async function api<T = Sync>(
+  method: 'GET' | 'PUT' | 'DELETE',
+  path: string,
+  body?: unknown,
+  since?: number,
+): Promise<T> {
   const blob = body instanceof Blob;
-  const response = await fetch(path, {
+  const url = since === undefined ? path : `${path}${path.includes('?') ? '&' : '?'}since=${since}`;
+  const response = await fetch(url, {
     method,
     headers:
       body === undefined ? undefined : { 'Content-Type': blob ? body.type : 'application/json' },
@@ -27,5 +37,5 @@ export async function api(method: 'GET' | 'PUT' | 'DELETE', path: string, body?:
     const { message, code } = answer as { message?: string; code?: string };
     throw new ApiFailure(response.status, message ?? '요청을 처리하지 못했어요.', code);
   }
-  return answer as AppData;
+  return answer as T;
 }
