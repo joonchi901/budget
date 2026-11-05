@@ -150,6 +150,8 @@ function Room({
   const filtering = query.trim() !== '' || conditions.length > 0;
   const found = totals(due(shown), ledgers);
   const context = { ledgers, showLedger, onOpenRecord, onOpenLedger, reacting, today };
+  // A parent whose 하위 all left or went out of sight has nowhere to add a record.
+  const addable = ledgers.length > 0;
   const filterBar = (
     <RecordFilterBar
       query={query}
@@ -192,10 +194,12 @@ function Room({
             onBack={onBack}
             menuItems={menuItems}
             action={
-              <Button variant="primary" onClick={() => onAddRecord()}>
-                <Plus size={18} />
-                내역 추가
-              </Button>
+              addable && (
+                <Button variant="primary" onClick={() => onAddRecord()}>
+                  <Plus size={18} />
+                  내역 추가
+                </Button>
+              )
             }
           />
           <SummaryStrip
@@ -249,26 +253,38 @@ function Room({
               ) : (
                 <RecordList
                   records={shown}
-                  emptyText={records.length ? '조건에 맞는 내역이 없어요.' : '아직 내역이 없어요.'}
+                  emptyText={
+                    records.length
+                      ? '조건에 맞는 내역이 없어요.'
+                      : addable
+                        ? '아직 내역이 없어요.'
+                        : '하위 가계부가 없어요. 설정에서 하위 가계부를 골라 주세요.'
+                  }
                   {...context}
                 />
               )}
             </div>
           </div>
-          <Button variant="primary" className="view-add-record" onClick={() => onAddRecord()}>
-            <Plus size={18} />
-            내역 추가
-          </Button>
+          {addable && (
+            <Button variant="primary" className="view-add-record" onClick={() => onAddRecord()}>
+              <Plus size={18} />
+              내역 추가
+            </Button>
+          )}
           {day && (
             <BottomSheet title={dayLabel(day)} onClose={() => setDay(undefined)}>
               <DayRecords
                 date={day}
                 records={shown.filter((record) => record.date === day)}
                 {...context}
-                onAdd={(date) => {
-                  setDay(undefined);
-                  onAddRecord(date);
-                }}
+                onAdd={
+                  addable
+                    ? (date) => {
+                        setDay(undefined);
+                        onAddRecord(date);
+                      }
+                    : undefined
+                }
               />
             </BottomSheet>
           )}

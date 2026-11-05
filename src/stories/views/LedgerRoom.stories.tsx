@@ -238,6 +238,21 @@ export const ParentTravel: Story = {
     await expect(c.getByRole('status')).toHaveTextContent('하위: 일본여행');
   },
 };
+export const ParentWithoutChildren: Story = {
+  // Its only 하위 left or went out of sight: nothing to add to, so no 내역 추가 anywhere.
+  args: { ledger: { ...travel, childIds: [] } },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(c.getByText('하위 0개')).toBeVisible();
+    await expect(c.getByText(/^하위 가계부가 없어요/)).toBeVisible();
+    await expect(c.queryByRole('button', { name: '내역 추가' })).toBeNull();
+    await userEvent.click(c.getByRole('button', { name: '캘린더' }));
+    await userEvent.click(c.getByRole('button', { name: /^11월 3일/ }));
+    await expect(page.getByRole('dialog', { name: /^11월 3일/ })).toBeVisible();
+    await expect(page.queryByRole('button', { name: '이 날짜로 추가' })).toBeNull();
+  },
+};
 export const MembersMenu: Story = {
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);

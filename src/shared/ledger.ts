@@ -330,7 +330,8 @@ export function totals(records: LedgerRecord[], ledgers: Ledger[]): Totals {
   return { income, expense, balance: income - expense };
 }
 
-export const isParent = (ledger: Ledger) => ledger.childIds.length > 0;
+/** A parent has no 유형, so one whose 하위 all left or went out of sight is still a parent. */
+export const isParent = (ledger: Ledger) => ledger.childIds.length > 0 || !ledger.kinds.length;
 
 /** Every ledger below `root` (not itself), each once even when reachable by several paths. */
 export function descendants(ledgers: Ledger[], root: Ledger): Ledger[] {
