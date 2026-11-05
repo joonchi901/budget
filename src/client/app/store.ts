@@ -37,6 +37,13 @@ const run = <T>(
       }),
   );
 
+/** Whether IndexedDB works here, for tabs to share the copy and the outbox. */
+export const stored = () =>
+  open().then(
+    () => true,
+    () => false,
+  );
+
 /** The stored copy, if one of this SCHEMA is there. */
 export const readState = () =>
   run('state', 'readonly', (store) => store.get('current'))

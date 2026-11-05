@@ -51,7 +51,7 @@ import {
 import { ApiFailure, api } from './api';
 import { reencodePhoto } from './photo';
 import { useRoute } from './route';
-import { pushOutbox, readOutbox, readState, removeOutbox, writeState } from './store';
+import { pushOutbox, readOutbox, readState, removeOutbox, stored, writeState } from './store';
 
 type Sheet =
   | { type: 'entry'; ledgers: Ledger[]; date?: IsoDate; record?: LedgerRecord }
@@ -101,6 +101,15 @@ const STORE_AFTER = 500;
 /** Waits between tries while the server cannot be reached; the last one repeats. */
 const RETRY = [5000, 10000, 20000, 60000];
 
+/** What tabs tell each other on BroadcastChannel `budget` (docs/sync-plan.md §4.3). */
+type TabMessage =
+  /** The syncing tab stored the copy: read it again. */
+  | { type: 'state' }
+  /** To the syncing tab: send the outbox, and with `sync` ask the feed too. */
+  | { type: 'outbox' | 'sync' }
+  /** To the syncing tab: a room's 이전 글 another tab loaded, to keep in the copy. */
+  | { type: 'older'; messages: ChatMessage[] };
+
 /**
  * The app layer: keeps the user's data on this device, opens rooms and sheets, and saves through
  * the API. The data comes whole once (snapshot); after that every answer lists what changed since
@@ -130,8 +139,13 @@ export function App() {
    * changes still in the outbox made in it. The screen shows it and the device stores it.
    */
   const state = useRef<Snapshot>(undefined);
-  /** This page's changes still in the outbox, by key, for making again over a fresh snapshot. */
+  /** This page's changes still in the outbox, by key, for making again over a copy read afresh. */
   const locals = useRef(new Map<number, (data: Snapshot) => Snapshot>());
+  /** Whether this tab sends, checks and stores for every tab (§4.3); the others read its copy. */
+  const [leading, setLeading] = useState(false);
+  const syncing = useRef(false);
+  const channel = useRef<BroadcastChannel>(undefined);
+  const tell = (message: TabMessage) => channel.current?.postMessage(message);
   const storing = useRef<number>(undefined);
   const retry = useRef({ timer: 0, count: 0 });
   /** Brings the next check for others' changes forward, while a shared room is open. */
@@ -143,20 +157,38 @@ export function App() {
       message: failure instanceof Error ? failure.message : '문제가 생겼어요.',
       login: failure instanceof ApiFailure && failure.status === 401,
     });
-  /** Shows the device's copy, and stores it STORE_AFTER after the last change (§4.1). */
+  /**
+   * Shows the device's copy. The syncing tab stores it STORE_AFTER after the last change (§4.1)
+   * and tells the other tabs.
+   */
   const commit = (next: Snapshot) => {
     state.current = next;
     setData(next);
+    if (!syncing.current) return;
     window.clearTimeout(storing.current);
-    storing.current = window.setTimeout(() => writeState(next), STORE_AFTER);
+    storing.current = window.setTimeout(
+      () => writeState(next).then((done) => done && tell({ type: 'state' })),
+      STORE_AFTER,
+    );
   };
+  /** This page's changes still waiting, made over `data`. */
+  const unsent = (data: Snapshot) =>
+    [...locals.current.values()].reduce((next, local) => local(next), data);
   /** The whole data again, with this page's unsent changes made over it. */
   const reload = () =>
     api<Snapshot>('GET', '/api/snapshot').then((answer) => {
-      commit([...locals.current.values()].reduce((next, local) => local(next), answer));
+      commit(unsent(answer));
       setFullChats(new Set());
       setError(undefined);
     });
+  /** The stored copy with this page's changes still in the outbox; resolves whether there was one. */
+  const refresh = async () => {
+    const [copy, queued] = await Promise.all([readState(), readOutbox()]);
+    const waiting = new Set(queued.map((item) => item.key));
+    for (const key of locals.current.keys()) if (!waiting.has(key)) locals.current.delete(key);
+    if (copy) commit(unsent(copy));
+    return Boolean(copy);
+  };
   /**
    * Takes in a feed answer, keeping the targets of changes still in the outbox (`skip`, read
    * from it when not given): ledgers newly shared with the user come whole, `more` is asked for.
@@ -192,7 +224,7 @@ export function App() {
   const sync = (feed = false) => {
     window.clearTimeout(retry.current.timer);
     const run = queue.current.then(async () => {
-      if (!state.current) return false;
+      if (!syncing.current || !state.current) return false;
       try {
         const sent = await replay({
           read: readOutbox,
@@ -225,14 +257,56 @@ export function App() {
   };
   /** The data from the server whole, then any changes left in the outbox. */
   const start = () => reload().then(() => sync(), report);
-  // A stored copy shows at once and catches up behind it; without one the snapshot comes first.
+  // A stored copy shows at once. The syncing tab reads it again when it takes over and catches
+  // up behind it; without one it takes the snapshot first, and the other tabs wait for it.
   useEffect(() => {
-    readState().then((stored) => {
-      if (!stored) return start();
-      state.current = stored;
-      setData(stored);
-      sync(true);
+    refresh();
+  }, []);
+  useEffect(() => {
+    if (leading) refresh().then((found) => (found ? sync(true) : start()));
+  }, [leading]);
+  // One tab holds the lock for its life and alone sends, checks and stores (§4.3); when it goes,
+  // the next takes over. Without Web Locks or IndexedDB each tab does all of it for itself.
+  useEffect(() => {
+    const stop = new AbortController();
+    let release = () => {};
+    const lead = () => {
+      syncing.current = true;
+      setLeading(true);
+    };
+    stored().then((shared) => {
+      if (stop.signal.aborted) return;
+      if (!shared || !navigator.locks) return lead();
+      navigator.locks
+        .request('budget-sync', { signal: stop.signal }, () => {
+          lead();
+          return new Promise<void>((resolve) => (release = resolve));
+        })
+        .catch(() => {}); // the page went while waiting
     });
+    return () => {
+      stop.abort();
+      release();
+      syncing.current = false;
+      setLeading(false);
+    };
+  }, []);
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const tabs = new BroadcastChannel('budget');
+    channel.current = tabs;
+    tabs.onmessage = ({ data: message }: MessageEvent<TabMessage>) => {
+      if (!syncing.current) {
+        if (message.type === 'state') refresh();
+      } else if (message.type === 'outbox') sync();
+      else if (message.type === 'sync') sync(true);
+      else if (message.type === 'older' && state.current)
+        commit(withOlder(state.current, message.messages));
+    };
+    return () => {
+      channel.current = undefined;
+      tabs.close();
+    };
   }, []);
   // Unsent changes go as soon as the device is online again or the page shows again (§4.2).
   useEffect(() => {
@@ -252,7 +326,7 @@ export function App() {
   // hidden page does not check, and checks at once when it shows again. A 메모 needs none.
   const watching = Boolean(roomId) && (data?.ledgerMembers?.[roomId!]?.length ?? 0) > 1;
   useEffect(() => {
-    if (!watching) return;
+    if (!watching || !leading) return;
     let delay = POLL_FIRST;
     let timer: number | undefined;
     const later = () => {
@@ -280,7 +354,7 @@ export function App() {
       window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', shown);
     };
-  }, [watching]);
+  }, [watching, leading]);
 
   /**
    * A change: made on the device's copy at once, put in the outbox, then sent in turn (§4.2).
@@ -296,7 +370,8 @@ export function App() {
     wake.current?.();
     pushOutbox({ method, path, body, createdAt: new Date().toISOString() }).then((key) => {
       locals.current.set(key, local);
-      sync();
+      if (syncing.current) sync();
+      else tell({ type: 'outbox' });
     });
   };
   /** A room's 100 messages before its oldest loaded one (이전 글). */
@@ -309,6 +384,7 @@ export function App() {
       .then((older) => {
         if (older.length < 100) setFullChats((full) => new Set(full).add(ledgerId));
         commit(withOlder(state.current!, older));
+        if (!syncing.current) tell({ type: 'older', messages: older });
       })
       .catch(report);
   };
@@ -656,7 +732,9 @@ export function App() {
             onSave={(profile, photo) => {
               setTakenHandle(undefined);
               const save = (method: 'PUT' | 'DELETE', path: string, body?: unknown) =>
-                api(method, path, body, state.current!.seq).then((answer) => accept(answer));
+                api(method, path, body, state.current!.seq).then((answer) =>
+                  syncing.current ? accept(answer) : tell({ type: 'sync' }),
+                );
               queue.current = queue.current.then(() =>
                 save('PUT', '/api/profile', profile)
                   .then(async () => {
