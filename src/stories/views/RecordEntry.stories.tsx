@@ -134,6 +134,17 @@ export const Repeat: Story = {
     );
   },
 };
+export const NoKinds: Story = {
+  // A ledger without 유형 should not reach here, but if it does the sheet still opens.
+  args: { ledgers: [{ ...november, kinds: [] }] },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.type(page.getByRole('textbox', { name: '금액' }), '1000');
+    await userEvent.type(page.getByRole('textbox', { name: /내용/ }), '우리마트');
+    await userEvent.click(page.getByRole('button', { name: '저장' }));
+    await expect(page.getByRole('alert')).toHaveTextContent('유형');
+  },
+};
 export const NotOwner: Story = {
   play: async ({ canvasElement }) => {
     // Only the owner starts a 반복 내역.
