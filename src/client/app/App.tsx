@@ -49,6 +49,7 @@ import {
 import { ApiFailure, api } from './api';
 import { reencodePhoto } from './photo';
 import { useRoute } from './route';
+import { readState, writeState } from './store';
 
 type Sheet =
   | { type: 'entry'; ledgers: Ledger[]; date?: IsoDate; record?: LedgerRecord }
@@ -93,6 +94,8 @@ const withReaction = <T extends LedgerRecord | ChatMessage>(
 /** Checks for others' changes start this often, and slow down to the longest while none come. */
 const POLL_FIRST = 5000;
 const POLL_LONGEST = 30000;
+/** The device's copy is stored this long after the last change to it, not on every one. */
+const STORE_AFTER = 500;
 
 /**
  * The app layer: loads the user's data, opens rooms and sheets, and saves through the API.
@@ -122,6 +125,7 @@ export function App() {
   const pending = useRef(0);
   /** The server's state as this device knows it: what is saved for sure, with the cursor. */
   const confirmed = useRef<Snapshot>(undefined);
+  const storing = useRef<number>(undefined);
   /** Brings the next check for others' changes forward, while a shared room is open. */
   const wake = useRef<() => void>(undefined);
   const today = localDate(new Date());
@@ -132,9 +136,15 @@ export function App() {
       login: failure instanceof ApiFailure && failure.status === 401,
       retry,
     });
+  /** Takes the server's state as known, and stores it on this device (docs/sync-plan.md §4.1). */
+  const confirm = (next: Snapshot) => {
+    confirmed.current = next;
+    window.clearTimeout(storing.current);
+    storing.current = window.setTimeout(() => writeState(next), STORE_AFTER);
+  };
   const reload = () =>
     api<Snapshot>('GET', '/api/snapshot').then((answer) => {
-      confirmed.current = answer;
+      confirm(answer);
       setData(answer);
       setFullChats(new Set());
       setError(undefined);
@@ -158,7 +168,7 @@ export function App() {
         window.setTimeout(() => (queue.current = queue.current.then(catchUp)), POLL_FIRST);
       }
     }
-    confirmed.current = next;
+    confirm(next);
     if (sync.more) return accept(await api('GET', '/api/sync', undefined, next.seq));
     if (!pending.current) setData(next);
   };
@@ -166,8 +176,14 @@ export function App() {
     api('GET', '/api/sync', undefined, confirmed.current?.seq)
       .then(accept)
       .catch(() => {});
+  // A stored copy shows at once and catches up behind it; without one the snapshot comes first.
   useEffect(() => {
-    reload();
+    readState().then((stored) => {
+      if (!stored) return reload();
+      confirmed.current = stored;
+      setData(stored);
+      queue.current = queue.current.then(catchUp);
+    });
   }, []);
   // Each room opens on 내역.
   useEffect(() => setRoomView('records'), [roomId]);
@@ -249,7 +265,7 @@ export function App() {
       )
         .then((older) => {
           if (older.length < 100) setFullChats((full) => new Set(full).add(ledgerId));
-          confirmed.current = withOlder(confirmed.current!, older);
+          confirm(withOlder(confirmed.current!, older));
           setData((current) => current && withOlder(current, older));
         })
         .catch(report);
