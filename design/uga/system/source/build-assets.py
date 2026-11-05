@@ -122,6 +122,30 @@ for motif,box in motifs.items():
 
 # Application identity uses the accepted representative drawing.
 r=base('우가 앱 아이콘','0 0 256 256');markup(r,'<rect x="0" y="0" width="256" height="256" rx="62" fill="#F08A5D"/><rect x="12" y="12" width="232" height="232" rx="53" fill="#F6B284"/><path d="M28 150C63 47 163 24 228 91V225H28Z" fill="#F8C49C"/>');r.append(art('uga-character',20,14,216,230));save('uga-app-icon',r,'accepted representative, coral UI palette','identity')
+
+moneybag_trace = base('우가 돈주머니와 뼈다귀 (ImageGen)','0 0 256 256')
+markup(moneybag_trace, '''
+<defs>
+  <linearGradient id="bag-gold" x2="0" y2="1" gradientUnits="objectBoundingBox">
+    <stop stop-color="#edbf83" />
+    <stop offset="1" stop-color="#e6b47a" />
+  </linearGradient>
+</defs>
+<g fill="#331c0e">
+  <path d="M104 92l15-39c-6-8-8-17-6-27 3-14 14-21 27-21 12 0 21 7 25 15 12-4 24 3 28 14 6 15-4 31-16 37l-15 28z" />
+  <path d="M82 121c-9-8-16-25-14-36 1-13 18-19 30-16 13 3 17 11 29 11s22-9 35-11c13-2 29 5 29 16 1 12-8 24-14 32 18 10 34 29 40 56 6 23 1 41-13 57-13 15-39 21-76 21s-62-6-76-21c-16-17-20-35-14-56 7-28 22-44 44-53Z" />
+</g>
+<path d="M118 82l13-30c1-4-3-6-5-10-7-12 1-26 13-27 9-1 15 6 17 16 1 4 2 4 6 1 10-6 22 1 23 10 1 11-7 19-18 21l-8 1-10 18c-9-1-22-2-31 0Z" fill="#faeddc" />
+<path d="M148 82l9-19c3-6 15-5 24-13l3-4c-1 9-7 15-17 17l-8 1-10 18Z" fill="#e4d2bf" />
+<path d="M79 86c-1-6 11-10 19-8 10 2 16 11 30 11 15 0 23-9 32-11s20 1 21 7c0 5-7 12-10 17-26 9-57 9-83 0-2-5-8-12-9-16Z" fill="url(#bag-gold)" />
+<path d="M94 87c6 0 11 3 14 6l4 14-12-1-5-14Zm65 0c-5 1-10 4-12 8l-4 13 12-2 8-16c1-2-1-3-4-3Z" fill="#bb8c5a" />
+<path d="M88 112c23 6 57 6 81 0 2 2 4 9 1 12-22 7-63 8-82 0-3-1-2-10 0-12Z" fill="#eabd7e" />
+<path d="M86 130c21 9 61 9 85 0 21 10 33 28 36 50 4 23-4 39-23 50-16 9-35 11-56 11-24 0-45-3-59-13-17-11-24-27-21-48 4-24 17-40 38-50Z" fill="url(#bag-gold)" />
+<path d="M104 135l11 1-4 13c-1 3-8 1-11-1-2-2 3-10 4-13Zm36 1 10-2c3 3 9 12 8 14-2 3-10 4-12 1Z" fill="#bd8e5c" />
+<path d="M111 230c12-3 29-2 38 1 10 4 7 7-4 8-12 2-30 2-42-1-7-2-3-6 8-8Z" fill="#d4a269" />
+<path d="M94 156h9c2 0 3 2 3 4l4 16h8l5-17c1-2 2-3 4-3h6c2 0 3 1 4 3l4 17h7l5-17c1-2 2-3 4-3h6c2 0 3 1 2 4l-4 16h7c2 0 3 1 3 3l-1 6c0 2-1 3-3 3h-10l-6 21c-1 2-2 3-4 3h-6c-3 0-4-1-5-3l-6-21h-3l-8 21c-1 2-2 3-4 3h-6c-2 0-4-1-4-3l-6-21h-9c-2 0-3-1-3-3v-6c0-2 1-3 3-3h6l-4-16c-1-2 0-4 2-4Z" fill="#32190d" />''')
+save('uga-app-icon-moneybag-imagegen',moneybag_trace,'vector trace of the ImageGen moneybag and bone artwork','identity')
+
 face=ET.parse(OUT/'uga-head-happy.svg').getroot()
 r=base('우가 단색 얼굴',face.get('viewBox'));defs=ET.SubElement(r,q('defs'));mask=ET.SubElement(defs,q('mask'),{'id':'mono-face-cutout','maskUnits':'userSpaceOnUse','x':'0','y':'0','width':face.get('width'),'height':face.get('height')})
 for n in face:
@@ -145,6 +169,14 @@ for i,n in enumerate(children):
  if i in [45,49]:continue
  if i in [4,6,7,8,9] or (coords and min(coords[1::2])+offset[1]>=360) or n.get('id')=='logo-subtitle':wm.append(deepcopy(n))
 save('uga-wordmark',wm,'accepted stone wordmark paths, rebuilt outline','logo')
+
+# These paths draw the subtitle's stone plaque and its highlights in the accepted wordmark.
+subtitle_plaque_paths = {0, 5, 10, 25, 26, 28, 33, 34, 38}
+wordmark_icon = base('우가','6 234 448 448')
+for i, path in enumerate(wm.findall(q('path'))):
+ if i not in subtitle_plaque_paths:wordmark_icon.append(deepcopy(path))
+save('uga-wordmark-icon',wordmark_icon,'accepted stone wordmark without subtitle or plaque','logo')
+
 r=base('우가 — 우리의 가계부 가로 로고','0 0 520 240');r.append(art('uga-character',0,7,226,226));r.append(art('uga-wordmark',214,17,306,207));save('uga-logo-horizontal',r,'accepted representative and accepted wordmark','logo')
 
 # Small functional icons deliberately simplify details at 24px; same outline palette.

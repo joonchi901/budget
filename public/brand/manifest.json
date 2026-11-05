@@ -215,6 +215,15 @@
       "kind": "identity",
       "sha256": "315bf03ab4008d13c56e41b7bfd87f699fd150138cd8973b86610139e2bade79"
     },
+    "uga-app-icon-moneybag-imagegen": {
+      "file": "/brand/uga-app-icon-moneybag-imagegen.svg",
+      "viewBox": "0 0 256 256",
+      "bytes": 2178,
+      "paths": 11,
+      "origin": "ImageGen money bag with a bone; the app icon and web icon",
+      "kind": "identity",
+      "sha256": "ac975333f35495009e0bce747e84ff1aec956ecc0c93fb97b2433d198e3f3617"
+    },
     "uga-monochrome": {
       "file": "/brand/uga-monochrome.svg",
       "viewBox": "0 0 117 117",
@@ -232,6 +241,15 @@
       "origin": "accepted stone wordmark paths, rebuilt outline",
       "kind": "logo",
       "sha256": "c5237f440153b9532bfb6d6848ca68859db0cb9707482eac9cff2c40e4df1968"
+    },
+    "uga-wordmark-icon": {
+      "file": "/brand/uga-wordmark-icon.svg",
+      "viewBox": "6 234 448 448",
+      "bytes": 28379,
+      "paths": 30,
+      "origin": "uga-wordmark letters without the subtitle, squared for the favicon",
+      "kind": "logo",
+      "sha256": "bab6819c82e15c38e3839303d71b396b9b68b2252242ce0b8366d9d10bede0f3"
     },
     "uga-logo-horizontal": {
       "file": "/brand/uga-logo-horizontal.svg",

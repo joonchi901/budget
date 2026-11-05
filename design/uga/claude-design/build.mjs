@@ -662,7 +662,7 @@ const groupOf = (file) =>
 const assetGroups = {
   Logos: {
     tile: 'l',
-    note: '로고. 원본 SVG 그대로 쓰고 색을 바꾸거나 다시 그리지 않아요. `uga-logo-primary.svg`는 첫 화면·로그인, `uga-logo-horizontal.svg`는 좁은 머리 막대, `uga-wordmark.svg`는 글자만, `uga-monochrome.svg`는 한 가지 색(brand-brown)만 쓸 수 있는 곳, `uga-app-icon.svg`는 앱 아이콘과 파비콘이에요.',
+    note: '로고. 원본 SVG 그대로 쓰고 색을 바꾸거나 다시 그리지 않아요. `uga-logo-primary.svg`는 첫 화면·로그인, `uga-logo-horizontal.svg`는 좁은 머리 막대, `uga-wordmark.svg`는 글자만, `uga-monochrome.svg`는 한 가지 색(brand-brown)만 쓸 수 있는 곳, `uga-app-icon-moneybag-imagegen.svg`(돈주머니와 뼈다귀)는 앱 아이콘이자 파비콘이고 접힌 데스크톱 메뉴의 작은 로고예요. `uga-wordmark-icon.svg`는 우가 글자만 정사각형에 담은 것, `uga-app-icon.svg`는 이전 앱 아이콘이에요.',
   },
   Mascot: {
     tile: 'm',
