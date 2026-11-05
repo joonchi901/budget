@@ -991,4 +991,17 @@ export default {
       );
     }
   },
+  /** Keeps 30 days of the sync log (docs/sync-plan.md §3.8); a device away longer resyncs. */
+  async scheduled(_controller, env) {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    await env.DB.batch([
+      // The newest row stays, so the log is never empty and its last seq is never lost.
+      env.DB.prepare(
+        'DELETE FROM changes WHERE at < ? AND seq < (SELECT max(seq) FROM changes)',
+      ).bind(cutoff),
+      env.DB.prepare(
+        "UPDATE sync_meta SET value = (SELECT COALESCE(min(seq), 1) - 1 FROM changes) WHERE key = 'pruned_to'",
+      ),
+    ]);
+  },
 } satisfies ExportedHandler<Env>;
