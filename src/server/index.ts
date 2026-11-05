@@ -627,8 +627,41 @@ async function putRecord(db: D1Database, data: Loaded, id: Id, body: unknown) {
   ]);
 }
 
-async function deleteRecord(db: D1Database, data: Loaded, id: Id) {
+/**
+ * Whether a target that is gone changed in the user's scope after their cursor: a DELETE sent
+ * again (its first answer lost) succeeds like the first (docs/sync-plan.md §1, 원칙 4). An id the
+ * user never could see leaves no such row.
+ */
+async function goneSince(
+  db: D1Database,
+  data: Loaded,
+  kind: 'record' | 'asset',
+  id: Id,
+  since: number | undefined,
+) {
+  if (since === undefined) return false;
+  const row = await (
+    kind === 'asset'
+      ? db
+          .prepare(
+            `SELECT 1 FROM changes INDEXED BY changes_user
+             WHERE user_id = ? AND seq > ? AND kind = 'asset' AND id = ? LIMIT 1`,
+          )
+          .bind(data.user.id, since, id)
+      : db
+          .prepare(
+            `SELECT 1 FROM changes INDEXED BY changes_ledger
+             WHERE ledger_id IN (SELECT ledger_id FROM ledger_members WHERE user_id = ?)
+               AND seq > ? AND kind = 'record' AND id = ? LIMIT 1`,
+          )
+          .bind(data.user.id, since, id)
+  ).first();
+  return Boolean(row);
+}
+
+async function deleteRecord(db: D1Database, data: Loaded, id: Id, since?: number) {
   const before = await ledgerOf(db, id);
+  if (!before && (await goneSince(db, data, 'record', id, since))) return;
   if (!before || !data.roles.has(before.ledgerId)) fail(404, 'NOT_FOUND', '없는 내역이에요.');
   if (!writable(data, before.ledgerId)) fail(403, 'FORBIDDEN', '이 내역을 지울 권한이 없어요.');
   await db.batch([
@@ -823,8 +856,11 @@ async function setMessageReaction(
   ]);
 }
 
-async function deleteAsset(db: D1Database, data: Loaded, id: Id) {
-  if (!data.assets?.some((asset) => asset.id === id)) fail(404, 'NOT_FOUND', '없는 자산이에요.');
+async function deleteAsset(db: D1Database, data: Loaded, id: Id, since?: number) {
+  if (!data.assets?.some((asset) => asset.id === id)) {
+    if (await goneSince(db, data, 'asset', id, since)) return;
+    fail(404, 'NOT_FOUND', '없는 자산이에요.');
+  }
   await db.batch([
     db.prepare('DELETE FROM assets WHERE id = ? AND owner_id = ?').bind(id, data.user.id),
     change(db, { kind: 'asset', id, userId: data.user.id }),
@@ -899,11 +935,11 @@ export default {
       else if (resource === 'records' && request.method === 'PUT' && target)
         await putRecord(env.DB, data, target, await request.json());
       else if (resource === 'records' && request.method === 'DELETE' && target)
-        await deleteRecord(env.DB, data, target);
+        await deleteRecord(env.DB, data, target, since);
       else if (resource === 'assets' && request.method === 'PUT' && target)
         await putAsset(env.DB, data, target, await request.json());
       else if (resource === 'assets' && request.method === 'DELETE' && target)
-        await deleteAsset(env.DB, data, target);
+        await deleteAsset(env.DB, data, target, since);
       else if (resource === 'messages' && request.method === 'PUT' && target)
         await putMessage(env.DB, data, target, await request.json());
       else if (resource === 'messages' && request.method === 'DELETE' && target)
