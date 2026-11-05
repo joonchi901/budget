@@ -1,0 +1,11 @@
+{
+  "name": "우가 · 우리의 가계부",
+  "short_name": "우가",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#faf8f4",
+  "background_color": "#faf8f4",
+  "icons": [{ "src": "/brand/uga-app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
