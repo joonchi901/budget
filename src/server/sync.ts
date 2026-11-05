@@ -186,22 +186,26 @@ export async function feed(db: D1Database, me: Id, since: number | undefined): P
   if (since === undefined || since < (pruned ?? 0))
     return { seq: await latestSeq(db), ledgerIds, changes: [], resync: true };
 
-  // One query reads both indexes (MULTI-INDEX OR); past 90 ledgers the rest go 90 at a time.
-  // The newest seq is read in the same batch (one transaction), so nothing slips between them.
-  const scopes = chunks(ledgerIds);
+  // The user's rows and their ledgers' rows, each pinned to its index: with ANALYZE statistics
+  // SQLite drops the OR of the two for a seq range scan over every household's changes. Past 90
+  // ledgers the rest go 90 at a time. The newest seq is read in the same batch (one transaction),
+  // so nothing slips between them.
   const [top, ...found] = await db.batch<LogRow>([
     db.prepare('SELECT COALESCE(max(seq), 0) AS seq FROM changes'),
-    ...(scopes.length ? scopes : [[]]).map((chunk, at) => {
-      const where = [
-        ...(at ? [] : ['user_id = ?']),
-        ...(chunk.length ? [`ledger_id IN (${marks(chunk)})`] : []),
-      ].join(' OR ');
-      return db
+    db
+      .prepare(
+        `SELECT seq, kind, id, ledger_id FROM changes INDEXED BY changes_user
+         WHERE user_id = ? AND seq > ? ORDER BY seq LIMIT ${LIMIT}`,
+      )
+      .bind(me, since),
+    ...chunks(ledgerIds).map((chunk) =>
+      db
         .prepare(
-          `SELECT seq, kind, id, ledger_id FROM changes WHERE seq > ? AND (${where}) ORDER BY seq LIMIT ${LIMIT}`,
+          `SELECT seq, kind, id, ledger_id FROM changes INDEXED BY changes_ledger
+           WHERE ledger_id IN (${marks(chunk)}) AND seq > ? ORDER BY seq LIMIT ${LIMIT}`,
         )
-        .bind(since, ...(at ? [] : [me]), ...chunk);
-    }),
+        .bind(...chunk, since),
+    ),
   ]);
   const rows = found
     .flatMap((result) => result.results)

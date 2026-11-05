@@ -190,6 +190,8 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
 
 `EXPLAIN QUERY PLAN`으로 3의 쿼리가 두 인덱스를 OR로 쓰는지 확인한다(SQLite의 OR 최적화). 못 쓰면 `user_id = ?` 와 `ledger_id IN (...)`를 두 쿼리로 나눠 `UNION ALL` 한다.
 
+확인 결과(구현 시): 통계가 없으면 `MULTI-INDEX OR`로 두 인덱스를 쓰지만, `ANALYZE` 뒤에는(D1은 `PRAGMA optimize`로 통계를 만들 수 있다) `seq` 범위 스캔으로 바뀌어 다른 집의 변경까지 읽는다(커서가 1만 행 뒤처지면 1,980행). 그래서 두 쿼리로 나누고 각각 `INDEXED BY changes_user`·`INDEXED BY changes_ledger`로 인덱스를 고정했다. `UNION ALL` 대신 같은 `db.batch`의 별개 문으로 보내고(한 트랜잭션) 코드에서 seq로 합친다.
+
 ### 3.6 서버 검증 범위 축소 (확정)
 
 `load(db, user, scope?)`에 `scope.ledgerId`를 더한다. 주어지면 내역·반응·대화 쿼리에 `AND ledger_id = ?`를 붙인다(가계부 목록·멤버는 그대로: 수십 행). 디스패처는 자원별로 범위를 정한다.
@@ -202,6 +204,8 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
 | `snapshot`, `sync` | 위 3.4·3.5 |
 
 각 핸들러가 `data.records`·`data.messages`에서 무엇을 찾는지 grep으로 확인하고, 범위 밖을 가정하는 곳을 고친다.
+
+검증용 `load()`는 내역의 반응을 읽지 않고(어떤 검사도 보지 않음), 사람 목록(친구·초대·멤버·가입 링크)은 초대 핸들러(`inviteMembers`·`acceptInvite`·`declineInvite`)만 읽는다. 측정해 보니 가계부 24개·멤버 2명에서 사람 목록이 쓰기 한 번에 약 150행이라 "내역 쓰기 ≤ 그 가계부 내역 수 + 50"을 넘겼다.
 
 ### 3.7 대화 변경 (확정)
 

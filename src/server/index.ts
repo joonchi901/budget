@@ -105,19 +105,23 @@ function checkOrigin(request: Request, env: Env) {
 }
 
 /** What a request reads beyond the user's ledgers, roles, assets and people (§3.6). */
+/** What a request reads besides the user's ledgers, roles and assets (docs/sync-plan.md §3.6). */
 type Scope = {
-  /** Records of these ledgers only; at most 90. */
-  ledgerIds?: Id[];
-  /** No records at all: the request does not look at them. */
-  records?: false;
+  /** Records: all the user's, these ledgers' only (at most 90), or none. */
+  records: 'all' | Id[] | false;
+  /** The records' reactions, as the snapshot shows them; no check looks at them. */
+  reactions?: true;
+  /** Friends, invitations, members and the signup link; of the changes, invitations use them. */
+  people?: true;
 };
 
 async function load(
   db: D1Database,
   user: AppData['user'],
-  scope: Scope = {},
+  scope: Scope,
 ): Promise<Loaded & Pick<Snapshot, 'seenAt'>> {
-  const only = scope.ledgerIds ? ` AND r.ledger_id IN (${marks(scope.ledgerIds)})` : '';
+  const ledgerIds = Array.isArray(scope.records) ? scope.records : undefined;
+  const only = ledgerIds ? ` AND r.ledger_id IN (${marks(ledgerIds)})` : '';
   const [ledgerRows, edgeRows, recordRows, assetRows, people] = await Promise.all([
     db
       .prepare(
@@ -136,16 +140,17 @@ async function load(
       ? undefined
       : db
           .prepare(
-            `SELECT r.*, ${RECORD_REACTIONS} FROM records r JOIN ledger_members m ON m.ledger_id = r.ledger_id
+            `SELECT r.*, ${scope.reactions ? RECORD_REACTIONS : "'[]' AS reactions"} FROM records r
+             JOIN ledger_members m ON m.ledger_id = r.ledger_id
              WHERE m.user_id = ?${only} ORDER BY r.date, r.created_at`,
           )
-          .bind(user.id, ...(scope.ledgerIds ?? []))
+          .bind(user.id, ...(ledgerIds ?? []))
           .all<RecordRow>(),
     db
       .prepare('SELECT * FROM assets WHERE owner_id = ? ORDER BY created_at')
       .bind(user.id)
       .all<Parameters<typeof toAsset>[0]>(),
-    loadPeople(db, user.id, scope.ledgerIds),
+    scope.people ? loadPeople(db, user.id, ledgerIds) : {},
   ]);
   const visible = new Set(ledgerRows.results.map((row) => row.id));
   return {
@@ -172,7 +177,11 @@ async function snapshot(
 ): Promise<Snapshot> {
   // The cursor first: whatever changes while the rest is read comes again by the feed.
   const seq = await latestSeq(db);
-  const { roles: _, ...data } = await load(db, user, { ledgerIds });
+  const { roles: _, ...data } = await load(db, user, {
+    records: ledgerIds ?? 'all',
+    reactions: true,
+    people: true,
+  });
   const ledgers = ledgerIds
     ? data.ledgers.filter((ledger) => ledgerIds.includes(ledger.id))
     : data.ledgers;
@@ -871,14 +880,16 @@ export default {
           return json(await olderMessages(env.DB, user, ledgerId, before));
         }
       }
-      // A change reads only what its checks need (§3.6): a ledger's own records for its PUT.
+      // A change reads only what its checks need (§3.6): a ledger's own records for its PUT,
+      // the people lists for invitations, and otherwise no records at all.
       const target = isId(id) && extra === undefined ? id : undefined;
+      const inviting = (resource === 'ledgers' && extra === 'invites') || resource === 'invites';
       const data = await load(
         env.DB,
         user,
         resource === 'ledgers' && request.method === 'PUT' && target
-          ? { ledgerIds: [target] }
-          : { records: false },
+          ? { records: [target] }
+          : { records: false, ...(inviting ? { people: true as const } : {}) },
       );
       if (request.method === 'GET') fail(404, 'NOT_FOUND', '없는 주소예요.');
       else if (resource === 'ledgers' && request.method === 'PUT' && target)
