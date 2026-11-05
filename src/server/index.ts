@@ -104,7 +104,6 @@ function checkOrigin(request: Request, env: Env) {
   fail(403, 'ORIGIN_DENIED', '허용되지 않은 요청이에요.');
 }
 
-/** What a request reads beyond the user's ledgers, roles, assets and people (§3.6). */
 /** What a request reads besides the user's ledgers, roles and assets (docs/sync-plan.md §3.6). */
 type Scope = {
   /** Records: all the user's, these ledgers' only (at most 90), or none. */
@@ -729,10 +728,10 @@ async function putAsset(db: D1Database, data: Loaded, id: Id, body: unknown) {
   ]);
 }
 
-/** Sends a 대화 line to a ledger the user belongs to: a text of up to 1,000 characters or one sticker. */
 /**
- * Sends a message, or changes the text of one the user wrote. A new one may answer another
- * message of the same 대화 (답장).
+ * Sends a 대화 line to a ledger the user belongs to (a text of up to 1,000 characters or one
+ * sticker), or changes the text of one the user wrote. A new one may answer another message of
+ * the same 대화 (답장).
  */
 async function putMessage(db: D1Database, data: Loaded, id: Id, body: unknown) {
   const value = raw(body);
@@ -895,6 +894,11 @@ export default {
       const [, api, resource, id, extra, reaction, rest] = url.pathname.split('/');
       if (api !== 'api') fail(404, 'NOT_FOUND', '없는 주소예요.');
       const user = await signedIn(request, env);
+      // A device holding another account's copy forgets it before anything is read or written
+      // (docs/sync-plan.md §4.5).
+      const cached = request.headers.get('X-Cached-User');
+      if (cached !== null && cached !== user.id)
+        fail(409, 'ACCOUNT_CHANGED', '다른 계정으로 로그인했어요.');
       if (request.method !== 'GET') checkOrigin(request, env);
       // Reads: a photo, an exact ID lookup, the snapshot, the feed and a room's older messages.
       if (request.method === 'GET' && resource === 'photos' && isId(id) && extra && !reaction)
@@ -1032,11 +1036,18 @@ export default {
   /** Keeps 30 days of the sync log (docs/sync-plan.md §3.8); a device away longer resyncs. */
   async scheduled(_controller, env) {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    // Everything before the first row of the last 30 days goes. Finding that row in seq order
+    // (`at` has no index) and deleting by seq reads only the rows that go. The newest row always
+    // stays, so the log is never empty and its last seq is never lost.
+    const last = await env.DB.prepare(
+      `SELECT COALESCE((SELECT seq FROM changes WHERE at >= ? ORDER BY seq LIMIT 1),
+                       (SELECT max(seq) FROM changes)) - 1 AS seq`,
+    )
+      .bind(cutoff)
+      .first<number>('seq');
+    if (!last) return;
     await env.DB.batch([
-      // The newest row stays, so the log is never empty and its last seq is never lost.
-      env.DB.prepare(
-        'DELETE FROM changes WHERE at < ? AND seq < (SELECT max(seq) FROM changes)',
-      ).bind(cutoff),
+      env.DB.prepare('DELETE FROM changes WHERE seq <= ?').bind(last),
       env.DB.prepare(
         "UPDATE sync_meta SET value = (SELECT COALESCE(min(seq), 1) - 1 FROM changes) WHERE key = 'pruned_to'",
       ),

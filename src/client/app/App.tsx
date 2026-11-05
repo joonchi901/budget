@@ -39,8 +39,11 @@ import {
 import { assetFor, type Asset } from '../../shared/assets';
 import type { Profile, RoomInvite } from '../../shared/people';
 import {
+  ROOM_LATEST,
   applyChanges,
   mergeSnapshot,
+  pendingKeys,
+  replay,
   withOlder,
   type Snapshot,
   type Sync,
@@ -48,6 +51,15 @@ import {
 import { ApiFailure, api } from './api';
 import { reencodePhoto } from './photo';
 import { useRoute } from './route';
+import {
+  clearState,
+  pushOutbox,
+  readOutbox,
+  readState,
+  removeOutbox,
+  stored,
+  writeState,
+} from './store';
 
 type Sheet =
   | { type: 'entry'; ledgers: Ledger[]; date?: IsoDate; record?: LedgerRecord }
@@ -92,17 +104,33 @@ const withReaction = <T extends LedgerRecord | ChatMessage>(
 /** Checks for others' changes start this often, and slow down to the longest while none come. */
 const POLL_FIRST = 5000;
 const POLL_LONGEST = 30000;
+/** The device's copy is stored this long after the last change to it, not on every one. */
+const STORE_AFTER = 500;
+/** Waits between tries while the server cannot be reached; the last one repeats. */
+const RETRY = [5000, 10000, 20000, 60000];
+
+/** What tabs tell each other on BroadcastChannel `budget` (docs/sync-plan.md §4.3). */
+type TabMessage =
+  /** The syncing tab stored the copy: read it again. */
+  | { type: 'state' }
+  /** The syncing tab's check found others' changes: a shared room open elsewhere checks soon. */
+  | { type: 'news' }
+  /** To the syncing tab: send the outbox, and with `sync` ask the feed too. */
+  | { type: 'outbox' | 'sync' }
+  /** To the syncing tab: a room's 이전 글 another tab loaded, to keep in the copy. */
+  | { type: 'older'; messages: ChatMessage[] }
+  /** The copy is gone (§4.5): show the login screen, or start again. */
+  | { type: 'logout' | 'reset' };
 
 /**
- * The app layer: loads the user's data, opens rooms and sheets, and saves through the API.
- * The data comes whole once (snapshot); after that every answer lists what changed since the
- * client's cursor (docs/sync-plan.md §3.9). A change shows at once; changes are sent one at a
- * time in order, and the server's state shows again once none is left unanswered. A failure
- * catches up with the server.
+ * The app layer: keeps the user's data on this device, opens rooms and sheets, and saves through
+ * the API. The data comes whole once (snapshot); after that every answer lists what changed since
+ * the device's cursor (docs/sync-plan.md §3.9). A change shows at once and waits in the outbox
+ * until the server takes it, one at a time in order (§4.2).
  */
 export function App() {
   const [data, setData] = useState<Snapshot>();
-  const [error, setError] = useState<{ message: string; login?: boolean; retry?(): void }>();
+  const [error, setError] = useState<{ message: string; login?: boolean }>();
   const [sheet, setSheet] = useState<Sheet>();
   const { route, go, back } = useRoute();
   const { tab, roomId } = route;
@@ -116,57 +144,261 @@ export function App() {
   const [takenHandle, setTakenHandle] = useState<string>();
   /** Rooms whose 대화 is loaded back to its first message. */
   const [fullChats, setFullChats] = useState<Set<Id>>(() => new Set());
+  /** Calls to the server, one at a time: the outbox, checks for others' changes, their answers. */
   const queue = useRef(Promise.resolve());
-  /** Changes sent and not answered yet; while any is, the screen keeps showing them. */
-  const pending = useRef(0);
-  /** The server's state as this device knows it: what is saved for sure, with the cursor. */
-  const confirmed = useRef<Snapshot>(undefined);
+  /**
+   * This device's copy (docs/sync-plan.md §4.1): the server's state as last answered, with the
+   * changes still in the outbox made in it. The screen shows it and the device stores it.
+   */
+  const state = useRef<Snapshot>(undefined);
+  /** This page's changes still in the outbox, by key, for making again over a copy read afresh. */
+  const locals = useRef(new Map<number, (data: Snapshot) => Snapshot>());
+  /** Whether this tab sends, checks and stores for every tab (§4.3); the others read its copy. */
+  const [leading, setLeading] = useState(false);
+  const syncing = useRef(false);
+  const channel = useRef<BroadcastChannel>(undefined);
+  const tell = (message: TabMessage) => channel.current?.postMessage(message);
+  const storing = useRef<number>(undefined);
+  const retry = useRef({ timer: 0, count: 0 });
+  /** What the server last refused in the outbox, told once the data is taken whole again. */
+  const refusal = useRef<string>(undefined);
+  /** Counts the copies forgotten, so a snapshot asked for before cannot bring one back. */
+  const epoch = useRef(0);
   /** Brings the next check for others' changes forward, while a shared room is open. */
   const wake = useRef<() => void>(undefined);
   const today = localDate(new Date());
 
-  const report = (failure: unknown, retry?: () => void) =>
-    setError({
-      message: failure instanceof Error ? failure.message : '문제가 생겼어요.',
-      login: failure instanceof ApiFailure && failure.status === 401,
-      retry,
-    });
-  const reload = () =>
-    api<Snapshot>('GET', '/api/snapshot').then((answer) => {
-      confirmed.current = answer;
-      setData(answer);
+  /** Drops this page's copy; a request already out comes back to nothing. */
+  const drop = () => {
+    epoch.current += 1;
+    window.clearTimeout(storing.current);
+    window.clearTimeout(retry.current.timer);
+    state.current = undefined;
+    refusal.current = undefined;
+    locals.current.clear();
+    setData(undefined);
+    setFullChats(new Set());
+  };
+  /** Once the copy is gone: the login screen, or after `reset` the syncing tab starts again. */
+  const after = (then: 'logout' | 'reset') => {
+    setError(then === 'logout' ? { message: '', login: true } : undefined);
+    if (then === 'reset' && syncing.current) start();
+  };
+  /** Forgets this device's copy and outbox in every tab (docs/sync-plan.md §4.5, §8.16). */
+  const forget = (then: 'logout' | 'reset') => {
+    drop();
+    tell({ type: then });
+    return clearState().then(() => after(then));
+  };
+  /** A 401, or a session of another account: forgets the copy, and says so (§4.5). */
+  const leave = (failure: unknown) =>
+    failure instanceof ApiFailure && failure.status === 401
+      ? forget('logout')
+      : failure instanceof ApiFailure && failure.code === 'ACCOUNT_CHANGED'
+        ? forget('reset')
+        : undefined;
+  const report = (failure: unknown) => {
+    if (leave(failure)) return;
+    setError({ message: failure instanceof Error ? failure.message : '문제가 생겼어요.' });
+  };
+  /**
+   * Shows the device's copy. The syncing tab stores it STORE_AFTER after the last change (§4.1)
+   * and tells the other tabs.
+   */
+  const commit = (next: Snapshot) => {
+    state.current = next;
+    setData(next);
+    if (!syncing.current) return;
+    window.clearTimeout(storing.current);
+    storing.current = window.setTimeout(
+      () => writeState(next).then((done) => done && tell({ type: 'state' })),
+      STORE_AFTER,
+    );
+  };
+  /** This page's changes still waiting, made over `data`. */
+  const unsent = (data: Snapshot) =>
+    [...locals.current.values()].reduce((next, local) => local(next), data);
+  /** The whole data again, with this page's unsent changes made over it. */
+  const reload = () => {
+    const asked = epoch.current;
+    return api<Snapshot>('GET', '/api/snapshot', undefined, state.current).then((answer) => {
+      if (asked !== epoch.current) return;
+      commit(unsent(answer));
+      setFullChats(new Set());
       setError(undefined);
-    }, report);
-  /** Takes in a feed answer: ledgers newly shared with the user come whole, `more` is asked for. */
-  const accept = async (sync: Sync): Promise<void> => {
-    if (sync.resync) return reload();
-    const before = confirmed.current!;
-    let next = applyChanges(before, sync);
-    const fresh = sync.ledgerIds.filter((id) => !before.ledgers.some((ledger) => ledger.id === id));
+    });
+  };
+  /** The stored copy with this page's changes still in the outbox; resolves whether there was one. */
+  const refresh = async () => {
+    const [copy, queued] = await Promise.all([readState(), readOutbox()]);
+    const waiting = new Set(queued.map((item) => item.key));
+    for (const key of locals.current.keys()) if (!waiting.has(key)) locals.current.delete(key);
+    if (copy) commit(unsent(copy));
+    return Boolean(copy);
+  };
+  /**
+   * Takes in a feed answer, keeping the targets of changes still in the outbox (`skip`, read
+   * from it when not given): ledgers newly shared with the user come whole, `more` is asked for.
+   * It applies to the copy as it is once the answer is complete, so a change made meanwhile stays.
+   */
+  const accept = async (answer: Sync, skip?: Set<string>): Promise<void> => {
+    if (answer.resync) return reload();
+    const fresh = answer.ledgerIds.filter(
+      (id) => !state.current!.ledgers.some((ledger) => ledger.id === id),
+    );
     // shortcut: more than 90 new ledgers at once take the whole snapshot again.
     if (fresh.length > 90) return reload();
-    if (fresh.length)
-      next = mergeSnapshot(
-        next,
-        await api<Snapshot>('GET', `/api/snapshot?ledgers=${fresh.join(',')}`),
-      );
-    confirmed.current = next;
-    if (sync.more) return accept(await api('GET', '/api/sync', undefined, next.seq));
-    if (!pending.current) setData(next);
+    const part = fresh.length
+      ? await api<Snapshot>(
+          'GET',
+          `/api/snapshot?ledgers=${fresh.join(',')}`,
+          undefined,
+          state.current,
+        ).catch(() => undefined)
+      : undefined;
+    const skipped = skip ?? pendingKeys(await readOutbox());
+    if (!state.current) return; // forgotten meanwhile
+    let next = applyChanges(state.current, answer, skipped);
+    if (part) next = mergeSnapshot(next, part);
+    // What was saved stays; the new ledgers stay out, so the next try asks for them again.
+    else if (fresh.length)
+      next = { ...next, ledgers: next.ledgers.filter((ledger) => !fresh.includes(ledger.id)) };
+    commit(next);
+    if (fresh.length && !part) throw new ApiFailure(0, '서버에 연결하지 못했어요.');
+    if (answer.more) return accept(await api('GET', '/api/sync', undefined, next), skip);
   };
-  const catchUp = () =>
-    api('GET', '/api/sync', undefined, confirmed.current?.seq)
-      .then(accept)
-      .catch(() => {});
+  /**
+   * The way to the server for changes and checks: sends the outbox in order, then with `feed`
+   * asks what changed; resolves whether anything came. After changes the server refused, the data
+   * is taken whole once and the last refusal told. While the server cannot be reached it tries
+   * again after RETRY, and when the device is online or the page shows again.
+   */
+  const sync = (feed = false) => {
+    window.clearTimeout(retry.current.timer);
+    const run = queue.current.then(async () => {
+      if (!syncing.current || !state.current) return false;
+      try {
+        const sent = await replay({
+          read: readOutbox,
+          // As the account that made it, whatever this page holds now (§4.5).
+          send: (item) =>
+            api(item.method, item.path, item.body, {
+              seq: state.current!.seq,
+              user: { id: item.userId },
+            }),
+          remove: (key) => {
+            locals.current.delete(key);
+            return removeOutbox(key);
+          },
+          accept,
+          refused: (failure) => leave(failure) ?? (refusal.current = (failure as Error).message),
+        });
+        if (!state.current) return false; // forgotten meanwhile
+        if (!sent) throw new ApiFailure(0, '서버에 연결하지 못했어요.');
+        if (refusal.current) {
+          await reload();
+          if (refusal.current) setError({ message: refusal.current }); // unless forgotten meanwhile
+          refusal.current = undefined;
+        }
+        const answer = feed ? await api('GET', '/api/sync', undefined, state.current) : undefined;
+        if (answer) await accept(answer);
+        if (answer?.changes.length) tell({ type: 'news' });
+        retry.current.count = 0;
+        return Boolean(answer?.changes.length);
+      } catch (failure) {
+        if (leave(failure)) return false;
+        const wait = RETRY[Math.min(retry.current.count++, RETRY.length - 1)];
+        retry.current.timer = window.setTimeout(() => sync(feed), wait);
+        return false;
+      }
+    });
+    queue.current = run.then(() => {});
+    return run;
+  };
+  /** The data from the server whole, then any changes left in the outbox. */
+  const start = () => reload().then(() => sync(), report);
+  /** Starts again in every tab: the syncing one takes the snapshot, the others wait for it. */
+  const again = () => {
+    tell({ type: 'reset' });
+    after('reset');
+  };
+  // A stored copy shows at once. The syncing tab reads it again when it takes over and catches
+  // up behind it; without one it takes the snapshot first, and the other tabs wait for it.
   useEffect(() => {
-    reload();
+    refresh();
+  }, []);
+  useEffect(() => {
+    if (leading) refresh().then((found) => (found ? sync(true) : start()));
+  }, [leading]);
+  // One tab holds the lock for its life and alone sends, checks and stores (§4.3); when it goes,
+  // the next takes over. Without Web Locks or IndexedDB each tab does all of it for itself.
+  useEffect(() => {
+    const stop = new AbortController();
+    let release = () => {};
+    const lead = () => {
+      syncing.current = true;
+      setLeading(true);
+    };
+    stored().then((shared) => {
+      if (stop.signal.aborted) return;
+      if (!shared || !navigator.locks) return lead();
+      navigator.locks
+        .request('budget-sync', { signal: stop.signal }, () => {
+          lead();
+          return new Promise<void>((resolve) => (release = resolve));
+        })
+        .catch(() => {}); // the page went while waiting
+    });
+    return () => {
+      stop.abort();
+      release();
+      syncing.current = false;
+      setLeading(false);
+    };
+  }, []);
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const tabs = new BroadcastChannel('budget');
+    channel.current = tabs;
+    tabs.onmessage = ({ data: message }: MessageEvent<TabMessage>) => {
+      if (message.type === 'logout' || message.type === 'reset') {
+        drop();
+        after(message.type);
+      } else if (!syncing.current) {
+        if (message.type === 'state') refresh();
+        else if (message.type === 'news') wake.current?.();
+      } else if (message.type === 'outbox') sync();
+      else if (message.type === 'sync') sync(true);
+      else if (message.type === 'older' && state.current)
+        commit(withOlder(state.current, message.messages));
+    };
+    return () => {
+      channel.current = undefined;
+      tabs.close();
+    };
+  }, []);
+  // Unsent changes go as soon as the device is online again or the page shows again (§4.2); the
+  // waits between tries start over, since `online` may come a moment before the network does.
+  useEffect(() => {
+    const now = () => {
+      if (document.visibilityState !== 'visible') return;
+      retry.current.count = 0;
+      sync();
+    };
+    window.addEventListener('online', now);
+    document.addEventListener('visibilitychange', now);
+    return () => {
+      window.removeEventListener('online', now);
+      document.removeEventListener('visibilitychange', now);
+    };
   }, []);
   // Each room opens on 내역.
   useEffect(() => setRoomView('records'), [roomId]);
   // A shared ledger's room can change under the person: while it shows, check for others'
-  // changes, queued after any change being sent. Each check that finds nothing waits longer, up
-  // to POLL_LONGEST; something new, or the person's own change, starts again from POLL_FIRST. A
+  // changes, after the outbox is empty. Each check that finds nothing waits longer, up to
+  // POLL_LONGEST; something new, or the person's own change, starts again from POLL_FIRST. A
   // hidden page does not check, and checks at once when it shows again. A 메모 needs none.
+  // Another tab asks the syncing one to check, which tells every tab when something came (§4.3).
   const watching = Boolean(roomId) && (data?.ledgerMembers?.[roomId!]?.length ?? 0) > 1;
   useEffect(() => {
     if (!watching) return;
@@ -178,18 +410,11 @@ export function App() {
     };
     const check = () => {
       window.clearTimeout(timer);
-      queue.current = queue.current.then(() =>
-        api('GET', '/api/sync', undefined, confirmed.current?.seq)
-          .then((sync) => {
-            delay = sync.changes.length ? POLL_FIRST : Math.min(delay * 2, POLL_LONGEST);
-            return accept(sync);
-          })
-          // A failed check stays quiet; the next one tries again.
-          .catch(() => {})
-          .then(() => {
-            if (wake.current === soon) later();
-          }),
-      );
+      const asked = syncing.current ? sync(true) : (tell({ type: 'sync' }), Promise.resolve(false));
+      asked.then((news) => {
+        delay = news ? POLL_FIRST : Math.min(delay * 2, POLL_LONGEST);
+        if (wake.current === soon) later();
+      });
     };
     const soon = () => {
       delay = POLL_FIRST;
@@ -207,45 +432,46 @@ export function App() {
     };
   }, [watching]);
 
+  /**
+   * A change: made on the device's copy at once, put in the outbox, then sent in turn (§4.2).
+   * `local` makes it; it runs again over a snapshot taken before the change is sent.
+   */
   const change = (
     local: (data: Snapshot) => Snapshot,
     method: 'PUT' | 'DELETE',
     path: string,
     body?: unknown,
   ) => {
-    setData((current) => current && local(current));
-    pending.current += 1;
+    commit(local(state.current!));
     wake.current?.();
-    queue.current = queue.current.then(() =>
-      api(method, path, body, confirmed.current?.seq)
-        .then(accept, (failure) => {
-          report(failure, () => change(local, method, path, body));
-          // Catch up with the server quietly, keeping the notice and its 다시 시도.
-          return catchUp();
-        })
-        .catch(report)
-        .finally(() => {
-          pending.current -= 1;
-          // Show only what the server holds, so nothing unsaved looks saved.
-          if (!pending.current && confirmed.current) setData(confirmed.current);
-        }),
-    );
+    pushOutbox({
+      userId: state.current!.user.id,
+      method,
+      path,
+      body,
+      createdAt: new Date().toISOString(),
+    }).then((key) => {
+      locals.current.set(key, local);
+      if (syncing.current) sync();
+      else tell({ type: 'outbox' });
+    });
   };
   /** A room's 100 messages before its oldest loaded one (이전 글). */
   const loadOlder = (ledgerId: Id) => {
-    queue.current = queue.current.then(() => {
-      const oldest = confirmed.current?.messages?.find((message) => message.ledgerId === ledgerId);
-      return api<ChatMessage[]>(
-        'GET',
-        `/api/messages?ledger=${ledgerId}&before=${encodeURIComponent(oldest?.createdAt ?? '9999')}`,
-      )
-        .then((older) => {
-          if (older.length < 100) setFullChats((full) => new Set(full).add(ledgerId));
-          confirmed.current = withOlder(confirmed.current!, older);
-          setData((current) => current && withOlder(current, older));
-        })
-        .catch(report);
-    });
+    const oldest = state.current?.messages?.find((message) => message.ledgerId === ledgerId);
+    api<ChatMessage[]>(
+      'GET',
+      `/api/messages?ledger=${ledgerId}&before=${encodeURIComponent(oldest?.createdAt ?? '9999')}`,
+      undefined,
+      state.current,
+    )
+      .then((older) => {
+        if (!state.current) return;
+        if (older.length < 100) setFullChats((full) => new Set(full).add(ledgerId));
+        commit(withOlder(state.current, older));
+        if (!syncing.current) tell({ type: 'older', messages: older });
+      })
+      .catch(report);
   };
   /** A change whose result only the server knows; the screen updates when it answers. */
   const send = (method: 'PUT' | 'DELETE', path: string, body?: unknown) =>
@@ -268,13 +494,13 @@ export function App() {
   if (error?.login)
     return (
       <LoginView
-        onLogin={reload}
+        onLogin={again}
         error="로그인은 아직 연결 전이에요. 로컬 개발 서버(npm run dev)에서 열어 주세요."
       />
     );
   if (!data)
     return (
-      <StatusScreen busy={!error} action={<Button onClick={reload}>다시 시도</Button>}>
+      <StatusScreen busy={!error} action={<Button onClick={again}>다시 시도</Button>}>
         {error ? error.message : '불러오는 중이에요'}
       </StatusScreen>
     );
@@ -357,26 +583,7 @@ export function App() {
 
   return (
     <>
-      {error && (
-        <Notice
-          onClose={() => setError(undefined)}
-          action={
-            error.retry && (
-              <Button
-                variant="plain"
-                onClick={() => {
-                  setError(undefined);
-                  error.retry!();
-                }}
-              >
-                다시 시도
-              </Button>
-            )
-          }
-        >
-          {error.message}
-        </Notice>
-      )}
+      {error && <Notice onClose={() => setError(undefined)}>{error.message}</Notice>}
       <AppShell
         logo={<UgaLogo size={120} alt="우리의 가계부" />}
         mark={<UgaLogo variant="mark" size={36} />}
@@ -409,7 +616,7 @@ export function App() {
                 memo={(data.ledgerMembers?.[room.id]?.length ?? 0) <= 1}
                 messages={roomMessages}
                 // The snapshot holds each room's latest 200: a room with that many may have more.
-                hasOlder={roomMessages.length >= 200 && !fullChats.has(room.id)}
+                hasOlder={roomMessages.length >= ROOM_LATEST && !fullChats.has(room.id)}
                 onLoadOlder={() => loadOlder(room.id)}
                 memberId={data.user.id}
                 members={data.members}
@@ -440,7 +647,11 @@ export function App() {
                   change(
                     (current) => ({
                       ...current,
-                      messages: [...(current.messages ?? []), message],
+                      // Made again over a copy that may hold it already.
+                      messages: [
+                        ...(current.messages ?? []).filter((item) => item.id !== message.id),
+                        message,
+                      ],
                     }),
                     'PUT',
                     `/api/messages/${message.id}`,
@@ -606,7 +817,9 @@ export function App() {
             onSave={(profile, photo) => {
               setTakenHandle(undefined);
               const save = (method: 'PUT' | 'DELETE', path: string, body?: unknown) =>
-                api(method, path, body, confirmed.current?.seq).then(accept);
+                api(method, path, body, state.current).then((answer) =>
+                  syncing.current ? accept(answer) : tell({ type: 'sync' }),
+                );
               queue.current = queue.current.then(() =>
                 save('PUT', '/api/profile', profile)
                   .then(async () => {
@@ -620,11 +833,9 @@ export function App() {
                   }),
               );
             }}
-            onLogout={() =>
-              setError({
-                message: '로컬 개발 계정은 로그아웃할 수 없어요. Google 로그인을 붙인 뒤에 열어요.',
-              })
-            }
+            // shortcut: no server session yet (the dev account), so logging out forgets this
+            // device's data and shows the login screen; Google login adds ending the session.
+            onLogout={() => forget('logout')}
             onLeave={() => setError({ message: '탈퇴는 Google 로그인을 붙인 뒤에 열어요.' })}
             onBack={wide ? undefined : back}
             tabBar={tabBar}
@@ -795,7 +1006,10 @@ export function App() {
           invite={sheet.invite}
           ledgers={data.ledgers}
           onAccept={({ parentIds }) => {
-            send('PUT', `/api/invites/${sheet.invite.id}`, { parentIds });
+            send('PUT', `/api/invites/${sheet.invite.id}`, {
+              ledgerId: sheet.invite.ledger.id,
+              parentIds,
+            });
             setSheet(undefined);
           }}
           onDecline={() => {

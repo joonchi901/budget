@@ -248,49 +248,64 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
 
 ### 4.1 저장 (확정)
 
-- IndexedDB `budget` v1, 저장소 둘: `state`(키 `'current'` 하나: `{ schema, seq, data }`), `outbox`(autoIncrement).
+- IndexedDB `budget` v1, 저장소 둘: `state`(키 `'current'` 하나: `{ schema, seq, data }`), `outbox`(autoIncrement, `keyPath: 'key'`라 읽을 때 순서 번호가 항목에 들어 있다).
+- 저장하는 상태는 **서버 상태에 이 기기의 아직 보내지 않은 변경을 얹은 것**이다. 오프라인에서 쓴 것이 새로고침 뒤에도 보인다. 답을 적용할 때 남은 outbox 대상을 `skip`하는 이유다(4.2).
 - **상태는 통째로 한 값**으로 저장한다(2년치 약 2MB, 직렬화 수 ms). 변경을 적용한 뒤 500ms 디바운스로 `put`. `shortcut: whole state as one value; split into stores once it passes ~10MB` 주석.
 - `schema` 상수가 다르면 무시하고 스냅숏부터 받는다. 데이터 형태를 바꾸는 PR은 이 상수를 올린다.
 - 시작 순서: IndexedDB에서 읽어 **바로 그린다** → 백그라운드로 `sync?since=` → 적용. 저장된 것이 없으면 지금처럼 "불러오는 중" 뒤 스냅숏.
-- IndexedDB를 못 쓰면(사생활 보호 모드 등) 메모리만 쓴다(지금 동작). 모든 IndexedDB 호출은 try/catch.
+- IndexedDB를 못 쓰면(사생활 보호 모드 등) 메모리만 쓴다(지금 동작). 모든 IndexedDB 호출은 try/catch. outbox에 넣기가 실패하면 그 항목은 메모리에 둔다(쓰기를 잃지 않게).
 - 처음 한 번 `navigator.storage.persist()`를 부른다(거절돼도 무시).
 - 파일: `src/client/app/store.ts` — `readState()`, `writeState()`, `clearState()`, `pushOutbox()`, `readOutbox()`, `removeOutbox()`. 30줄 안팎의 IndexedDB promise 헬퍼를 직접 쓴다.
 
 ### 4.2 outbox (확정)
 
-- `change()`는 쓰기를 먼저 `outbox`에 넣고(`{ method, path, body, createdAt }`) 낙관적 반영한 뒤 "비우기"를 깨운다.
+- `change()`는 쓰기를 먼저 `outbox`에 넣고(`{ userId, method, path, body, createdAt }`; `userId`는 4.5) 낙관적 반영한 뒤 "비우기"를 깨운다.
 - 비우기: 한 번에 하나씩 순서대로 보낸다(지금 `queue`와 같음). `?since=`는 보낼 때의 `seq`.
   - 2xx: 항목을 지우고 답을 `applyChanges`. 이때 `skip`에 **남은 outbox 항목의 대상**(`path`에서 kind·id를 뽑는다)을 넣는다.
-  - 4xx(검증·권한): 항목을 지우고 오류를 한 번 알린 뒤(지금 "다시 시도" 알림과 같은 자리) **스냅숏으로 다시 맞춘다**(로컬이 잘못된 상태일 수 있다). 삭제 요청의 404는 성공으로 본다.
-  - 네트워크 실패·5xx: 멈추고 5 → 10 → 20 → 60초 간격으로 다시 시도. `online` 이벤트와 `visibilitychange`에서 바로 시도.
-- outbox가 비어 있을 때만 폴링한다(보내지 않은 변경이 있는데 남의 변경을 덮어쓰지 않게).
-- 서버 멱등은 P1에서 끝났다(upsert, 반응 PUT/DELETE, 대화 PUT 같은 내용 무시, 삭제 반복 허용). 새로 더하는 쓰기 핸들러는 모두 이 조건을 지킨다.
+  - 4xx(검증·권한): 항목을 지우고 다음 항목으로 간다. 그 비우기가 끝나면 **스냅숏으로 한 번 다시 맞추고**(로컬이 잘못된 상태일 수 있다) 마지막 거절을 한 번 알린다(지금 "다시 시도" 알림과 같은 자리, 닫을 때까지 남는다). 거절이 여럿이어도 스냅숏은 한 번이다(D1 읽기: 스냅숏 하나가 약 9.8K행). 삭제 요청의 404는 성공으로 본다. 401과 계정 바뀜(4.5)은 알리지 않고 지운다.
+  - 네트워크 실패·5xx·408·425·429(나중에 다시 하라는 답, 요청 한도 포함): 멈추고 5 → 10 → 20 → 60초 간격으로 다시 시도. `online` 이벤트와 `visibilitychange`에서 바로 시도.
+- `skip`의 대상(구현): 내역·대화·자산·가계부는 `kind:id`, 반응은 그 내역·글, `seen`·`invites`·`members`는 그 가계부, 친구·초대 수락·가입 링크는 그 목록 전체. 가계부 PUT은 본문에 함께 보낸 내역도 넣는다. `skip`에 있는 가계부는 피드의 `ledgerIds`에 없어도 지우지 않는다(오프라인에서 만든 가계부가 앞 항목의 답에 지워지지 않게).
+- outbox가 비어 있을 때만 폴링한다(보내지 않은 변경이 있는데 남의 변경을 덮어쓰지 않게). 폴링 차례에 outbox가 남아 있으면 먼저 비운다.
+- 프로필 저장은 outbox에 넣지 않는다(구현자 판단): 아이디 중복(`HANDLE_TAKEN`)을 그 자리의 입력란에 바로 보여야 해서 온라인에서만 보낸다. 사진은 Blob이라 저장할 이유도 없다.
+- 서버 멱등: P1에서 upsert, 반응 PUT/DELETE, 대화 PUT 같은 내용 무시, 삭제 반복 허용을 했다. 다시 보내면 거절하던 셋은 P2에서 고쳤다(답을 잃고 다시 보내거나, 잡은 탭이 보내는 중에 닫힐 때). 친구 수락은 이미 친구면, 가계부 나가기는 이미 나갔으면 그대로 200이다. 초대 수락은 본문에 `ledgerId`를 함께 보내고, 초대가 없어도 그 가계부의 멤버면 200이다. 클라이언트가 이 답들을 "이미 됨"으로 보는 방법은 쓰지 않았다: 상대가 요청을 취소했거나 초대를 거둔 경우까지 말없이 넘어간다. 새로 더하는 쓰기 핸들러는 모두 다시 보내도 같은 결과가 되게 한다.
 
 ### 4.3 여러 탭 (확정)
 
-- `navigator.locks.request('budget-sync', ...)`를 **한 탭이 평생 잡는다**. 잡은 탭만 outbox를 보내고 폴링한다. 다른 탭은 쓰기를 outbox에 넣고 `BroadcastChannel('budget')`으로 `{ type: 'outbox' }`를 보낸다.
+- `navigator.locks.request('budget-sync', ...)`를 **한 탭이 평생 잡는다**. 잡은 탭만 outbox를 보내고 피드를 받는다. 다른 탭은 쓰기를 outbox에 넣고 `BroadcastChannel('budget')`으로 `{ type: 'outbox' }`를 보낸다.
+- 폴링(3.9의 공유 방 확인)은 공유 방을 보고 있는 탭마다 같은 간격으로 한다. 잡은 탭은 직접 `sync(true)`, 다른 탭은 `{ type: 'sync' }`를 보내 잡은 탭이 확인하게 한다. 잡은 탭은 확인에서 남의 변경이 오면 `{ type: 'news' }`를 보내고, 방을 보는 탭은 다음 확인을 처음 간격(5초)으로 당긴다. 잡은 탭이 가려져 있어도 다른 탭의 요청은 처리한다.
 - 잡은 탭은 상태를 저장할 때마다 `{ type: 'state' }`를 보내고, 다른 탭은 받으면 IndexedDB에서 다시 읽어 그린다.
-- 잡은 탭이 닫히면 잠금이 풀려 다음 탭이 잡는다.
-- Web Locks가 없으면(아주 오래된 브라우저) 탭마다 동기화한다(중복 전송이 멱등이라 안전).
+- 잡은 탭이 닫히면 잠금이 풀려 다음 탭이 잡는다. 새로 잡은 탭은 IndexedDB를 다시 읽고(자기의 보내지 않은 변경을 얹어) `sync?since=`부터 한다.
+- 다른 탭은 IndexedDB에서 읽은 상태 위에 **자기가 넣고 아직 outbox에 남은 변경**을 다시 얹어 그린다(구현).
+- 다른 탭이 서버에 직접 하는 일(프로필 저장, "이전 글")의 결과는 잡은 탭이 저장한다: 프로필은 `{ type: 'sync' }`로 피드를 받게 하고, 이전 글은 `{ type: 'older', messages }`로 넘긴다(구현).
+- 로그아웃·401·계정 바뀜은 `{ type: 'logout' }`·`{ type: 'reset' }`으로 모든 탭에 알린다. 잡은 탭이 메모리의 상태를 다시 저장하지 않게 한다(4.5).
+- Web Locks가 없거나 IndexedDB를 못 쓰면 탭마다 동기화한다(중복 전송이 멱등이라 안전).
 
 ### 4.4 서비스 워커·PWA (확정)
 
 - `vite-plugin-pwa`(devDependency) `registerType: 'autoUpdate'`, 빌드 산출물만 사전 캐시. **`/api/*`는 절대 캐시하지 않는다.**
-- `public/manifest.webmanifest`: 이름 "우리 가계부", 아이콘은 `public/brand`의 로고, `display: standalone`. iOS에서 홈 화면에 추가하면 저장소 7일 정리를 피할 수 있다.
-- 새 버전이 있으면 조용히 받아 다음 열 때 적용한다. 알림 UI는 두지 않는다.
+  - 구현: `vite-plugin-pwa` 2.0.0의 peer가 `vite ^8.0.0`이라 Vite 8.3에 그대로 설치된다(직접 쓰는 서비스 워커는 필요 없었다). `injectRegister: 'script'`로 등록 코드를 별도 파일(`registerSW.js`)로 둔다: 인라인 스크립트는 CSP `script-src 'self'`(§8.12)가 막는다.
+  - 사전 캐시: `index.html`, `assets/`(빌드 산출물), 화면이 쓰는 `brand/*.svg`·반응 그림(`reactions/stickers-96`·`decorations`)·웹 매니페스트. 런타임 캐시는 두지 않는다(`/api/*`가 캐시에 들어갈 길이 없다). 주소가 화면이라(`/ledgers/:id`) 페이지 이동은 `index.html`로 답하되 `/api/`는 제외한다.
+  - 개발 서버에서는 꺼 둔다(`devOptions.enabled: false`). 확인은 `npm run build` 결과로 한다.
+- `public/manifest.webmanifest`: 이름 "우가 · 우리의 가계부", 짧은 이름 "우가", `display: standalone`, `theme_color`·`background_color` `#faf8f4`(`index.html`과 같음). 아이콘은 `index.html` favicon과 같은 `/brand/uga-app-icon.svg`를 `sizes: "any"`로 쓴다. 앱 아이콘을 바꿀 때 이 아이콘도 함께 바꾼다. `index.html`에는 `<link rel="manifest">`만 더한다. iOS에서 홈 화면에 추가하면 저장소 7일 정리를 피할 수 있다.
+- `public/brand/manifest.json`은 브랜드 에셋 목록이지 웹 매니페스트가 아니다. 건드리지 않는다.
+- 새 버전이 있으면 조용히 받아 바로 넘어간다(`workbox.skipWaiting`·`clientsClaim`). 열려 있던 화면은 그대로 쓰고, 다음 새로고침·열 때 새 빌드가 뜬다. 알림 UI는 두지 않는다.
+  - `injectRegister: 'script'`에서는 플러그인이 `autoUpdate`에도 이 둘을 켜 주지 않는다(`auto`일 때만). 켜지 않으면 새 버전은 모든 창이 닫힐 때까지 `waiting`이고, 홈 화면 PWA는 거의 닫히지 않는다. 앱이 번들 하나라 나중에 불러올 청크가 없어, 옛 화면이 새 캐시에서 없는 파일을 찾는 일이 없다.
 - CSP(§8.12)는 그대로. 서비스 워커는 같은 출처라 `script-src 'self'`로 된다.
 
 ### 4.5 지우기 (§8.16, 확정)
 
 - 로그아웃, 탈퇴, `401` 응답: `clearState()`, outbox 포함, 그 뒤 로그인 화면.
+  - 지금은 서버 세션이 없다(개발 계정). 로그아웃은 이 기기의 데이터를 지우고 로그인 화면을 보인다. Google 로그인이 붙으면 서버 세션 삭제를 더한다. 탈퇴는 아직 없다.
 - 멤버에서 빠짐: 피드가 처리한다(3.9). 보관한 가계부는 그대로 둔다(보관은 삭제가 아니다).
 - 계정이 바뀌면(저장된 `data.user.id`와 서버 `user.id`가 다르면) 지우고 스냅숏부터.
+  - 방법(구현): 클라이언트는 상태를 가진 동안 모든 API 요청에 `X-Cached-User: <저장된 user.id>`를 붙이고, 서버는 로그인한 사용자와 다르면 아무것도 읽거나 쓰기 전에 `409 ACCOUNT_CHANGED`로 거절한다. 시작 때의 `sync?since=`가 바로 걸러진다. 피드 답에 사용자 id를 더하는 방법은 3.4의 응답 형태를 바꾸고 outbox 전송을 막지 못해 쓰지 않았다.
+  - outbox 항목은 만든 계정의 `userId`를 함께 저장하고, 보낼 때는 지금 상태가 아니라 그 값을 `X-Cached-User`로 보낸다. 그래서 상태가 없어도(SCHEMA가 바뀌었거나, 상태 저장만 실패했거나, 복사본이 깨졌을 때) 다른 계정이 만든 변경은 409로 거절되고 모두 지워진다. 같은 계정이면 그대로 보낸다.
 
 ### 4.6 검증과 완료 조건
 
 - `check-sync.mjs`에 outbox 재생 순서와 `skip` 계산 검사를 더한다.
 - 손으로: 오프라인(브라우저 DevTools)에서 내역 셋 추가·하나 삭제 → 온라인 → 서버에 셋 중 둘만 있고 순서가 맞는지. 탭 둘에서 번갈아 쓸 때 중복 전송이 없는지(`wrangler dev` 로그). 새로고침 직후 서버 요청 없이 화면이 뜨는지(네트워크 탭). 로그아웃 뒤 IndexedDB가 비는지.
-- Lighthouse PWA 설치 가능.
+- 설치 가능: Chrome DevTools Application 패널의 Manifest에 설치 가능 오류(Installability)가 없는지. (Lighthouse는 PWA 항목을 없애 이 검사에 쓸 수 없다.) 서비스 워커는 `npm run build` 결과로 확인한다.
 
 ## 5. P3 — Durable Object 푸시
 

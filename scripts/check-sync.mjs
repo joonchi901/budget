@@ -1,8 +1,15 @@
-// Checks how the client applies the change feed (docs/sync-plan.md §3.9–3.10). Node 24 runs the
-// shared TypeScript as is.
+// Checks how the client applies the change feed and replays its outbox (docs/sync-plan.md §3.9,
+// §3.10, §4.2). Node 24 runs the shared TypeScript as is.
 import assert from 'node:assert/strict';
 import { unseenCounts } from '../src/shared/ledger.ts';
-import { applyChanges, mergeSnapshot, withOlder } from '../src/shared/sync.ts';
+import {
+  ROOM_LATEST,
+  applyChanges,
+  mergeSnapshot,
+  pendingKeys,
+  replay,
+  withOlder,
+} from '../src/shared/sync.ts';
 
 const ledger = (id, childIds = []) => ({
   id,
@@ -80,8 +87,8 @@ assert.deepEqual(
 );
 assert.equal(base.records.length, 2, 'the data passed in stays as it was');
 
-// Messages: a new one joins in time order, a deleted one stays as a tombstone, and one older
-// than the room's oldest loaded waits for 이전 글.
+// Messages: a new one joins in time order, a deleted one stays as a tombstone, and 이전 글 join
+// before them.
 next = applyChanges(base, {
   seq: 13,
   ledgerIds: all,
@@ -98,12 +105,6 @@ next = applyChanges(base, {
       ledgerId: 'nov',
       data: { ...message('m1', 'nov', '2026-11-02T00:00:00.000Z'), text: undefined, deleted: true },
     },
-    {
-      kind: 'message',
-      id: 'm0',
-      ledgerId: 'nov',
-      data: message('m0', 'nov', '2026-10-01T00:00:00.000Z'),
-    },
   ],
 });
 assert.deepEqual(
@@ -117,6 +118,48 @@ assert.deepEqual(
   ['m0', 'm1', 'm3', 'm2'],
 );
 assert.equal(next.messages[1].deleted, true, '이전 글 keeps what is already here');
+
+// A room holding fewer than the snapshot's latest has all its messages: one written a moment
+// before the room's first but logged after it still shows. A full room waits for 이전 글.
+next = applyChanges(base, {
+  seq: 13,
+  ledgerIds: all,
+  changes: [
+    {
+      kind: 'message',
+      id: 'm0',
+      ledgerId: 'nov',
+      data: message('m0', 'nov', '2026-11-01T23:59:59.000Z'),
+    },
+  ],
+});
+assert.deepEqual(
+  next.messages.map((item) => item.id),
+  ['m0', 'm1', 'm2'],
+);
+const full = {
+  ...base,
+  messages: Array.from({ length: ROOM_LATEST }, (_, index) =>
+    message(
+      `f${index}`,
+      'nov',
+      `2026-11-02T00:00:${String(index % 60).padStart(2, '0')}.${String(index).padStart(3, '0')}Z`,
+    ),
+  ),
+};
+next = applyChanges(full, {
+  seq: 13,
+  ledgerIds: all,
+  changes: [
+    {
+      kind: 'message',
+      id: 'm0',
+      ledgerId: 'nov',
+      data: message('m0', 'nov', '2026-11-01T23:59:59.000Z'),
+    },
+  ],
+});
+assert.equal(next.messages.length, ROOM_LATEST);
 
 // A ledger no longer in ledgerIds goes with its records, messages, members and badge, and out
 // of its parent.
@@ -212,6 +255,133 @@ assert.deepEqual(
 );
 assert.equal(next.seenAt.shared, '2026-11-04T00:00:00.000Z');
 assert.equal(next.ledgerMembers.nov.length, 1);
+
+// The outbox's targets, in the feed's kind:id terms.
+assert.deepEqual(
+  [
+    ...pendingKeys([
+      { path: '/api/records/r1' },
+      { path: '/api/records/r2/reactions/aha' },
+      { path: '/api/messages/m1' },
+      { path: '/api/messages/m2/reactions/agree' },
+      { path: '/api/assets/a1' },
+      { path: '/api/ledgers/new', body: { ledger: {}, parentIds: [], records: [{ id: 'r9' }] } },
+      { path: '/api/ledgers/nov/seen' },
+      { path: '/api/ledgers/trip/members/b' },
+      { path: '/api/ledgers/trip/invites' },
+      { path: '/api/friends/b' },
+      { path: '/api/invites/i1' },
+      { path: '/api/signup-link' },
+    ]),
+  ],
+  [
+    'record:r1',
+    'record:r2',
+    'message:m1',
+    'message:m2',
+    'asset:a1',
+    'ledger:new',
+    'record:r9',
+    'seen:nov',
+    'members:trip',
+    'friends:',
+    'invites:',
+    'me:',
+  ],
+);
+
+// A ledger made here and not sent yet stays, though the feed does not know it.
+next = applyChanges(
+  {
+    ...base,
+    ledgers: [...base.ledgers, ledger('new')],
+    records: [...base.records, record('n1', 'new')],
+  },
+  { seq: 17, ledgerIds: all, changes: [] },
+  pendingKeys([{ path: '/api/ledgers/new' }, { path: '/api/records/n1' }]),
+);
+assert.deepEqual(
+  next.ledgers.map((item) => item.id),
+  ['y2026', 'nov', 'trip', 'new'],
+);
+assert.deepEqual(
+  next.records.map((item) => item.id),
+  ['r1', 'r2', 'n1'],
+);
+
+// The outbox goes in order, one at a time; each answer keeps what is still waiting, a change
+// added meanwhile goes in the same run, a refused one goes with the caller told, and a DELETE of
+// something already gone counts as sent.
+const outbox = (paths) => paths.map(([method, path], index) => ({ key: index + 1, method, path }));
+const run = async (queued, answer) => {
+  const log = [];
+  let added = false;
+  const sent = await replay({
+    read: async () => queued,
+    async send(item) {
+      log.push(`send ${item.method} ${item.path}`);
+      if (!added && item.key === 1) {
+        added = true;
+        queued = [...queued, { key: 9, method: 'PUT', path: '/api/records/late' }];
+      }
+      return answer(item);
+    },
+    async remove(key) {
+      queued = queued.filter((item) => item.key !== key);
+    },
+    async accept(sync, skip) {
+      log.push(`accept ${sync.seq} skip ${[...skip].join(' ')}`);
+    },
+    async refused(failure) {
+      log.push(`refused ${failure.status}`);
+    },
+  });
+  return { sent, log, left: queued.map((item) => item.key) };
+};
+const failure = (status) => Object.assign(new Error(String(status)), { status });
+let result = await run(
+  outbox([
+    ['PUT', '/api/records/r1'],
+    ['PUT', '/api/records/r2'],
+    ['DELETE', '/api/records/r1'],
+    ['PUT', '/api/records/bad'],
+  ]),
+  async (item) => {
+    if (item.key === 3) throw failure(404);
+    if (item.key === 4) throw failure(403);
+    return { seq: item.key * 10, ledgerIds: all, changes: [] };
+  },
+);
+assert.equal(result.sent, true);
+assert.deepEqual(result.left, []);
+assert.deepEqual(result.log, [
+  'send PUT /api/records/r1',
+  'accept 10 skip record:r2 record:r1 record:bad record:late',
+  'send PUT /api/records/r2',
+  'accept 20 skip record:r1 record:bad record:late',
+  'send DELETE /api/records/r1',
+  'send PUT /api/records/bad',
+  'refused 403',
+  'send PUT /api/records/late',
+  'accept 90 skip ',
+]);
+
+// Without a connection, on a server error, or told to try later (429 and the like), the run
+// stops and the change waits.
+for (const status of [0, 503, 408, 425, 429]) {
+  result = await run(
+    outbox([
+      ['PUT', '/api/records/r1'],
+      ['PUT', '/api/records/r2'],
+    ]),
+    async (item) => {
+      if (item.key === 2) throw failure(status);
+      return { seq: 10, ledgerIds: all, changes: [] };
+    },
+  );
+  assert.equal(result.sent, false);
+  assert.deepEqual(result.left, [2, 9]);
+}
 
 // Badges count others' records since the room was last opened, a parent's from below it.
 assert.deepEqual(unseenCounts(base.ledgers, base.records, base.seenAt, 'a'), {
