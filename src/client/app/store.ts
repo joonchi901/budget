@@ -1,9 +1,10 @@
 /**
- * This device's copy of the data, in IndexedDB `budget` (docs/sync-plan.md §4.1). The server holds
- * the truth: the copy may go at any time (§8.16) and comes again from the server. Every call fails
- * quietly; without IndexedDB (private browsing, say) the app keeps to memory as before.
+ * This device's copy of the data and its outbox, in IndexedDB `budget` (docs/sync-plan.md §4.1).
+ * The server holds the truth: the copy may go at any time (§8.16) and comes again from the
+ * server. Every call fails quietly; without IndexedDB (private browsing, say) the app keeps to
+ * memory as before.
  */
-import type { Snapshot } from '../../shared/sync';
+import type { Outgoing, Snapshot } from '../../shared/sync';
 
 /** Raise it with any change to the stored data's shape: a device holding another starts afresh. */
 export const SCHEMA = 1;
@@ -61,4 +62,34 @@ export const writeState = (data: Snapshot) => {
     () => true,
     () => false,
   );
+};
+
+/** Changes IndexedDB would not take: kept in memory, never lost while the page lives. */
+let unstored: Outgoing[] = [];
+let unstoredKey = 0;
+
+/** Puts a change in the outbox; resolves its key. */
+export const pushOutbox = (item: Omit<Outgoing, 'key'>) =>
+  run('outbox', 'readwrite', (store) => store.add(item) as IDBRequest<number>).catch(() => {
+    // shortcut: one kept in memory goes after the stored ones; fine while IndexedDB fails as a whole.
+    const key = --unstoredKey; // below zero: never an IndexedDB key
+    unstored.push({ ...item, key });
+    return key;
+  });
+
+/** The changes waiting, oldest first. */
+export const readOutbox = () =>
+  run('outbox', 'readonly', (store) => store.getAll() as IDBRequest<Outgoing[]>)
+    .catch(() => [])
+    .then((queued) => [...queued, ...unstored]);
+
+/** Takes a sent change out; one left by a failure goes again later, which writes allow. */
+export const removeOutbox = (key: number) => {
+  unstored = unstored.filter((item) => item.key !== key);
+  return key < 0
+    ? Promise.resolve()
+    : run('outbox', 'readwrite', (store) => store.delete(key)).then(
+        () => {},
+        () => {},
+      );
 };

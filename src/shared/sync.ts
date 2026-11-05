@@ -59,7 +59,8 @@ export const changeKey = (change: Change) =>
 /**
  * The data with a feed answer applied (docs/sync-plan.md §3.9). A target in `skip` (`kind:id`)
  * keeps its local state: a change of this device's own to it is still unsent. Whatever belongs
- * to a ledger missing from `ledgerIds` goes. When the answer says `more`, the caller asks again.
+ * to a ledger missing from `ledgerIds` goes, unless the ledger is in `skip` (made here, not sent
+ * yet). When the answer says `more`, the caller asks again.
  */
 export function applyChanges(data: Snapshot, sync: Sync, skip = new Set<string>()): Snapshot {
   let next: Snapshot = { ...data, seq: sync.seq };
@@ -136,6 +137,7 @@ export function applyChanges(data: Snapshot, sync: Sync, skip = new Set<string>(
     }
   }
   const visible = new Set(sync.ledgerIds);
+  for (const key of skip) if (key.startsWith('ledger:')) visible.add(key.slice('ledger:'.length));
   // A ledger may have gone by its own change already; what belongs to it goes all the same.
   if ([...data.ledgers, ...next.ledgers].every((ledger) => visible.has(ledger.id))) return next;
   const keep = <T>(entries: { [id: Id]: T } = {}) =>
@@ -181,4 +183,63 @@ export function withOlder(data: Snapshot, older: ChatMessage[]): Snapshot {
       byTime,
     ),
   };
+}
+
+/** A change waiting in the outbox (docs/sync-plan.md §4.2); `key` keeps the order it was made in. */
+export type Outgoing = {
+  key: number;
+  method: 'PUT' | 'DELETE';
+  path: string;
+  body?: unknown;
+  createdAt: string;
+};
+
+/**
+ * The `skip` for a feed answer: the targets of the changes still in the outbox, read from their
+ * paths in the feed's `kind:id` terms (a reaction is its record's or message's; a ledger's
+ * records sent with it count too).
+ */
+export function pendingKeys(queued: Pick<Outgoing, 'path' | 'body'>[]): Set<string> {
+  const keys = queued.flatMap(({ path, body }) => {
+    const [, , resource, id, extra] = path.split('/');
+    if (resource === 'records') return [`record:${id}`];
+    if (resource === 'messages') return [`message:${id}`];
+    if (resource === 'assets') return [`asset:${id}`];
+    if (resource === 'friends') return ['friends:'];
+    if (resource === 'invites') return ['invites:'];
+    if (resource !== 'ledgers') return ['me:'];
+    if (extra === 'seen') return [`seen:${id}`];
+    if (extra) return [`members:${id}`];
+    const records = (body as { records?: { id: Id }[] } | undefined)?.records ?? [];
+    return [`ledger:${id}`, ...records.map((record) => `record:${record.id}`)];
+  });
+  return new Set(keys);
+}
+
+/**
+ * Sends the outbox one change at a time, oldest first (docs/sync-plan.md §4.2); a change added
+ * meanwhile goes in the same run. Each answer is taken in keeping the targets of the changes
+ * still waiting. A refused change (4xx) goes and the caller hears of it, except a DELETE of
+ * something already gone (404), which counts as sent. Without a connection or on a server error
+ * the run stops with the rest waiting, and resolves false.
+ */
+export async function replay(io: {
+  read(): Promise<Outgoing[]>;
+  send(item: Outgoing): Promise<Sync>;
+  remove(key: number): Promise<void>;
+  accept(answer: Sync, skip: Set<string>): Promise<void>;
+  refused(failure: unknown): Promise<void>;
+}): Promise<boolean> {
+  for (let queued = await io.read(); queued.length; queued = await io.read()) {
+    const [item] = queued;
+    const sent = await io.send(item).then(
+      (answer) => ({ answer, status: 200 }),
+      (failure: { status?: number }) => ({ failure, status: failure?.status ?? 0 }),
+    );
+    if (!sent.status || sent.status >= 500) return false;
+    await io.remove(item.key);
+    if ('answer' in sent) await io.accept(sent.answer, pendingKeys(await io.read()));
+    else if (sent.status !== 404 || item.method !== 'DELETE') await io.refused(sent.failure);
+  }
+  return true;
 }
