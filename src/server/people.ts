@@ -475,6 +475,18 @@ export async function inviteMembers(db: D1Database, data: Loaded, ledgerId: Id, 
 }
 
 /** The owner changes a member's or invitee's role. */
+/** 404 unless the person is in the ledger or invited to it: the change logs rows to their feed. */
+async function findMember(db: D1Database, ledgerId: Id, userId: Id) {
+  const found = await db
+    .prepare(
+      `SELECT 1 FROM ledger_members WHERE ledger_id = ?1 AND user_id = ?2
+       UNION ALL SELECT 1 FROM ledger_invites WHERE ledger_id = ?1 AND invitee_id = ?2 LIMIT 1`,
+    )
+    .bind(ledgerId, userId)
+    .first();
+  if (!found) fail(404, 'NOT_FOUND', '없는 멤버예요.');
+}
+
 export async function setMemberRole(
   db: D1Database,
   data: Loaded,
@@ -486,6 +498,7 @@ export async function setMemberRole(
   if (!roles.includes(role as string)) invalid('권한');
   if (data.roles.get(ledgerId) !== 'owner' || userId === data.user.id)
     fail(403, 'FORBIDDEN', '소유자만 다른 멤버의 권한을 바꿀 수 있어요.');
+  await findMember(db, ledgerId, userId);
   await db.batch([
     db
       .prepare(
@@ -514,6 +527,7 @@ export async function removeMember(db: D1Database, data: Loaded, ledgerId: Id, u
       'FORBIDDEN',
       leaving ? '소유자는 가계부를 나갈 수 없어요.' : '소유자만 내보낼 수 있어요.',
     );
+  if (!leaving) await findMember(db, ledgerId, userId);
   await db.batch([
     db
       .prepare(

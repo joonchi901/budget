@@ -39,6 +39,7 @@ import {
 import { assetFor, type Asset } from '../../shared/assets';
 import type { Profile, RoomInvite } from '../../shared/people';
 import {
+  ROOM_LATEST,
   applyChanges,
   mergeSnapshot,
   withOlder,
@@ -135,6 +136,7 @@ export function App() {
     api<Snapshot>('GET', '/api/snapshot').then((answer) => {
       confirmed.current = answer;
       setData(answer);
+      setFullChats(new Set());
       setError(undefined);
     }, report);
   /** Takes in a feed answer: ledgers newly shared with the user come whole, `more` is asked for. */
@@ -145,11 +147,17 @@ export function App() {
     const fresh = sync.ledgerIds.filter((id) => !before.ledgers.some((ledger) => ledger.id === id));
     // shortcut: more than 90 new ledgers at once take the whole snapshot again.
     if (fresh.length > 90) return reload();
-    if (fresh.length)
-      next = mergeSnapshot(
-        next,
-        await api<Snapshot>('GET', `/api/snapshot?ledgers=${fresh.join(',')}`),
+    if (fresh.length) {
+      const part = await api<Snapshot>('GET', `/api/snapshot?ledgers=${fresh.join(',')}`).catch(
+        () => undefined,
       );
+      if (part) next = mergeSnapshot(next, part);
+      else {
+        // What was saved stays; the new ledgers stay out, so the next answer asks for them again.
+        next = { ...next, ledgers: next.ledgers.filter((ledger) => !fresh.includes(ledger.id)) };
+        window.setTimeout(() => (queue.current = queue.current.then(catchUp)), POLL_FIRST);
+      }
+    }
     confirmed.current = next;
     if (sync.more) return accept(await api('GET', '/api/sync', undefined, next.seq));
     if (!pending.current) setData(next);
@@ -409,7 +417,7 @@ export function App() {
                 memo={(data.ledgerMembers?.[room.id]?.length ?? 0) <= 1}
                 messages={roomMessages}
                 // The snapshot holds each room's latest 200: a room with that many may have more.
-                hasOlder={roomMessages.length >= 200 && !fullChats.has(room.id)}
+                hasOlder={roomMessages.length >= ROOM_LATEST && !fullChats.has(room.id)}
                 onLoadOlder={() => loadOlder(room.id)}
                 memberId={data.user.id}
                 members={data.members}

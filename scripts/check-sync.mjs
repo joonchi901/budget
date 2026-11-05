@@ -2,7 +2,7 @@
 // shared TypeScript as is.
 import assert from 'node:assert/strict';
 import { unseenCounts } from '../src/shared/ledger.ts';
-import { applyChanges, mergeSnapshot, withOlder } from '../src/shared/sync.ts';
+import { ROOM_LATEST, applyChanges, mergeSnapshot, withOlder } from '../src/shared/sync.ts';
 
 const ledger = (id, childIds = []) => ({
   id,
@@ -80,8 +80,8 @@ assert.deepEqual(
 );
 assert.equal(base.records.length, 2, 'the data passed in stays as it was');
 
-// Messages: a new one joins in time order, a deleted one stays as a tombstone, and one older
-// than the room's oldest loaded waits for 이전 글.
+// Messages: a new one joins in time order, a deleted one stays as a tombstone, and 이전 글 join
+// before them.
 next = applyChanges(base, {
   seq: 13,
   ledgerIds: all,
@@ -98,12 +98,6 @@ next = applyChanges(base, {
       ledgerId: 'nov',
       data: { ...message('m1', 'nov', '2026-11-02T00:00:00.000Z'), text: undefined, deleted: true },
     },
-    {
-      kind: 'message',
-      id: 'm0',
-      ledgerId: 'nov',
-      data: message('m0', 'nov', '2026-10-01T00:00:00.000Z'),
-    },
   ],
 });
 assert.deepEqual(
@@ -117,6 +111,48 @@ assert.deepEqual(
   ['m0', 'm1', 'm3', 'm2'],
 );
 assert.equal(next.messages[1].deleted, true, '이전 글 keeps what is already here');
+
+// A room holding fewer than the snapshot's latest has all its messages: one written a moment
+// before the room's first but logged after it still shows. A full room waits for 이전 글.
+next = applyChanges(base, {
+  seq: 13,
+  ledgerIds: all,
+  changes: [
+    {
+      kind: 'message',
+      id: 'm0',
+      ledgerId: 'nov',
+      data: message('m0', 'nov', '2026-11-01T23:59:59.000Z'),
+    },
+  ],
+});
+assert.deepEqual(
+  next.messages.map((item) => item.id),
+  ['m0', 'm1', 'm2'],
+);
+const full = {
+  ...base,
+  messages: Array.from({ length: ROOM_LATEST }, (_, index) =>
+    message(
+      `f${index}`,
+      'nov',
+      `2026-11-02T00:00:${String(index % 60).padStart(2, '0')}.${String(index).padStart(3, '0')}Z`,
+    ),
+  ),
+};
+next = applyChanges(full, {
+  seq: 13,
+  ledgerIds: all,
+  changes: [
+    {
+      kind: 'message',
+      id: 'm0',
+      ledgerId: 'nov',
+      data: message('m0', 'nov', '2026-11-01T23:59:59.000Z'),
+    },
+  ],
+});
+assert.equal(next.messages.length, ROOM_LATEST);
 
 // A ledger no longer in ledgerIds goes with its records, messages, members and badge, and out
 // of its parent.

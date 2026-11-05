@@ -31,6 +31,9 @@ export type Sync = {
 
 export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string } };
 
+/** The snapshot's messages per room, the latest ones; a room holding fewer has them all. */
+export const ROOM_LATEST = 200;
+
 /** The list with `item` in place of the one with its id (or added), or without that id. */
 const put = <T extends { id: Id }>(items: T[], id: Id, item?: T) =>
   !item
@@ -97,9 +100,11 @@ export function applyChanges(data: Snapshot, sync: Sync, skip = new Set<string>(
           next = { ...next, messages: put(messages, change.id, change.data) };
           break;
         }
-        // One older than the room's oldest loaded stays for 이전 글, so no gap opens.
-        const oldest = messages.find((message) => message.ledgerId === change.ledgerId);
-        if (oldest && change.data.createdAt < oldest.createdAt) break;
+        // One older than the room's oldest loaded stays for 이전 글, so no gap opens. A room with
+        // fewer than the snapshot's latest has all its messages here: two first messages may
+        // come in either order.
+        const room = messages.filter((message) => message.ledgerId === change.ledgerId);
+        if (room.length >= ROOM_LATEST && change.data.createdAt < room[0].createdAt) break;
         next = { ...next, messages: [...messages, change.data].sort(byTime) };
         break;
       }
