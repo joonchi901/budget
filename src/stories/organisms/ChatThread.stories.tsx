@@ -204,7 +204,10 @@ export const Messenger: Story = {
     await expect(c.getByRole('button', { name: '좋아요 1명' })).toBeVisible();
   },
 };
-/** A deleted message does not show; an answer to it quotes 삭제된 메시지, which goes nowhere. */
+/**
+ * A deleted message does not show; an answer to it quotes 삭제된 메시지, which goes nowhere. So
+ * does an answer to a message that is not here when nothing older remains to load.
+ */
 export const DeletedMessage: Story = {
   args: {
     messages: [
@@ -223,12 +226,22 @@ export const DeletedMessage: Story = {
         createdAt: '2026-11-01T00:03:00.000Z',
         replyTo: 'gone',
       },
+      {
+        id: 'answer-2',
+        ledgerId: 'nov',
+        authorId: 'u2',
+        text: '예전에 지운 글에 단 답장',
+        createdAt: '2026-11-01T00:04:00.000Z',
+        replyTo: 'removed-long-ago',
+      },
     ],
   },
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);
-    await expect(c.getAllByRole('listitem')).toHaveLength(1);
-    await expect(c.getByRole('button', { name: '삭제된 메시지' })).toBeDisabled();
+    await expect(c.getAllByRole('listitem')).toHaveLength(2);
+    const quotes = c.getAllByRole('button', { name: '삭제된 메시지' });
+    await expect(quotes).toHaveLength(2);
+    for (const quote of quotes) await expect(quote).toBeDisabled();
   },
 };
 /**

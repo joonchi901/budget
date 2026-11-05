@@ -43,7 +43,7 @@ const sameMinute = (a?: ChatMessage, b?: ChatMessage) =>
  * 반응 추가, 답장 and ⋯ (복사, and on one's own 수정 and 삭제); a long press or right click opens
  * the same menu. Then a box to write and a button for Uga stickers and decorations. A deleted
  * message does not show; an answer to it quotes 삭제된 메시지. An answer to a message not loaded
- * yet quotes 이전 글, which loads older messages, as the 이전 글 보기 button on top does.
+ * yet, while older ones remain, quotes 이전 글, which loads them as 이전 글 보기 on top does.
  */
 export function ChatThread({
   messages,
@@ -207,6 +207,9 @@ export function ChatThread({
                     const mine = message.authorId === memberId;
                     const quoted =
                       message.replyTo && messages.find((item) => item.id === message.replyTo);
+                    // A target not here is older while older ones remain; else it was deleted
+                    // before deleted messages were kept.
+                    const older = !quoted && hasOlder && onLoadOlder;
                     // Like KakaoTalk: picture and name start one person's run; a new minute in
                     // it starts with a pointed bubble and the minute's time follows its last one.
                     const start = !sameAuthor(list[index - 1], message);
@@ -279,7 +282,7 @@ export function ChatThread({
                             <Button
                               variant="plain"
                               className="ledger-chat-quote"
-                              disabled={quoted ? quoted.deleted : !onLoadOlder}
+                              disabled={quoted ? quoted.deleted : !older}
                               onClick={() =>
                                 quoted
                                   ? document
@@ -290,9 +293,9 @@ export function ChatThread({
                             >
                               <Reply size={14} aria-hidden="true" />
                               <span>
-                                {!quoted
+                                {older
                                   ? '이전 글'
-                                  : quoted.deleted
+                                  : !quoted || quoted.deleted
                                     ? '삭제된 메시지'
                                     : `${nameOf(quoted.authorId)} · ${summaryOf(quoted)}`}
                               </span>
