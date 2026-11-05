@@ -16,7 +16,10 @@ const ledger = (id, childIds = []) => ({
   name: id,
   icon: 'ledger',
   period: { start: '2026-11-01', end: '2026-11-30' },
-  kinds: [],
+  // A ledger that holds records has the 유형 its records use; a parent has none.
+  kinds: childIds.length
+    ? []
+    : [{ id: 'k', name: '지출', color: '#AE393B', nature: 'expense', base: true }],
   fields: [],
   childIds,
 });
