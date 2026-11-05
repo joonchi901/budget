@@ -280,7 +280,12 @@ export function App() {
       try {
         const sent = await replay({
           read: readOutbox,
-          send: (item) => api(item.method, item.path, item.body, state.current),
+          // As the account that made it, whatever this page holds now (§4.5).
+          send: (item) =>
+            api(item.method, item.path, item.body, {
+              seq: state.current!.seq,
+              user: { id: item.userId },
+            }),
           remove: (key) => {
             locals.current.delete(key);
             return removeOutbox(key);
@@ -439,7 +444,13 @@ export function App() {
   ) => {
     commit(local(state.current!));
     wake.current?.();
-    pushOutbox({ method, path, body, createdAt: new Date().toISOString() }).then((key) => {
+    pushOutbox({
+      userId: state.current!.user.id,
+      method,
+      path,
+      body,
+      createdAt: new Date().toISOString(),
+    }).then((key) => {
       locals.current.set(key, local);
       if (syncing.current) sync();
       else tell({ type: 'outbox' });

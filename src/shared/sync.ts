@@ -185,9 +185,13 @@ export function withOlder(data: Snapshot, older: ChatMessage[]): Snapshot {
   };
 }
 
-/** A change waiting in the outbox (docs/sync-plan.md §4.2); `key` keeps the order it was made in. */
+/**
+ * A change waiting in the outbox (docs/sync-plan.md §4.2); `key` keeps the order it was made in,
+ * `userId` the account it was made in, which it goes as (§4.5).
+ */
 export type Outgoing = {
   key: number;
+  userId: Id;
   method: 'PUT' | 'DELETE';
   path: string;
   body?: unknown;

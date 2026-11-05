@@ -1,4 +1,5 @@
-import type { Snapshot, Sync } from '../../shared/sync';
+import type { Id } from '../../shared/ledger';
+import type { Sync } from '../../shared/sync';
 
 export class ApiFailure extends Error {
   constructor(
@@ -21,7 +22,7 @@ export async function api<T = Sync>(
   method: 'GET' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown,
-  copy?: Pick<Snapshot, 'seq' | 'user'>,
+  copy?: { seq: number; user: { id: Id } },
 ): Promise<T> {
   const blob = body instanceof Blob;
   const url = copy ? `${path}${path.includes('?') ? '&' : '?'}since=${copy.seq}` : path;
