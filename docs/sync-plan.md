@@ -33,7 +33,7 @@ Cloudflare 무료 한도(2026-11-05 공식 문서): D1 읽기 500만 행/일, �
 | 단계 | 요청당 읽는 행 | 하루 활성 사용자(무료) |
 | --- | --- | --- |
 | P0 | 읽기 8,000·쓰기 8,000·대화 폴링 ≤ 30 | 약 60명 |
-| P1 | 폴링 ≤ 30, 쓰기 ≤ 그 가계부 내역 수 + 50 | 약 250명 (한도는 Workers 요청) |
+| P1 | 변경 없는 폴링 ≈ 가계부 수 + 2, 내역 쓰기 ≈ 가계부 수 × 4 + 8 (2년치·가계부 24개 실측: 26, 약 101) | 약 250명 (한도는 Workers 요청) |
 | P2 | 새로고침·재방문 시 서버 읽기 0 | 같음, 체감 즉시 |
 | P3 | 폴링 없음 | 수천 명 |
 
@@ -174,17 +174,21 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
 1. members = SELECT ledger_id, role, seen_at FROM ledger_members WHERE user_id = me
 2. pruned = SELECT value FROM sync_meta WHERE key = 'pruned_to'
    since < pruned 이면 { seq: max(seq), ledgerIds, changes: [], resync: true }
-3. rows = SELECT seq, kind, id, ledger_id FROM changes
-         WHERE seq > ?since AND (user_id = ?me OR ledger_id IN (?members...))
-         ORDER BY seq LIMIT 1000
-   (members가 90개를 넘으면 IN을 나눠 두 번 조회하고 seq로 합친다: 바인딩 상한 100)
+3. 한 db.batch(한 트랜잭션)로:
+   top  = SELECT COALESCE(max(seq), 0) FROM changes
+   mine = SELECT seq, kind, id, ledger_id FROM changes INDEXED BY changes_user
+          WHERE user_id = ?me AND seq > ?since ORDER BY seq LIMIT 1000
+   room = SELECT seq, kind, id, ledger_id FROM changes INDEXED BY changes_ledger
+          WHERE ledger_id IN (?members...) AND seq > ?since ORDER BY seq LIMIT 1000
+          (members 90개마다 한 문: 바인딩 상한 100)
+   rows = mine과 room을 seq로 합치고 같은 seq를 지운 뒤 앞의 1,000개
 4. (kind, id)로 중복을 지우고 마지막 것만 남긴다
 5. kind별로 id를 모아 90개씩 IN 조회로 지금 상태를 읽고, 요청자 관점으로 payload를 만든다
    - ledger: 멤버가 아니면 data 없음. childIds는 소유자에게만(§8.1). role 포함
    - record: 행이 없거나 그 가계부 멤버가 아니면 data 없음. reactions 포함
    - message: 소프트 삭제면 text·sticker·reactions 없이 deleted: true
    - members/friends/invites/me: 그 범위의 목록을 통째로 다시 만든다(작다)
-6. seq = rows가 있으면 마지막 행의 seq, 없으면 SELECT max(seq) FROM changes (없으면 0)
+6. seq = rows가 있으면 마지막 행의 seq, 없으면 3의 top (같은 트랜잭션이라 그 사이 변경을 건너뛰지 않는다)
 7. rows가 1,000개면 more: true
 ```
 
@@ -194,7 +198,7 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
 
 ### 3.6 서버 검증 범위 축소 (확정)
 
-`load(db, user, scope?)`에 `scope.ledgerId`를 더한다. 주어지면 내역·반응·대화 쿼리에 `AND ledger_id = ?`를 붙인다(가계부 목록·멤버는 그대로: 수십 행). 디스패처는 자원별로 범위를 정한다.
+`load(db, user, scope)`의 `scope`는 `{ records: 'all' | Id[] | false; reactions?: true; people?: true }`다. `records`는 내역을 읽는 범위다: 전부, 주어진 가계부만(90개까지, `AND r.ledger_id IN (...)`), 또는 읽지 않음. `reactions`는 내역의 반응을 함께 읽고(스냅숏만), `people`은 친구·초대·멤버·가입 링크를 읽는다(스냅숏과 초대 핸들러만). 가계부 목록·역할·자산은 늘 읽는다(수십 행). 대화는 `load()`가 읽지 않고 스냅숏이 가계부마다 따로 읽는다. 디스패처는 자원별로 범위를 정한다.
 
 | 요청 | 범위 |
 | --- | --- |
@@ -209,10 +213,11 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
 
 ### 3.7 대화 변경 (확정)
 
-- `deleteMessage`: `UPDATE messages SET deleted_at = ?, text = NULL, sticker = NULL WHERE id = ? AND author_id = ?` + `DELETE FROM message_reactions WHERE message_id = ?`. 이미 지운 글은 성공으로 답한다(멱등).
-- `putMessage`: 같은 id가 있고 `text`가 같으면 아무것도 하지 않고 성공(재전송 멱등). 지운 글은 고칠 수 없다(`403`). 답장 대상은 지운 글이어도 된다(지금 `SELECT 1 … WHERE id = ? AND ledger_id = ?` 유지).
+- `deleteMessage`: `UPDATE messages SET deleted_at = ?, text = NULL, sticker = NULL WHERE id = ? AND author_id = ?` + `DELETE FROM message_reactions WHERE message_id = ?`. 이미 지운 글은 성공으로 답한다(멱등). 쓴 사람이라도 지금 그 가계부 멤버가 아니면 `403`(§8.4, `putMessage`와 같음).
+- `putMessage`: 같은 id가 있고 내용이 같으면(글은 `text`, 스티커는 `sticker`) 아무것도 하지 않고 성공(재전송 멱등). 지운 글은 고칠 수 없다(`403`). 답장 대상은 지운 글이어도 된다(지금 `SELECT 1 … WHERE id = ? AND ledger_id = ?` 유지).
+- `setMessageReaction`: 지운 글에는 반응할 수 없다(`404`, 없는 글과 같음).
 - 스냅숏·피드·`/api/messages` 모두 소프트 삭제 글을 `deleted: true`로 준다.
-- 화면(`src/client/ledger/Chat.tsx`): 답장 대상이 로컬에 **있고** `deleted`면 "삭제된 메시지", 로컬에 **없으면** "이전 글"(눌러서 이전 글 불러오기). 지금은 둘 다 "삭제된 메시지"로 보인다.
+- 화면(`src/client/ledger/Chat.tsx`): 답장 대상이 로컬에 **있고** `deleted`면 "삭제된 메시지", 로컬에 **없으면** 그 방에 더 받을 이전 글이 남아 있을 때 "이전 글"(눌러서 이전 글 불러오기), 남아 있지 않으면 "삭제된 메시지"(이 변경 전에 실제로 지운 글은 tombstone이 없다). 지금은 둘 다 "삭제된 메시지"로 보인다.
 
 ### 3.8 로그 보관 (확정)
 
@@ -235,7 +240,7 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
 
 - `scripts/check-sync.mjs`(node:assert, Node 24가 `.ts`를 바로 실행): `applyChanges`의 추가·수정·삭제·가계부 사라짐·`skip`·`more` 없는 경우를 검사한다. `package.json`에 `"check:sync"` 스크립트.
 - 로컬 두 계정(§8 끝의 방식. `DEV_AUTH`가 한 계정만 주면 loopback 한정 `X-Dev-User` 헤더를 더한다)으로: A가 쓴 내역·글·반응·삭제가 B의 `sync`에 오는지, B를 내보낸 직후 B의 `sync`에서 그 가계부가 `ledgerIds`에서 빠지고 `ledger` 변경이 data 없이 오는지, B가 A의 가계부 id로 `snapshot?ledgers=`를 불러도 빈 답인지.
-- §6의 방법으로 측정: 변경이 없는 `sync` ≤ 30행, 내역 쓰기 ≤ 그 가계부 내역 수 + 50행, 스냅숏은 지금 `load()`보다 적음(UNION 스캔 제거).
+- §6의 방법으로 측정: 변경이 없는 `sync` ≈ 가계부 수 + 2행(내 멤버십 + `pruned_to` + `max(seq)`), 내역 쓰기 ≈ 가계부 수 × 4 + 8행(가계부 목록·상위 연결·답 피드가 가계부 수에 비례), 스냅숏은 지금 `load()`보다 적음(UNION 스캔 제거). 2년치·가계부 24개 실측: 26행, 약 101행, 9,844행(같은 씨앗에서 이전 `load()` 23,129행).
 - `docs/ledger-baseline.md` §8.14의 "대화 탭을 보는 동안 몇 초마다 새 글을 확인한다"를 이 문서로 연결해 고친다.
 - Storybook: `ChatThread`에 `deleted`·"이전 글" 상태 스토리. `Flow` 스토리는 메모리 상태라 그대로.
 
