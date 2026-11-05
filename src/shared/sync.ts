@@ -186,8 +186,88 @@ export function withOlder(data: Snapshot, older: ChatMessage[]): Snapshot {
 }
 
 /**
+ * Whether a stored copy has the snapshot's shape, at least as far as the screen relies on it: one
+ * broken while its schema number stayed is taken as none (docs/sync-plan.md §4.1).
+ */
+export function isSnapshot(value: unknown): value is Snapshot {
+  const data = value as { [part: string]: unknown } | undefined;
+  const optional = [data?.members, data?.assets, data?.messages, data?.friends, data?.invites];
+  return (
+    typeof data?.seq === 'number' &&
+    typeof (data.user as { id?: unknown } | undefined)?.id === 'string' &&
+    Array.isArray(data.ledgers) &&
+    Array.isArray(data.records) &&
+    typeof data.seenAt === 'object' &&
+    data.seenAt !== null &&
+    optional.every((list) => list === undefined || Array.isArray(list))
+  );
+}
+
+/**
+ * What a change did to the copy, as data, so that a tab other than the one that made it, or a
+ * later page, makes it again (docs/sync-plan.md §4.3). Per part of the data: the list items put
+ * and the ids gone, the keys set (to undefined: gone), or the new value.
+ */
+export type Patch = {
+  [part: string]:
+    { put: { id: Id }[]; gone: Id[] } | { keys: [string, unknown][] } | { value: unknown };
+};
+
+type Parts = { [part: string]: unknown };
+const listed = (value: unknown): value is { id: Id }[] =>
+  Array.isArray(value) && value.every((item) => typeof item?.id === 'string');
+const keyed = (value: unknown): value is Parts =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+// A change may copy what it does not change (a saved ledger maps every other one): equal is same.
+const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/** The patch that takes `before` to `after`, a copy and that copy with a change made. */
+export function patchOf(before: Snapshot, after: Snapshot): Patch {
+  const [was, now] = [before as unknown as Parts, after as unknown as Parts];
+  const patch: Patch = {};
+  for (const part of new Set([...Object.keys(was), ...Object.keys(now)])) {
+    const [a, b] = [was[part], now[part]];
+    if (a === b) continue;
+    if (listed(a) && listed(b)) {
+      const old = new Map(a.map((item) => [item.id, item]));
+      const ids = new Set(b.map((item) => item.id));
+      const changed = b.filter((item) => !same(old.get(item.id), item));
+      const gone = a.filter((item) => !ids.has(item.id)).map((item) => item.id);
+      if (changed.length || gone.length) patch[part] = { put: changed, gone };
+    } else if (keyed(a) && keyed(b)) {
+      const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])]
+        .filter((key) => !same(a[key], b[key]))
+        .map((key): [string, unknown] => [key, b[key]]);
+      if (keys.length) patch[part] = { keys };
+    } else patch[part] = { value: b };
+  }
+  return patch;
+}
+
+/** The copy with a patch made over it: list items keep their place, new ones go last. */
+export function patched(data: Snapshot, patch: Patch = {}): Snapshot {
+  const next: Parts = { ...data };
+  for (const [part, change] of Object.entries(patch)) {
+    if ('put' in change) {
+      let list = (next[part] ?? []) as { id: Id }[];
+      for (const item of change.put) list = put(list, item.id, item);
+      for (const id of change.gone) list = put(list, id);
+      next[part] = list;
+    } else if ('keys' in change) {
+      const map: Parts = { ...(next[part] as Parts) };
+      for (const [key, value] of change.keys)
+        if (value === undefined) delete map[key];
+        else map[key] = value;
+      next[part] = map;
+    } else next[part] = change.value;
+  }
+  return next as unknown as Snapshot;
+}
+
+/**
  * A change waiting in the outbox (docs/sync-plan.md §4.2); `key` keeps the order it was made in,
- * `userId` the account it was made in, which it goes as (§4.5).
+ * `userId` the account it was made in, which it goes as (§4.5), `patch` what it did to the copy
+ * (§4.3; none in items made before it was kept).
  */
 export type Outgoing = {
   key: number;
@@ -195,6 +275,7 @@ export type Outgoing = {
   method: 'PUT' | 'DELETE';
   path: string;
   body?: unknown;
+  patch?: Patch;
   createdAt: string;
 };
 

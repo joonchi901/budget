@@ -4,21 +4,37 @@
  * server. Every call fails quietly; without IndexedDB (private browsing, say) the app keeps to
  * memory as before.
  */
-import type { Outgoing, Snapshot } from '../../shared/sync';
+import { isSnapshot, type Outgoing, type Snapshot } from '../../shared/sync';
 
 /** Raise it with any change to the stored data's shape: a device holding another starts afresh. */
 export const SCHEMA = 1;
 
 let opened: Promise<IDBDatabase> | undefined;
+/**
+ * The connection, opened again on the next call after it failed or closed: another tab asking for
+ * a newer version or deleting the database gets it at once, and a connection the browser lost
+ * (iOS) comes back (§4.1).
+ */
 const open = () =>
   (opened ??= new Promise((resolve, reject) => {
     const request = indexedDB.open('budget', 1);
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = ({ oldVersion }) => {
+      if (oldVersion >= 1) return;
       request.result.createObjectStore('state');
       request.result.createObjectStore('outbox', { keyPath: 'key', autoIncrement: true });
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      db.onversionchange = db.onclose = () => {
+        db.close();
+        opened = undefined;
+      };
+      resolve(db);
+    };
+    request.onerror = () => {
+      opened = undefined;
+      reject(request.error);
+    };
   }));
 
 /** One request in a transaction of its own, answered once the transaction is done. */
@@ -27,15 +43,20 @@ const run = <T>(
   mode: IDBTransactionMode,
   work: (store: IDBObjectStore) => IDBRequest<T>,
 ) =>
-  open().then(
-    (db) =>
-      new Promise<T>((resolve, reject) => {
-        const transaction = db.transaction(name, mode);
-        const request = work(transaction.objectStore(name));
-        transaction.oncomplete = () => resolve(request.result);
-        transaction.onerror = transaction.onabort = () => reject(transaction.error);
-      }),
-  );
+  open()
+    .then(
+      (db) =>
+        new Promise<T>((resolve, reject) => {
+          const transaction = db.transaction(name, mode);
+          const request = work(transaction.objectStore(name));
+          transaction.oncomplete = () => resolve(request.result);
+          transaction.onerror = transaction.onabort = () => reject(transaction.error);
+        }),
+    )
+    .catch((failure) => {
+      opened = undefined; // a connection lost without a close event opens afresh next time
+      throw failure;
+    });
 
 /** Whether IndexedDB works here, for tabs to share the copy and the outbox. */
 export const stored = () =>
@@ -44,27 +65,32 @@ export const stored = () =>
     () => false,
   );
 
-/** The stored copy, if one of this SCHEMA is there. */
+/**
+ * The stored copy, if a whole one of this SCHEMA is there (a broken one counts as none and is
+ * written over next), with the last refusal not yet made good by a snapshot (§4.2).
+ */
 export const readState = () =>
   run('state', 'readonly', (store) => store.get('current'))
-    .then((value?: { schema: number; data: Snapshot }) =>
-      value?.schema === SCHEMA ? value.data : undefined,
+    .then((value?: { schema: number; data: unknown; refused?: string }) =>
+      value?.schema === SCHEMA && isSnapshot(value.data)
+        ? { data: value.data, refused: value.refused }
+        : undefined,
     )
     .catch(() => undefined);
 
 let asked = false;
 /**
- * Stores the copy; resolves whether it was. The browser is asked once to keep the storage
- * (refusing changes nothing).
+ * Stores the copy, and `refused` while a refusal in it is not made good; resolves whether it was.
+ * The browser is asked once to keep the storage (refusing changes nothing).
  */
-export const writeState = (data: Snapshot) => {
+export const writeState = (data: Snapshot, refused?: string) => {
   // shortcut: whole state as one value; split into stores once it passes ~10MB.
   if (!asked) {
     asked = true;
     navigator.storage?.persist?.().catch(() => {});
   }
   return run('state', 'readwrite', (store) =>
-    store.put({ schema: SCHEMA, seq: data.seq, data }, 'current'),
+    store.put({ schema: SCHEMA, seq: data.seq, data, refused }, 'current'),
   ).then(
     () => true,
     () => false,

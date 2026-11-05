@@ -5,7 +5,10 @@ import { unseenCounts } from '../src/shared/ledger.ts';
 import {
   ROOM_LATEST,
   applyChanges,
+  isSnapshot,
   mergeSnapshot,
+  patchOf,
+  patched,
   pendingKeys,
   replay,
   withOlder,
@@ -382,6 +385,72 @@ for (const status of [0, 503, 408, 425, 429]) {
   assert.equal(result.sent, false);
   assert.deepEqual(result.left, [2, 9]);
 }
+
+// A change kept as data (§4.3): only what it changed, by id or key, though it copied the rest.
+// Made over a newer copy, it leaves others' changes there alone.
+const changed = {
+  ...base,
+  ledgers: [
+    ...base.ledgers.map((item) => ({
+      ...item,
+      childIds: item.id === 'y2026' ? [...item.childIds, 'new'] : [...item.childIds],
+    })),
+    ledger('new'),
+  ],
+  records: [...base.records.filter((item) => item.id !== 'r2'), record('r3', 'nov')],
+  messages: base.messages.map((item) => (item.id === 'm1' ? { ...item, text: '고침' } : item)),
+  seenAt: { ...base.seenAt, nov: '2026-11-05T00:00:00.000Z' },
+};
+const patch = patchOf(base, changed);
+assert.deepEqual(Object.keys(patch).sort(), ['ledgers', 'messages', 'records', 'seenAt']);
+assert.deepEqual(
+  patch.ledgers.put.map((item) => item.id),
+  ['y2026', 'new'],
+);
+assert.deepEqual(patch.records, { put: [record('r3', 'nov')], gone: ['r2'] });
+assert.deepEqual(patch.seenAt, { keys: [['nov', '2026-11-05T00:00:00.000Z']] });
+assert.deepEqual(patchOf(base, { ...base }), {}, 'a change that only shows nothing keeps nothing');
+const newer = {
+  ...base,
+  seq: 30,
+  ledgers: base.ledgers.map((item) => (item.id === 'trip' ? { ...item, name: '여행' } : item)),
+  records: [record('r0', 'nov'), ...base.records],
+  seenAt: { ...base.seenAt, trip: '2026-11-04T00:00:00.000Z' },
+};
+next = patched(newer, patch);
+assert.equal(next.seq, 30);
+assert.deepEqual(
+  next.ledgers.map((item) => [item.id, item.name, item.childIds.length]),
+  [
+    ['y2026', 'y2026', 3],
+    ['nov', 'nov', 0],
+    ['trip', '여행', 0],
+    ['new', 'new', 0],
+  ],
+);
+assert.deepEqual(
+  next.records.map((item) => item.id),
+  ['r0', 'r1', 'r3'],
+);
+assert.equal(next.messages[0].text, '고침');
+assert.deepEqual(next.seenAt, {
+  nov: '2026-11-05T00:00:00.000Z',
+  trip: '2026-11-04T00:00:00.000Z',
+});
+assert.deepEqual(patched(newer, undefined), newer, 'an item made before patches were kept');
+// A key taken out of a map goes.
+const { trip: _, ...seenNov } = base.seenAt;
+assert.deepEqual(patched(newer, patchOf(base, { ...base, seenAt: seenNov })).seenAt, {
+  nov: base.seenAt.nov,
+});
+
+// A stored copy broken with its schema number unchanged counts as none (§4.1).
+assert.equal(isSnapshot(base), true);
+const { ledgers: __, ...noLedgers } = base;
+assert.equal(isSnapshot(noLedgers), false);
+assert.equal(isSnapshot({ ...base, messages: {} }), false);
+assert.equal(isSnapshot({ ...base, user: {} }), false);
+assert.equal(isSnapshot(undefined), false);
 
 // Badges count others' records since the room was last opened, a parent's from below it.
 assert.deepEqual(unseenCounts(base.ledgers, base.records, base.seenAt, 'a'), {
