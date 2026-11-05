@@ -100,3 +100,15 @@ export const removeOutbox = (key: number) => {
         () => {},
       );
 };
+
+/** Forgets the copy and the outbox (docs/sync-plan.md §4.5, §8.16). */
+export const clearState = () => {
+  unstored = [];
+  return Promise.all([
+    run('state', 'readwrite', (store) => store.clear()),
+    run('outbox', 'readwrite', (store) => store.clear()),
+  ]).then(
+    () => {},
+    () => {},
+  );
+};

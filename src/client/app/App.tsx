@@ -51,7 +51,15 @@ import {
 import { ApiFailure, api } from './api';
 import { reencodePhoto } from './photo';
 import { useRoute } from './route';
-import { pushOutbox, readOutbox, readState, removeOutbox, stored, writeState } from './store';
+import {
+  clearState,
+  pushOutbox,
+  readOutbox,
+  readState,
+  removeOutbox,
+  stored,
+  writeState,
+} from './store';
 
 type Sheet =
   | { type: 'entry'; ledgers: Ledger[]; date?: IsoDate; record?: LedgerRecord }
@@ -108,7 +116,9 @@ type TabMessage =
   /** To the syncing tab: send the outbox, and with `sync` ask the feed too. */
   | { type: 'outbox' | 'sync' }
   /** To the syncing tab: a room's 이전 글 another tab loaded, to keep in the copy. */
-  | { type: 'older'; messages: ChatMessage[] };
+  | { type: 'older'; messages: ChatMessage[] }
+  /** The copy is gone (§4.5): show the login screen, or start again. */
+  | { type: 'logout' | 'reset' };
 
 /**
  * The app layer: keeps the user's data on this device, opens rooms and sheets, and saves through
@@ -148,15 +158,44 @@ export function App() {
   const tell = (message: TabMessage) => channel.current?.postMessage(message);
   const storing = useRef<number>(undefined);
   const retry = useRef({ timer: 0, count: 0 });
+  /** Counts the copies forgotten, so a snapshot asked for before cannot bring one back. */
+  const epoch = useRef(0);
   /** Brings the next check for others' changes forward, while a shared room is open. */
   const wake = useRef<() => void>(undefined);
   const today = localDate(new Date());
 
-  const report = (failure: unknown) =>
-    setError({
-      message: failure instanceof Error ? failure.message : '문제가 생겼어요.',
-      login: failure instanceof ApiFailure && failure.status === 401,
-    });
+  /** Drops this page's copy; a request already out comes back to nothing. */
+  const drop = () => {
+    epoch.current += 1;
+    window.clearTimeout(storing.current);
+    window.clearTimeout(retry.current.timer);
+    state.current = undefined;
+    locals.current.clear();
+    setData(undefined);
+    setFullChats(new Set());
+  };
+  /** Once the copy is gone: the login screen, or after `reset` the syncing tab starts again. */
+  const after = (then: 'logout' | 'reset') => {
+    setError(then === 'logout' ? { message: '', login: true } : undefined);
+    if (then === 'reset' && syncing.current) start();
+  };
+  /** Forgets this device's copy and outbox in every tab (docs/sync-plan.md §4.5, §8.16). */
+  const forget = (then: 'logout' | 'reset') => {
+    drop();
+    tell({ type: then });
+    return clearState().then(() => after(then));
+  };
+  /** A 401, or a session of another account: forgets the copy, and says so (§4.5). */
+  const leave = (failure: unknown) =>
+    failure instanceof ApiFailure && failure.status === 401
+      ? forget('logout')
+      : failure instanceof ApiFailure && failure.code === 'ACCOUNT_CHANGED'
+        ? forget('reset')
+        : undefined;
+  const report = (failure: unknown) => {
+    if (leave(failure)) return;
+    setError({ message: failure instanceof Error ? failure.message : '문제가 생겼어요.' });
+  };
   /**
    * Shows the device's copy. The syncing tab stores it STORE_AFTER after the last change (§4.1)
    * and tells the other tabs.
@@ -175,12 +214,15 @@ export function App() {
   const unsent = (data: Snapshot) =>
     [...locals.current.values()].reduce((next, local) => local(next), data);
   /** The whole data again, with this page's unsent changes made over it. */
-  const reload = () =>
-    api<Snapshot>('GET', '/api/snapshot').then((answer) => {
+  const reload = () => {
+    const asked = epoch.current;
+    return api<Snapshot>('GET', '/api/snapshot', undefined, state.current).then((answer) => {
+      if (asked !== epoch.current) return;
       commit(unsent(answer));
       setFullChats(new Set());
       setError(undefined);
     });
+  };
   /** The stored copy with this page's changes still in the outbox; resolves whether there was one. */
   const refresh = async () => {
     const [copy, queued] = await Promise.all([readState(), readOutbox()]);
@@ -202,18 +244,23 @@ export function App() {
     // shortcut: more than 90 new ledgers at once take the whole snapshot again.
     if (fresh.length > 90) return reload();
     const part = fresh.length
-      ? await api<Snapshot>('GET', `/api/snapshot?ledgers=${fresh.join(',')}`).catch(
-          () => undefined,
-        )
+      ? await api<Snapshot>(
+          'GET',
+          `/api/snapshot?ledgers=${fresh.join(',')}`,
+          undefined,
+          state.current,
+        ).catch(() => undefined)
       : undefined;
-    let next = applyChanges(state.current!, answer, skip ?? pendingKeys(await readOutbox()));
+    const skipped = skip ?? pendingKeys(await readOutbox());
+    if (!state.current) return; // forgotten meanwhile
+    let next = applyChanges(state.current, answer, skipped);
     if (part) next = mergeSnapshot(next, part);
     // What was saved stays; the new ledgers stay out, so the next try asks for them again.
     else if (fresh.length)
       next = { ...next, ledgers: next.ledgers.filter((ledger) => !fresh.includes(ledger.id)) };
     commit(next);
     if (fresh.length && !part) throw new ApiFailure(0, '서버에 연결하지 못했어요.');
-    if (answer.more) return accept(await api('GET', '/api/sync', undefined, next.seq), skip);
+    if (answer.more) return accept(await api('GET', '/api/sync', undefined, next), skip);
   };
   /**
    * The way to the server for changes and checks: sends the outbox in order, then with `feed`
@@ -228,25 +275,23 @@ export function App() {
       try {
         const sent = await replay({
           read: readOutbox,
-          send: (item) => api(item.method, item.path, item.body, state.current!.seq),
+          send: (item) => api(item.method, item.path, item.body, state.current),
           remove: (key) => {
             locals.current.delete(key);
             return removeOutbox(key);
           },
           accept,
-          refused: (failure) => {
-            report(failure);
-            return reload();
-          },
+          refused: (failure) =>
+            leave(failure) ?? (setError({ message: (failure as Error).message }), reload()),
         });
+        if (!state.current) return false; // forgotten meanwhile
         if (!sent) throw new ApiFailure(0, '서버에 연결하지 못했어요.');
-        const answer = feed
-          ? await api('GET', '/api/sync', undefined, state.current.seq)
-          : undefined;
+        const answer = feed ? await api('GET', '/api/sync', undefined, state.current) : undefined;
         if (answer) await accept(answer);
         retry.current.count = 0;
         return Boolean(answer?.changes.length);
-      } catch {
+      } catch (failure) {
+        if (leave(failure)) return false;
         const wait = RETRY[Math.min(retry.current.count++, RETRY.length - 1)];
         retry.current.timer = window.setTimeout(() => sync(feed), wait);
         return false;
@@ -296,7 +341,10 @@ export function App() {
     const tabs = new BroadcastChannel('budget');
     channel.current = tabs;
     tabs.onmessage = ({ data: message }: MessageEvent<TabMessage>) => {
-      if (!syncing.current) {
+      if (message.type === 'logout' || message.type === 'reset') {
+        drop();
+        after(message.type);
+      } else if (!syncing.current) {
         if (message.type === 'state') refresh();
       } else if (message.type === 'outbox') sync();
       else if (message.type === 'sync') sync(true);
@@ -380,10 +428,13 @@ export function App() {
     api<ChatMessage[]>(
       'GET',
       `/api/messages?ledger=${ledgerId}&before=${encodeURIComponent(oldest?.createdAt ?? '9999')}`,
+      undefined,
+      state.current,
     )
       .then((older) => {
+        if (!state.current) return;
         if (older.length < 100) setFullChats((full) => new Set(full).add(ledgerId));
-        commit(withOlder(state.current!, older));
+        commit(withOlder(state.current, older));
         if (!syncing.current) tell({ type: 'older', messages: older });
       })
       .catch(report);
@@ -409,7 +460,11 @@ export function App() {
   if (error?.login)
     return (
       <LoginView
-        onLogin={start}
+        // Every tab starts again; the syncing one takes the snapshot.
+        onLogin={() => {
+          tell({ type: 'reset' });
+          after('reset');
+        }}
         error="로그인은 아직 연결 전이에요. 로컬 개발 서버(npm run dev)에서 열어 주세요."
       />
     );
@@ -732,7 +787,7 @@ export function App() {
             onSave={(profile, photo) => {
               setTakenHandle(undefined);
               const save = (method: 'PUT' | 'DELETE', path: string, body?: unknown) =>
-                api(method, path, body, state.current!.seq).then((answer) =>
+                api(method, path, body, state.current).then((answer) =>
                   syncing.current ? accept(answer) : tell({ type: 'sync' }),
                 );
               queue.current = queue.current.then(() =>
@@ -748,11 +803,9 @@ export function App() {
                   }),
               );
             }}
-            onLogout={() =>
-              setError({
-                message: '로컬 개발 계정은 로그아웃할 수 없어요. Google 로그인을 붙인 뒤에 열어요.',
-              })
-            }
+            // shortcut: no server session yet (the dev account), so logging out forgets this
+            // device's data and shows the login screen; Google login adds ending the session.
+            onLogout={() => forget('logout')}
             onLeave={() => setError({ message: '탈퇴는 Google 로그인을 붙인 뒤에 열어요.' })}
             onBack={wide ? undefined : back}
             tabBar={tabBar}

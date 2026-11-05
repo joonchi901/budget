@@ -894,6 +894,11 @@ export default {
       const [, api, resource, id, extra, reaction, rest] = url.pathname.split('/');
       if (api !== 'api') fail(404, 'NOT_FOUND', '없는 주소예요.');
       const user = await signedIn(request, env);
+      // A device holding another account's copy forgets it before anything is read or written
+      // (docs/sync-plan.md §4.5).
+      const cached = request.headers.get('X-Cached-User');
+      if (cached !== null && cached !== user.id)
+        fail(409, 'ACCOUNT_CHANGED', '다른 계정으로 로그인했어요.');
       if (request.method !== 'GET') checkOrigin(request, env);
       // Reads: a photo, an exact ID lookup, the snapshot, the feed and a room's older messages.
       if (request.method === 'GET' && resource === 'photos' && isId(id) && extra && !reaction)
