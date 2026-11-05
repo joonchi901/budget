@@ -356,9 +356,14 @@ export function App() {
       tabs.close();
     };
   }, []);
-  // Unsent changes go as soon as the device is online again or the page shows again (§4.2).
+  // Unsent changes go as soon as the device is online again or the page shows again (§4.2); the
+  // waits between tries start over, since `online` may come a moment before the network does.
   useEffect(() => {
-    const now = () => document.visibilityState === 'visible' && sync();
+    const now = () => {
+      if (document.visibilityState !== 'visible') return;
+      retry.current.count = 0;
+      sync();
+    };
     window.addEventListener('online', now);
     document.addEventListener('visibilitychange', now);
     return () => {
