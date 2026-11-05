@@ -778,6 +778,8 @@ async function deleteMessage(db: D1Database, data: Loaded, id: Id) {
     .bind(id, data.user.id)
     .first<{ ledger_id: Id; deleted_at: string | null }>();
   if (!own) fail(404, 'NOT_FOUND', '내가 쓴 글만 지울 수 있어요.');
+  // Leaving or being removed ends the right to change the room's 대화 (§8.4, §8.14).
+  if (!data.roles.has(own.ledger_id)) fail(403, 'FORBIDDEN', '이 가계부의 대화에 쓸 수 없어요.');
   if (own.deleted_at) return;
   await db.batch([
     db
