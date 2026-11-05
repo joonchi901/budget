@@ -366,8 +366,9 @@ assert.deepEqual(result.log, [
   'accept 90 skip ',
 ]);
 
-// Without a connection, or on a server error, the run stops and the change waits.
-for (const status of [0, 503]) {
+// Without a connection, on a server error, or told to try later (429 and the like), the run
+// stops and the change waits.
+for (const status of [0, 503, 408, 425, 429]) {
   result = await run(
     outbox([
       ['PUT', '/api/records/r1'],

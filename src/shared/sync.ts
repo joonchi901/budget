@@ -220,12 +220,16 @@ export function pendingKeys(queued: Pick<Outgoing, 'path' | 'body'>[]): Set<stri
   return new Set(keys);
 }
 
+/** Answers that refuse for now, not for good: the change goes again like after a server error. */
+const LATER = [408, 425, 429];
+
 /**
  * Sends the outbox one change at a time, oldest first (docs/sync-plan.md §4.2); a change added
  * meanwhile goes in the same run. Each answer is taken in keeping the targets of the changes
  * still waiting. A refused change (4xx) goes and the caller hears of it, except a DELETE of
- * something already gone (404), which counts as sent. Without a connection or on a server error
- * the run stops with the rest waiting, and resolves false.
+ * something already gone (404), which counts as sent. Without a connection, on a server error or
+ * an answer to try again later (408, 425, 429) the run stops with the rest waiting, and resolves
+ * false.
  */
 export async function replay(io: {
   read(): Promise<Outgoing[]>;
@@ -240,7 +244,7 @@ export async function replay(io: {
       (answer) => ({ answer, status: 200 }),
       (failure: { status?: number }) => ({ failure, status: failure?.status ?? 0 }),
     );
-    if (!sent.status || sent.status >= 500) return false;
+    if (!sent.status || sent.status >= 500 || LATER.includes(sent.status)) return false;
     await io.remove(item.key);
     if ('answer' in sent) await io.accept(sent.answer, pendingKeys(await io.read()));
     else if (sent.status !== 404 || item.method !== 'DELETE') await io.refused(sent.failure);
