@@ -42,9 +42,12 @@ import {
   ROOM_LATEST,
   applyChanges,
   mergeSnapshot,
+  patchOf,
+  patched,
   pendingKeys,
   replay,
   withOlder,
+  type Outgoing,
   type Snapshot,
   type Sync,
 } from '../../shared/sync';
@@ -119,6 +122,8 @@ type TabMessage =
   | { type: 'outbox' | 'sync' }
   /** To the syncing tab: a room's 이전 글 another tab loaded, to keep in the copy. */
   | { type: 'older'; messages: ChatMessage[] }
+  /** From the syncing tab: the server refused a change, maybe one made in this tab (§4.2). */
+  | { type: 'refused'; message: string }
   /** The copy is gone (§4.5): show the login screen, or start again. */
   | { type: 'logout' | 'reset' };
 
@@ -160,7 +165,10 @@ export function App() {
   const tell = (message: TabMessage) => channel.current?.postMessage(message);
   const storing = useRef<number>(undefined);
   const retry = useRef({ timer: 0, count: 0 });
-  /** What the server last refused in the outbox, told once the data is taken whole again. */
+  /**
+   * What the server last refused in the outbox, told once the data is taken whole again; stored
+   * with the copy until then, so a start after this page closed makes it good (§4.2).
+   */
   const refusal = useRef<string>(undefined);
   /** Counts the copies forgotten, so a snapshot asked for before cannot bring one back. */
   const epoch = useRef(0);
@@ -173,6 +181,7 @@ export function App() {
     epoch.current += 1;
     window.clearTimeout(storing.current);
     window.clearTimeout(retry.current.timer);
+    retry.current.count = 0;
     state.current = undefined;
     refusal.current = undefined;
     locals.current.clear();
@@ -211,30 +220,40 @@ export function App() {
     if (!syncing.current) return;
     window.clearTimeout(storing.current);
     storing.current = window.setTimeout(
-      () => writeState(next).then((done) => done && tell({ type: 'state' })),
+      () => writeState(next, refusal.current).then((done) => done && tell({ type: 'state' })),
       STORE_AFTER,
     );
   };
-  /** This page's changes still waiting, made over `data`. */
-  const unsent = (data: Snapshot) =>
-    [...locals.current.values()].reduce((next, local) => local(next), data);
-  /** The whole data again, with this page's unsent changes made over it. */
+  /**
+   * The changes still in the outbox made over `data` (§4.3): this page's own made again, others'
+   * (another tab's, an earlier page's) from what they did. Another account's are only sent (§4.5).
+   */
+  const unsent = (data: Snapshot, queued: Outgoing[]) =>
+    queued.reduce((next, item) => {
+      if (item.userId !== data.user.id) return next;
+      const local = locals.current.get(item.key);
+      return local ? local(next) : patched(next, item.patch);
+    }, data);
+  /** The whole data again, with the unsent changes made over it. */
   const reload = () => {
     const asked = epoch.current;
-    return api<Snapshot>('GET', '/api/snapshot', undefined, state.current).then((answer) => {
+    return Promise.all([
+      api<Snapshot>('GET', '/api/snapshot', undefined, state.current),
+      readOutbox(),
+    ]).then(([answer, queued]) => {
       if (asked !== epoch.current) return;
-      commit(unsent(answer));
+      commit(unsent(answer, queued));
       setFullChats(new Set());
       setError(undefined);
     });
   };
-  /** The stored copy with this page's changes still in the outbox; resolves whether there was one. */
+  /** The stored copy with the changes still in the outbox; resolves what was stored. */
   const refresh = async () => {
     const [copy, queued] = await Promise.all([readState(), readOutbox()]);
     const waiting = new Set(queued.map((item) => item.key));
     for (const key of locals.current.keys()) if (!waiting.has(key)) locals.current.delete(key);
-    if (copy) commit(unsent(copy));
-    return Boolean(copy);
+    if (copy) commit(unsent(copy.data, queued));
+    return copy;
   };
   /**
    * Takes in a feed answer, keeping the targets of changes still in the outbox (`skip`, read
@@ -242,6 +261,7 @@ export function App() {
    * It applies to the copy as it is once the answer is complete, so a change made meanwhile stays.
    */
   const accept = async (answer: Sync, skip?: Set<string>): Promise<void> => {
+    if (!state.current) return; // forgotten while the answer came (logout, reset)
     if (answer.resync) return reload();
     const fresh = answer.ledgerIds.filter(
       (id) => !state.current!.ledgers.some((ledger) => ledger.id === id),
@@ -291,13 +311,23 @@ export function App() {
             return removeOutbox(key);
           },
           accept,
-          refused: (failure) => leave(failure) ?? (refusal.current = (failure as Error).message),
+          refused: (failure) => {
+            const left = leave(failure);
+            if (left) return left;
+            refusal.current = (failure as Error).message;
+            // Stored at once: the run may stop on the next change and the page close (§4.2).
+            if (state.current) return writeState(state.current, refusal.current);
+          },
         });
         if (!state.current) return false; // forgotten meanwhile
         if (!sent) throw new ApiFailure(0, '서버에 연결하지 못했어요.');
         if (refusal.current) {
-          await reload();
-          if (refusal.current) setError({ message: refusal.current }); // unless forgotten meanwhile
+          await reload(); // the copy it stores drops the refusal
+          // Unless forgotten meanwhile; every tab says it, the change may be another's (§4.2).
+          if (refusal.current) {
+            setError({ message: refusal.current });
+            tell({ type: 'refused', message: refusal.current });
+          }
           refusal.current = undefined;
         }
         const answer = feed ? await api('GET', '/api/sync', undefined, state.current) : undefined;
@@ -306,7 +336,7 @@ export function App() {
         retry.current.count = 0;
         return Boolean(answer?.changes.length);
       } catch (failure) {
-        if (leave(failure)) return false;
+        if (leave(failure) || !state.current) return false; // forgotten: nothing to try again
         const wait = RETRY[Math.min(retry.current.count++, RETRY.length - 1)];
         retry.current.timer = window.setTimeout(() => sync(feed), wait);
         return false;
@@ -315,6 +345,8 @@ export function App() {
     queue.current = run.then(() => {});
     return run;
   };
+  /** A check for others' changes, unless a try waits after a failure: that one goes first (§4.3). */
+  const poll = () => (retry.current.count ? Promise.resolve(false) : sync(true));
   /** The data from the server whole, then any changes left in the outbox. */
   const start = () => reload().then(() => sync(), report);
   /** Starts again in every tab: the syncing one takes the snapshot, the others wait for it. */
@@ -328,7 +360,12 @@ export function App() {
     refresh();
   }, []);
   useEffect(() => {
-    if (leading) refresh().then((found) => (found ? sync(true) : start()));
+    if (!leading) return;
+    refresh().then((copy) => {
+      // A refusal stored before the snapshot made it good (§4.2): this run takes one and says it.
+      if (copy?.refused) refusal.current = copy.refused;
+      return copy ? sync(true) : start();
+    });
   }, [leading]);
   // One tab holds the lock for its life and alone sends, checks and stores (§4.3); when it goes,
   // the next takes over. Without Web Locks or IndexedDB each tab does all of it for itself.
@@ -367,8 +404,14 @@ export function App() {
       } else if (!syncing.current) {
         if (message.type === 'state') refresh();
         else if (message.type === 'news') wake.current?.();
-      } else if (message.type === 'outbox') sync();
-      else if (message.type === 'sync') sync(true);
+        else if (message.type === 'refused') setError({ message: message.message });
+      } else if (message.type === 'outbox')
+        // Another tab's change goes in this copy too, so it is stored before it is sent (§4.3).
+        readOutbox().then((queued) => {
+          if (state.current) commit(unsent(state.current, queued));
+          sync();
+        });
+      else if (message.type === 'sync') poll();
       else if (message.type === 'older' && state.current)
         commit(withOlder(state.current, message.messages));
     };
@@ -410,7 +453,7 @@ export function App() {
     };
     const check = () => {
       window.clearTimeout(timer);
-      const asked = syncing.current ? sync(true) : (tell({ type: 'sync' }), Promise.resolve(false));
+      const asked = syncing.current ? poll() : (tell({ type: 'sync' }), Promise.resolve(false));
       asked.then((news) => {
         delay = news ? POLL_FIRST : Math.min(delay * 2, POLL_LONGEST);
         if (wake.current === soon) later();
@@ -434,7 +477,8 @@ export function App() {
 
   /**
    * A change: made on the device's copy at once, put in the outbox, then sent in turn (§4.2).
-   * `local` makes it; it runs again over a snapshot taken before the change is sent.
+   * `local` makes it; it runs again over a snapshot taken before the change is sent. What it did
+   * goes with it, for other tabs and later pages to make again (§4.3).
    */
   const change = (
     local: (data: Snapshot) => Snapshot,
@@ -442,13 +486,16 @@ export function App() {
     path: string,
     body?: unknown,
   ) => {
-    commit(local(state.current!));
+    const before = state.current!;
+    const after = local(before);
+    commit(after);
     wake.current?.();
     pushOutbox({
-      userId: state.current!.user.id,
+      userId: before.user.id,
       method,
       path,
       body,
+      patch: patchOf(before, after),
       createdAt: new Date().toISOString(),
     }).then((key) => {
       locals.current.set(key, local);
