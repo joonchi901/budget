@@ -20,14 +20,18 @@ const withinPeriod = (ledger: Ledger, date: IsoDate) =>
       ? ledger.period.end
       : date;
 
-/** A new record starts as the base 지출, not whichever expense 유형 (고정지출) is listed first. */
+/**
+ * A new record starts as the base 지출, not whichever expense 유형 (고정지출) is listed first. With
+ * no 유형 at all, 저장 reports 유형 rather than the screen going blank.
+ */
 const draftFor = (ledger: Ledger, date: IsoDate): RecordDraft => ({
   date,
-  kindId: (
-    ledger.kinds.find((kind) => kind.base && kind.nature === 'expense') ??
-    ledger.kinds.find((kind) => kind.nature === 'expense') ??
-    ledger.kinds[0]
-  ).id,
+  kindId:
+    (
+      ledger.kinds.find((kind) => kind.base && kind.nature === 'expense') ??
+      ledger.kinds.find((kind) => kind.nature === 'expense') ??
+      ledger.kinds[0]
+    )?.id ?? '',
   title: '',
   amount: null,
   values: {},
