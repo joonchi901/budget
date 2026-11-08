@@ -42,8 +42,9 @@ const run = <T>(
   name: 'state' | 'outbox',
   mode: IDBTransactionMode,
   work: (store: IDBObjectStore) => IDBRequest<T>,
-) =>
-  open()
+) => {
+  const connection = open();
+  return connection
     .then(
       (db) =>
         new Promise<T>((resolve, reject) => {
@@ -54,9 +55,18 @@ const run = <T>(
         }),
     )
     .catch((failure) => {
-      opened = undefined; // a connection lost without a close event opens afresh next time
+      // A connection lost without a close event opens afresh next time; this one is closed, so
+      // failing writes (storage full) do not leave one open each.
+      if (opened === connection) {
+        opened = undefined;
+        connection.then(
+          (db) => db.close(),
+          () => {},
+        );
+      }
       throw failure;
     });
+};
 
 /** Whether IndexedDB works here, for tabs to share the copy and the outbox. */
 export const stored = () =>
@@ -127,6 +137,13 @@ export const removeOutbox = (key: number) => {
         () => {},
       );
 };
+
+/** Forgets the copy alone, one the screen failed to draw; the outbox still goes (§4.1). */
+export const clearCopy = () =>
+  run('state', 'readwrite', (store) => store.clear()).then(
+    () => {},
+    () => {},
+  );
 
 /** Forgets the copy and the outbox (docs/sync-plan.md §4.5, §8.16). */
 export const clearState = () => {

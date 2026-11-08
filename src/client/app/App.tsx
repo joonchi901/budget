@@ -43,10 +43,10 @@ import {
   applyChanges,
   mergeSnapshot,
   patchOf,
-  patched,
   pendingKeys,
   replay,
   withOlder,
+  withUnsent,
   type Outgoing,
   type Snapshot,
   type Sync,
@@ -55,6 +55,7 @@ import { ApiFailure, api } from './api';
 import { reencodePhoto } from './photo';
 import { useRoute } from './route';
 import {
+  SCHEMA,
   clearState,
   pushOutbox,
   readOutbox,
@@ -109,8 +110,11 @@ const POLL_FIRST = 5000;
 const POLL_LONGEST = 30000;
 /** The device's copy is stored this long after the last change to it, not on every one. */
 const STORE_AFTER = 500;
-/** Waits between tries while the server cannot be reached; the last one repeats. */
-const RETRY = [5000, 10000, 20000, 60000];
+/**
+ * Waits between tries while the server cannot be reached; the last one repeats. Checks wait
+ * behind a try, so it is no longer than the longest between checks (§4.2).
+ */
+const RETRY = [5000, 10000, 20000, POLL_LONGEST];
 
 /** What tabs tell each other on BroadcastChannel `budget` (docs/sync-plan.md §4.3). */
 type TabMessage =
@@ -224,16 +228,9 @@ export function App() {
       STORE_AFTER,
     );
   };
-  /**
-   * The changes still in the outbox made over `data` (§4.3): this page's own made again, others'
-   * (another tab's, an earlier page's) from what they did. Another account's are only sent (§4.5).
-   */
+  /** The changes still in the outbox made over `data`, this page's own made again (§4.3). */
   const unsent = (data: Snapshot, queued: Outgoing[]) =>
-    queued.reduce((next, item) => {
-      if (item.userId !== data.user.id) return next;
-      const local = locals.current.get(item.key);
-      return local ? local(next) : patched(next, item.patch);
-    }, data);
+    withUnsent(data, queued, SCHEMA, (key) => locals.current.get(key));
   /** The whole data again, with the unsent changes made over it. */
   const reload = () => {
     const asked = epoch.current;
@@ -359,6 +356,8 @@ export function App() {
   useEffect(() => {
     refresh();
   }, []);
+  // Taken off the page (the screen failed to draw, §4.1): nothing of its copy is stored after.
+  useEffect(() => drop, []);
   useEffect(() => {
     if (!leading) return;
     refresh().then((copy) => {
@@ -496,6 +495,7 @@ export function App() {
       path,
       body,
       patch: patchOf(before, after),
+      schema: SCHEMA,
       createdAt: new Date().toISOString(),
     }).then((key) => {
       locals.current.set(key, local);
