@@ -578,7 +578,7 @@ export function LedgerSettingsView({
       <Button
         variant="primary"
         className="view-sticky-action"
-        disabled={!dirty || !draft.name.trim() || (parent && !draft.childIds.length)}
+        disabled={!dirty || !draft.name.trim()}
         onClick={() =>
           onSave({
             ledger: {

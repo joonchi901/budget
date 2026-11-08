@@ -49,6 +49,7 @@ const meta = {
           {...args}
           onInvite={({ profileIds, role }) => setLog(`초대 ${profileIds.join(',')} ${role}`)}
           onLeave={() => setLog('나가기')}
+          onRemove={(profile) => setLog(`내보내기 ${profile.id}`)}
           onFindFriends={() => setLog('친구 찾기')}
         />
         <p role="status" className="sr-only">
@@ -108,6 +109,22 @@ export const ShareFromParent: Story = {
     await userEvent.click(page.getByRole('checkbox', { name: /예디/ }));
     await userEvent.click(page.getByRole('button', { name: '1명 초대' }));
     await expect(page.getByRole('status')).toHaveTextContent(`초대 ${yedi.id} editor`);
+  },
+};
+export const EmptyParentLeftover: Story = {
+  // An empty parent could be shared itself before parents became their owner's alone. Nothing is
+  // below to invite to now, but whoever it let in can still be sent away.
+  args: { ledger: { ...year2026, childIds: [] }, below: [] },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(page.getByRole('checkbox', { name: /서연/ }));
+    await expect(page.getByRole('button', { name: '1명 초대' })).toBeDisabled();
+    await expect(
+      page.getByRole('heading', { name: '상위 가계부에 직접 초대된 사람' }),
+    ).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: '예디 메뉴' }));
+    await userEvent.click(page.getByRole('menuitem', { name: '내보내기' }));
+    await expect(page.getByRole('status')).toHaveTextContent(`내보내기 ${yedi.id}`);
   },
 };
 export const AcceptInvite: Story = {
