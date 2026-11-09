@@ -141,26 +141,30 @@ export const removeOutbox = (key: number) => {
       );
 };
 
+/** Forgets the copy alone: after a 401 the outbox waits for the account to sign in again (§4.5). */
+export const clearCopy = () =>
+  run('state', 'readwrite', (store) => store.clear()).then(
+    () => {},
+    () => {},
+  );
+
 /**
- * Forgets the copy, one the screen failed to draw, and the outbox's patches, which may be what
- * broke it: the changes themselves still go, only unshown until sent (§4.1).
+ * Forgets what the outbox's changes did to the copy, with a copy the screen failed to draw, as
+ * they may be what broke it: the changes themselves still go, only unshown until sent (§4.1).
  */
-export const clearCopy = () => {
+export const dropPatches = () => {
   unstored = unstored.map(({ patch, ...item }) => item);
-  return Promise.all([
-    run('state', 'readwrite', (store) => store.clear()),
-    run('outbox', 'readwrite', (store) => {
-      const request = store.openCursor();
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (!cursor) return;
-        const { patch, ...item } = cursor.value as Outgoing;
-        cursor.update(item);
-        cursor.continue();
-      };
-      return request;
-    }),
-  ]).then(
+  return run('outbox', 'readwrite', (store) => {
+    const request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      const { patch, ...item } = cursor.value as Outgoing;
+      cursor.update(item);
+      cursor.continue();
+    };
+    return request;
+  }).then(
     () => {},
     () => {},
   );

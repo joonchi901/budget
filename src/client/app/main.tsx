@@ -4,7 +4,7 @@ import { StatusScreen } from '../templates';
 import { Button } from '../ui';
 import './app.css';
 import { App } from './App';
-import { clearCopy } from './store';
+import { clearCopy, dropPatches } from './store';
 
 /**
  * A screen that fails to draw (a stored copy or an outbox patch broken inside its lists, say)
@@ -19,7 +19,7 @@ class Recover extends Component<{ children: ReactNode }, { failed: boolean; trie
   }
   componentDidCatch() {
     if (this.state.tries) return;
-    clearCopy().then(() => {
+    Promise.all([clearCopy(), dropPatches()]).then(() => {
       if (typeof BroadcastChannel !== 'undefined') {
         const tabs = new BroadcastChannel('budget');
         tabs.postMessage({ type: 'reset' });
