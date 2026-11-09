@@ -239,18 +239,63 @@ export const ParentTravel: Story = {
   },
 };
 export const ParentWithoutChildren: Story = {
-  // Its only 하위 left or went out of sight: nothing to add to, so no 내역 추가 anywhere.
+  // Its only 하위 left or went out of sight: nothing to show or add to, on any display.
   args: { ledger: { ...travel, childIds: [] } },
   play: async ({ canvasElement }) => {
     const c = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
     await expect(c.getByText('하위 0개')).toBeVisible();
-    await expect(c.getByText(/^하위 가계부가 없어요/)).toBeVisible();
+    await expect(c.getByText(/^내역을 적는 하위 가계부가 없어요\. 설정에서/)).toBeVisible();
     await expect(c.queryByRole('button', { name: '내역 추가' })).toBeNull();
-    await userEvent.click(c.getByRole('button', { name: '캘린더' }));
-    await userEvent.click(c.getByRole('button', { name: /^11월 3일/ }));
-    await expect(page.getByRole('dialog', { name: /^11월 3일/ })).toBeVisible();
-    await expect(page.queryByRole('button', { name: '이 날짜로 추가' })).toBeNull();
+    // No 표·캘린더 to switch to, where the notice would hide.
+    await expect(c.queryByRole('button', { name: '캘린더' })).toBeNull();
+    await userEvent.click(c.getByRole('button', { name: '여행 메뉴' }));
+    await expect(page.getByRole('menuitem', { name: '하위 전부 공유' })).toBeVisible();
+  },
+};
+export const ParentOnlyEmptyBelow: Story = {
+  // Its one 하위 is an empty parent: "하위 1개", and still nothing that holds records.
+  args: {
+    ledger: { ...travel, childIds: ['empty'] },
+    ledgers: [...ledgers, { ...travel, id: 'empty', name: '빈 상위', childIds: [] }],
+  },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await expect(c.getByText('하위 1개')).toBeVisible();
+    await expect(c.getByText(/^내역을 적는 하위 가계부가 없어요/)).toBeVisible();
+  },
+};
+export const ParentSomeoneElseMade: Story = {
+  // Shared with the user before parents became their owner's alone: they can only leave it.
+  args: { ledger: { ...travel, childIds: [] }, owned: false },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(c.getByText(/다른 사람이 만든 상위 가계부라 바꿀 수 없고/)).toBeVisible();
+    await userEvent.click(c.getByRole('button', { name: '여행 메뉴' }));
+    await userEvent.click(page.getByRole('menuitem', { name: '멤버' }));
+    await expect(c.getByRole('status')).toHaveTextContent('멤버');
+  },
+};
+export const LastChildGoes: Story = {
+  // Sync takes the last 하위 away while 내역 추가 has focus: focus stays in the room.
+  args: { ledger: travel },
+  render: function Going(args) {
+    const [ledger, setLedger] = useState(args.ledger);
+    return (
+      <LedgerRoomView
+        {...args}
+        ledger={ledger}
+        onAddRecord={() => setLedger({ ...ledger, childIds: [] })}
+      />
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const c = within(canvasElement);
+    await userEvent.click(c.getAllByRole('button', { name: '내역 추가' })[0]);
+    await expect(
+      c.getByText(/^내역을 적는 하위 가계부가 없어요/).closest('[tabindex="-1"]'),
+    ).toHaveFocus();
   },
 };
 export const MembersMenu: Story = {

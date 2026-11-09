@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -36,7 +36,7 @@ import {
   type TagCondition,
 } from '../ledger';
 import { BottomSheet, FullScreenSheet, Screen, guardLeave, useUnsavedGuard } from '../templates';
-import { Button, IconButton, Inline, won, type MenuItem } from '../ui';
+import { Button, Empty, IconButton, Inline, won, type MenuItem } from '../ui';
 import {
   defaultStatAxis,
   defaultStatCards,
@@ -93,6 +93,7 @@ function Room({
   reacting,
   path,
   onOpenPath,
+  emptyNote,
 }: RoomActions & {
   title: string;
   subtitle: string;
@@ -118,6 +119,8 @@ function Room({
   memo?: boolean;
   /** A parent room's records link to the ledger each came from. */
   onOpenLedger?(ledger: Ledger): void;
+  /** 내역 in place of 표·캘린더 when no ledger in `ledgers` holds records. */
+  emptyNote: string;
 }) {
   const [view, setView] = useState<RoomView>('records');
   const [display, setDisplay] = useState<RecordDisplay>('list');
@@ -150,8 +153,17 @@ function Room({
   const filtering = query.trim() !== '' || conditions.length > 0;
   const found = totals(due(shown), ledgers);
   const context = { ledgers, showLedger, onOpenRecord, onOpenLedger, reacting, today };
-  // A parent whose 하위 all left or went out of sight has nowhere to add a record.
+  // A parent with nothing below that holds records (its 하위 left, went out of sight, or are
+  // empty parents themselves) has no records to show and nowhere to add one.
   const addable = ledgers.length > 0;
+  const notice = useRef<HTMLDivElement>(null);
+  const wasAddable = useRef(addable);
+  useEffect(() => {
+    // The last 하위 went while focus was on what it took away: keep focus in the room.
+    if (wasAddable.current && !addable && document.activeElement === document.body)
+      notice.current?.focus();
+    wasAddable.current = addable;
+  }, [addable]);
   const filterBar = (
     <RecordFilterBar
       query={query}
@@ -229,7 +241,12 @@ function Room({
         />
       }
     >
-      {view === 'records' && (
+      {view === 'records' && !addable && (
+        <div ref={notice} tabIndex={-1}>
+          <Empty>{emptyNote}</Empty>
+        </div>
+      )}
+      {view === 'records' && addable && (
         <>
           {filterBar}
           {meta}
@@ -253,38 +270,26 @@ function Room({
               ) : (
                 <RecordList
                   records={shown}
-                  emptyText={
-                    records.length
-                      ? '조건에 맞는 내역이 없어요.'
-                      : addable
-                        ? '아직 내역이 없어요.'
-                        : '하위 가계부가 없어요. 설정에서 하위 가계부를 골라 주세요.'
-                  }
+                  emptyText={records.length ? '조건에 맞는 내역이 없어요.' : '아직 내역이 없어요.'}
                   {...context}
                 />
               )}
             </div>
           </div>
-          {addable && (
-            <Button variant="primary" className="view-add-record" onClick={() => onAddRecord()}>
-              <Plus size={18} />
-              내역 추가
-            </Button>
-          )}
+          <Button variant="primary" className="view-add-record" onClick={() => onAddRecord()}>
+            <Plus size={18} />
+            내역 추가
+          </Button>
           {day && (
             <BottomSheet title={dayLabel(day)} onClose={() => setDay(undefined)}>
               <DayRecords
                 date={day}
                 records={shown.filter((record) => record.date === day)}
                 {...context}
-                onAdd={
-                  addable
-                    ? (date) => {
-                        setDay(undefined);
-                        onAddRecord(date);
-                      }
-                    : undefined
-                }
+                onAdd={(date) => {
+                  setDay(undefined);
+                  onAddRecord(date);
+                }}
               />
             </BottomSheet>
           )}
@@ -525,6 +530,7 @@ export function LedgerRoomView({
   memo,
   path,
   onOpenPath,
+  owned = true,
   ...actions
 }: RoomActions & {
   ledger: Ledger;
@@ -540,8 +546,13 @@ export function LedgerRoomView({
   /** 복사해서 만들기, for ledgers that hold records. */
   onCopy(): void;
   onOpenLedger(ledger: Ledger): void;
-  /** 멤버, or 하위 전부 공유 for a parent. */
+  /** 멤버, or 하위 전부 공유 for the user's own parent. */
   onOpenMembers?(): void;
+  /**
+   * False for a 상위 가계부 someone else made, which the user joined before parents became their
+   * owner's alone: they can only leave it, from 멤버.
+   */
+  owned?: boolean;
   /** Saves 통계's charts; given to the owner only. */
   onSaveStatCards?(cards: StatCard[]): void;
   /** Used alone: 대화 is the owner's 메모. */
@@ -581,7 +592,7 @@ export function LedgerRoomView({
         ...(onOpenMembers
           ? [
               {
-                label: parent ? '하위 전부 공유' : '멤버',
+                label: parent && owned ? '하위 전부 공유' : '멤버',
                 icon: <Users size={18} />,
                 onSelect: onOpenMembers,
               },
@@ -593,6 +604,12 @@ export function LedgerRoomView({
       ]}
       showLedger={parent}
       onOpenLedger={onOpenLedger}
+      // "하위 n개" may count empty parents, so this says what is missing: one that holds records.
+      emptyNote={
+        owned
+          ? '내역을 적는 하위 가계부가 없어요. 설정에서 하위 가계부를 골라 주세요.'
+          : '내역을 적는 하위 가계부가 없어요. 다른 사람이 만든 상위 가계부라 바꿀 수 없고, 메뉴의 멤버에서 나갈 수 있어요.'
+      }
       calendar={
         parent
           ? {

@@ -22,6 +22,7 @@ import {
   RoomPlaceholderView,
 } from '../views';
 import {
+  isParent,
   isScheduled,
   leafLedgers,
   ledgerPath,
@@ -563,6 +564,13 @@ export function App() {
         (member) => member.profile.id === data.user.id && member.role === 'owner',
       ),
     );
+  /** Made by someone else; a ledger not synced yet (just made here) counts as the user's. */
+  const othersOwn = (ledgerId: Id) =>
+    Boolean(
+      data.ledgerMembers?.[ledgerId]?.some(
+        (member) => member.profile.id !== data.user.id && member.role === 'owner',
+      ),
+    );
   // 자산 count what has happened; 예정 records join once due.
   const dueRecords = data.records.filter((record) => !isScheduled(record, today));
   const friends = data.friends ?? [];
@@ -645,6 +653,7 @@ export function App() {
             ledgers={data.ledgers}
             records={data.records}
             today={today}
+            owned={!othersOwn(room.id)}
             // On phones back is the room list; the desktop keeps the list beside the room.
             onBack={wide ? undefined : () => go({ tab: 'ledgers' })}
             path={roomPath}
@@ -1015,7 +1024,7 @@ export function App() {
           meId={data.user.id}
           members={data.ledgerMembers?.[sheet.ledger.id] ?? []}
           below={
-            sheet.ledger.childIds.length
+            isParent(sheet.ledger) && !othersOwn(sheet.ledger.id)
               ? leafLedgers(data.ledgers, sheet.ledger).map((ledger) => ({
                   ledger,
                   owned: Boolean(

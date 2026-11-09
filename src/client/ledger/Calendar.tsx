@@ -110,8 +110,7 @@ export function DayRecords({
 }: RecordContext & {
   date: IsoDate;
   records: LedgerRecord[];
-  /** Omit where nothing can be added, such as a parent with no 하위. */
-  onAdd?(date: IsoDate): void;
+  onAdd(date: IsoDate): void;
 }) {
   return (
     <Stack gap={4}>
@@ -124,11 +123,9 @@ export function DayRecords({
       ) : (
         <Empty>이 날은 내역이 없어요.</Empty>
       )}
-      {onAdd && (
-        <Button variant="primary" onClick={() => onAdd(date)}>
-          <Plus size={18} />이 날짜로 추가
-        </Button>
-      )}
+      <Button variant="primary" onClick={() => onAdd(date)}>
+        <Plus size={18} />이 날짜로 추가
+      </Button>
     </Stack>
   );
 }

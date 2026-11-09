@@ -84,7 +84,7 @@ export function LedgerMembersView({
 }: {
   ledger: Ledger;
   meId: Id;
-  /** Members of a ledger that holds records; empty for a parent. */
+  /** Members of a ledger that holds records; for a parent, only its owner unless shared before. */
   members: LedgerMember[];
   /** For a parent: the ledgers below it and whether this user owns each. */
   below?: { ledger: Ledger; owned: boolean }[];
@@ -108,6 +108,7 @@ export function LedgerMembersView({
     (friend) => !members.some((member) => member.profile.id === friend.id),
   );
   const owned = below?.filter((item) => item.owned) ?? [];
+  const leftover = members.filter((item) => item.profile.id !== meId);
   const invite = (
     <Button
       variant="primary"
@@ -156,6 +157,22 @@ export function LedgerMembersView({
                 />
               ))}
             </List>
+            {/* Before parents became their owner's alone, an empty one could be shared itself. */}
+            {leftover.length > 0 && (
+              <>
+                <h3>상위 가계부에 직접 초대된 사람</h3>
+                <p className="muted">
+                  예전에 이 상위 가계부로 초대된 사람이에요. 내보낼 수 있어요.
+                </p>
+                <MemberList
+                  members={leftover}
+                  meId={meId}
+                  canManage
+                  onRoleChange={onRoleChange}
+                  onRemove={onRemove}
+                />
+              </>
+            )}
           </Stack>
         ) : (
           <Stack gap={3}>
