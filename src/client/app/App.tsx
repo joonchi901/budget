@@ -564,11 +564,14 @@ export function App() {
         (member) => member.profile.id === data.user.id && member.role === 'owner',
       ),
     );
-  /** Made by someone else; a ledger not synced yet (just made here) counts as the user's. */
+  /**
+   * Joined, not made: the user's own role comes with the ledger, before its other members do. A
+   * ledger not synced yet (just made here) has no role listed and counts as the user's.
+   */
   const othersOwn = (ledgerId: Id) =>
     Boolean(
       data.ledgerMembers?.[ledgerId]?.some(
-        (member) => member.profile.id !== data.user.id && member.role === 'owner',
+        (member) => member.profile.id === data.user.id && member.role !== 'owner',
       ),
     );
   // 자산 count what has happened; 예정 records join once due.
@@ -765,6 +768,7 @@ export function App() {
                 key={room.id}
                 ledger={room}
                 ledgers={data.ledgers}
+                readOnly={othersOwn(room.id)}
                 today={today}
                 onSave={({ ledger, parentIds }) => {
                   // Changed or stopped 반복 내역 carry over to their 예정 records.

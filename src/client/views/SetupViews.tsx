@@ -426,6 +426,7 @@ export function LedgerSettingsView({
   onSave,
   onArchive,
   onRestore,
+  readOnly = false,
 }: {
   ledger: Ledger;
   /** All ledgers, to place this one among parents and children. */
@@ -435,6 +436,8 @@ export function LedgerSettingsView({
   onSave(result: { ledger: Ledger; parentIds: Id[] }): void;
   onArchive(ledger: Ledger): void;
   onRestore?(ledger: Ledger): void;
+  /** Someone else's ledger: shown as it is, since only its owner changes it (the server agrees). */
+  readOnly?: boolean;
 }) {
   const parent = isParent(ledger);
   const initialParents = ledgers
@@ -459,141 +462,146 @@ export function LedgerSettingsView({
   const [rule, setRule] = useState<RecurringRule>();
   return (
     <Stack gap={6} className="view-settings">
-      <LedgerBasics
-        name={draft.name}
-        onNameChange={(name) => setDraft({ ...draft, name })}
-        period={parent ? undefined : draft.period}
-        onPeriodChange={(period) => setDraft({ ...draft, period })}
-        icon={draft.icon}
-        onIconChange={(icon) => setDraft({ ...draft, icon })}
-        nameError={draft.name.trim() ? undefined : '이름을 입력해 주세요.'}
-      />
-      {parent ? (
-        <ChildPicker
-          ledgers={ledgers}
-          self={ledger}
-          value={draft.childIds}
-          onValueChange={(childIds) => setDraft({ ...draft, childIds })}
+      {readOnly && <p className="view-meta">설정은 이 가계부를 만든 사람만 바꿀 수 있어요.</p>}
+      <fieldset className="view-settings-fields" disabled={readOnly}>
+        <LedgerBasics
+          name={draft.name}
+          onNameChange={(name) => setDraft({ ...draft, name })}
+          period={parent ? undefined : draft.period}
+          onPeriodChange={(period) => setDraft({ ...draft, period })}
+          icon={draft.icon}
+          onIconChange={(icon) => setDraft({ ...draft, icon })}
+          nameError={draft.name.trim() ? undefined : '이름을 입력해 주세요.'}
         />
-      ) : (
-        <>
-          <Stack gap={3}>
-            <h2 className="view-section-title">필드</h2>
-            <FieldSchemaEditor
-              fields={draft.fields}
-              onChange={(fields) => setDraft({ ...draft, fields })}
-            />
-          </Stack>
-          <Stack gap={3}>
-            <h2 className="view-section-title">태그 옵션</h2>
-            <Field>
-              필드
-              <SelectField value={tagFieldId} onValueChange={setTagFieldId}>
-                <SelectOption value={KINDS}>유형</SelectOption>
-                {selectFields.map((field) => (
-                  <SelectOption key={field.id} value={field.id}>
-                    {field.name}
-                  </SelectOption>
-                ))}
-              </SelectField>
-            </Field>
-            {tagField ? (
-              <TagOptionEditor
-                field={tagField}
-                onChange={(options) =>
+        {parent ? (
+          <ChildPicker
+            ledgers={ledgers}
+            self={ledger}
+            value={draft.childIds}
+            onValueChange={(childIds) => setDraft({ ...draft, childIds })}
+          />
+        ) : (
+          <>
+            <Stack gap={3}>
+              <h2 className="view-section-title">필드</h2>
+              <FieldSchemaEditor
+                fields={draft.fields}
+                onChange={(fields) => setDraft({ ...draft, fields })}
+              />
+            </Stack>
+            <Stack gap={3}>
+              <h2 className="view-section-title">태그 옵션</h2>
+              <Field>
+                필드
+                <SelectField value={tagFieldId} onValueChange={setTagFieldId}>
+                  <SelectOption value={KINDS}>유형</SelectOption>
+                  {selectFields.map((field) => (
+                    <SelectOption key={field.id} value={field.id}>
+                      {field.name}
+                    </SelectOption>
+                  ))}
+                </SelectField>
+              </Field>
+              {tagField ? (
+                <TagOptionEditor
+                  field={tagField}
+                  onChange={(options) =>
+                    setDraft({
+                      ...draft,
+                      fields: draft.fields.map((field) =>
+                        field.id === tagField.id ? { ...tagField, options } : field,
+                      ),
+                    })
+                  }
+                />
+              ) : (
+                <KindOptionEditor
+                  kinds={draft.kinds}
+                  onChange={(kinds) => setDraft({ ...draft, kinds })}
+                />
+              )}
+            </Stack>
+            <Stack gap={3}>
+              <h2 className="view-section-title">반복 내역</h2>
+              <p className="view-meta">
+                바꾸거나 그만두면 아직 오지 않은 예정 내역에도 저장할 때 함께 적용돼요.
+              </p>
+              <RecurringList
+                ledger={draft}
+                rules={draft.recurring ?? []}
+                today={today}
+                onOpen={setRule}
+                onRemove={(removed) =>
                   setDraft({
                     ...draft,
-                    fields: draft.fields.map((field) =>
-                      field.id === tagField.id ? { ...tagField, options } : field,
-                    ),
+                    recurring: (draft.recurring ?? []).filter((item) => item.id !== removed.id),
                   })
                 }
               />
-            ) : (
-              <KindOptionEditor
-                kinds={draft.kinds}
-                onChange={(kinds) => setDraft({ ...draft, kinds })}
+            </Stack>
+            {rule && (
+              <RuleSheet
+                initial={rule}
+                onApply={(changed) => {
+                  setDraft({
+                    ...draft,
+                    recurring: (draft.recurring ?? []).map((item) =>
+                      item.id === changed.id ? changed : item,
+                    ),
+                  });
+                  setRule(undefined);
+                }}
+                onClose={() => setRule(undefined)}
               />
             )}
-          </Stack>
-          <Stack gap={3}>
-            <h2 className="view-section-title">반복 내역</h2>
-            <p className="view-meta">
-              바꾸거나 그만두면 아직 오지 않은 예정 내역에도 저장할 때 함께 적용돼요.
-            </p>
-            <RecurringList
-              ledger={draft}
-              rules={draft.recurring ?? []}
-              today={today}
-              onOpen={setRule}
-              onRemove={(removed) =>
-                setDraft({
-                  ...draft,
-                  recurring: (draft.recurring ?? []).filter((item) => item.id !== removed.id),
-                })
-              }
-            />
-          </Stack>
-          {rule && (
-            <RuleSheet
-              initial={rule}
-              onApply={(changed) => {
-                setDraft({
-                  ...draft,
-                  recurring: (draft.recurring ?? []).map((item) =>
-                    item.id === changed.id ? changed : item,
-                  ),
-                });
-                setRule(undefined);
-              }}
-              onClose={() => setRule(undefined)}
-            />
-          )}
-        </>
-      )}
-      <ParentPicker
-        ledgers={ledgers}
-        self={ledger}
-        value={parentIds}
-        onValueChange={setParentIds}
-      />
-      <Stack gap={2}>
-        <h2 className="view-section-title">보관</h2>
-        <p className="view-meta">
-          {ledger.archived
-            ? '보관한 가계부예요. 보관을 풀면 방 목록에 다시 보여요.'
-            : '보관하면 방 목록 맨 아래 "보관한 가계부"로 옮겨요. 내역은 그대로 남아요.'}
-        </p>
-        {ledger.archived ? (
-          onRestore && <Button onClick={() => onRestore(ledger)}>보관 해제</Button>
-        ) : (
-          <Button
-            className="view-danger"
-            onClick={() => (confirmArchive ? onArchive(ledger) : setConfirmArchive(true))}
-          >
-            {confirmArchive ? '한 번 더 누르면 보관' : '보관'}
-          </Button>
+          </>
         )}
-      </Stack>
-      <Button
-        variant="primary"
-        className="view-sticky-action"
-        disabled={!dirty || !draft.name.trim()}
-        onClick={() =>
-          onSave({
-            ledger: {
-              ...draft,
-              archived: ledger.archived,
-              statCards: ledger.statCards,
-              name: draft.name.trim(),
-              period: parent ? spanOf(ledgers, draft.childIds, draft.period) : draft.period,
-            },
-            parentIds,
-          })
-        }
-      >
-        저장
-      </Button>
+        <ParentPicker
+          ledgers={ledgers}
+          self={ledger}
+          value={parentIds}
+          onValueChange={setParentIds}
+        />
+        <Stack gap={2}>
+          <h2 className="view-section-title">보관</h2>
+          <p className="view-meta">
+            {ledger.archived
+              ? '보관한 가계부예요. 보관을 풀면 방 목록에 다시 보여요.'
+              : '보관하면 방 목록 맨 아래 "보관한 가계부"로 옮겨요. 내역은 그대로 남아요.'}
+          </p>
+          {ledger.archived ? (
+            onRestore && <Button onClick={() => onRestore(ledger)}>보관 해제</Button>
+          ) : (
+            <Button
+              className="view-danger"
+              onClick={() => (confirmArchive ? onArchive(ledger) : setConfirmArchive(true))}
+            >
+              {confirmArchive ? '한 번 더 누르면 보관' : '보관'}
+            </Button>
+          )}
+        </Stack>
+      </fieldset>
+      {!readOnly && (
+        <Button
+          variant="primary"
+          className="view-sticky-action"
+          disabled={!dirty || !draft.name.trim()}
+          onClick={() =>
+            onSave({
+              ledger: {
+                ...draft,
+                archived: ledger.archived,
+                statCards: ledger.statCards,
+                name: draft.name.trim(),
+                period: parent ? spanOf(ledgers, draft.childIds, draft.period) : draft.period,
+              },
+              parentIds,
+            })
+          }
+        >
+          저장
+        </Button>
+      )}
     </Stack>
   );
 }

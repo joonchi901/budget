@@ -296,7 +296,7 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
   - 구현: `vite-plugin-pwa` 2.0.0의 peer가 `vite ^8.0.0`이라 Vite 8.3에 그대로 설치된다(직접 쓰는 서비스 워커는 필요 없었다). `injectRegister: 'script'`로 등록 코드를 별도 파일(`registerSW.js`)로 둔다: 인라인 스크립트는 CSP `script-src 'self'`(§8.12)가 막는다.
   - 사전 캐시: `index.html`, `assets/`(빌드 산출물), 화면이 쓰는 `brand/*.svg`·반응 그림(`reactions/stickers-96`·`decorations`)·웹 매니페스트. 런타임 캐시는 두지 않는다(`/api/*`가 캐시에 들어갈 길이 없다). 주소가 화면이라(`/ledgers/:id`) 페이지 이동은 `index.html`로 답하되 `/api/`는 제외한다.
   - 개발 서버에서는 꺼 둔다(`devOptions.enabled: false`). 확인은 `npm run build` 결과로 한다.
-- `public/manifest.webmanifest`: 이름 "우가 · 우리의 가계부", 짧은 이름 "우가", `display: standalone`, `theme_color`·`background_color` `#faf8f4`(`index.html`과 같음). 아이콘은 `index.html` favicon과 같은 `/brand/uga-app-icon.svg`를 `sizes: "any"`로 쓴다. 앱 아이콘을 바꿀 때 이 아이콘도 함께 바꾼다. `index.html`에는 `<link rel="manifest">`만 더한다. iOS에서 홈 화면에 추가하면 저장소 7일 정리를 피할 수 있다.
+- `public/manifest.webmanifest`: 이름 "우가 · 우리의 가계부", 짧은 이름 "우가", `display: standalone`, `theme_color`·`background_color` `#faf8f4`(`index.html`과 같음). 아이콘은 돈주머니 앱 아이콘을 배경색 위에 놓은 PNG다: 192·512와 maskable 512(`design/uga/system/source/render-app-icons.mjs`가 만든다). `index.html`에는 `<link rel="manifest">`와 iOS 홈 화면용 `apple-touch-icon`(180)을 더한다. 넷 다 서비스 워커가 미리 받는다. 앱 아이콘을 바꾸면 이 스크립트를 다시 돌린다. iOS에서 홈 화면에 추가하면 저장소 7일 정리를 피할 수 있다.
 - `public/brand/manifest.json`은 브랜드 에셋 목록이지 웹 매니페스트가 아니다. 건드리지 않는다.
 - 새 버전이 있으면 조용히 받아 바로 넘어간다(`workbox.skipWaiting`·`clientsClaim`). 알림 UI는 두지 않는다.
   - 배포 뒤 첫 로드는 옛 사전 캐시로 뜨면서 새 버전을 찾아 설치·활성화한다. 새 빌드는 그다음 로드(새로고침·다시 열기)부터 뜬다. 열려 있던 화면은 그대로 쓴다.

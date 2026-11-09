@@ -174,6 +174,39 @@ export const ParentSettings: Story = {
     await expect(page.getByRole('status')).toHaveTextContent('2026 하위 h2');
   },
 };
+// An editor or viewer sees the settings as they are: the server lets only the owner save them.
+const readOnlyPlay: Story['play'] = async ({ canvasElement }) => {
+  const page = within(canvasElement.ownerDocument.body);
+  await expect(page.getByText('설정은 이 가계부를 만든 사람만 바꿀 수 있어요.')).toBeVisible();
+  await expect(page.queryByRole('button', { name: '저장' })).toBeNull();
+  for (const role of ['button', 'textbox', 'combobox', 'switch', 'checkbox'] as const)
+    for (const control of within(canvasElement).queryAllByRole(role))
+      await expect(control).toBeDisabled();
+};
+export const NotOwner: Story = {
+  render: () => (
+    <LedgerSettingsView
+      ledger={november}
+      ledgers={ledgers}
+      onSave={() => {}}
+      onArchive={() => {}}
+      readOnly
+    />
+  ),
+  play: readOnlyPlay,
+};
+export const ParentNotOwner: Story = {
+  render: () => (
+    <LedgerSettingsView
+      ledger={year2026}
+      ledgers={ledgers}
+      onSave={() => {}}
+      onArchive={() => {}}
+      readOnly
+    />
+  ),
+  play: readOnlyPlay,
+};
 export const RecurringSettings: Story = {
   render: function Logged() {
     const [log, setLog] = useState('');

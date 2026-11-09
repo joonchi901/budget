@@ -285,7 +285,7 @@ export type AppData = {
   /** Ledger invitations waiting for this user's answer. */
   invites?: RoomInvite[];
   signupLink?: SignupLink;
-  /** Members (and pending invitees) of each ledger that holds records the user belongs to. */
+  /** Members (and pending invitees) of each ledger the user belongs to, parents included. */
   ledgerMembers?: { [ledgerId: Id]: LedgerMember[] };
 };
 

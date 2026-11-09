@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -157,6 +157,7 @@ function Room({
   // empty parents themselves) has no records to show and nowhere to add one.
   const addable = ledgers.length > 0;
   const notice = useRef<HTMLDivElement>(null);
+  const noticeId = useId();
   const wasAddable = useRef(addable);
   useEffect(() => {
     // The last 하위 went while focus was on what it took away: keep focus in the room.
@@ -242,8 +243,11 @@ function Room({
       }
     >
       {view === 'records' && !addable && (
-        <div ref={notice} tabIndex={-1}>
-          <Empty>{emptyNote}</Empty>
+        // Named by its words, so a screen reader says them when focus lands here.
+        <div ref={notice} tabIndex={-1} role="group" aria-labelledby={noticeId}>
+          <Empty>
+            <span id={noticeId}>{emptyNote}</span>
+          </Empty>
         </div>
       )}
       {view === 'records' && addable && (
