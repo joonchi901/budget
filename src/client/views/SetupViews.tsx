@@ -463,7 +463,7 @@ export function LedgerSettingsView({
   return (
     <Stack gap={6} className="view-settings">
       {readOnly && <p className="view-meta">설정은 이 가계부를 만든 사람만 바꿀 수 있어요.</p>}
-      <fieldset className="view-settings-fields" disabled={readOnly}>
+      <fieldset className="view-fieldset" disabled={readOnly}>
         <LedgerBasics
           name={draft.name}
           onNameChange={(name) => setDraft({ ...draft, name })}

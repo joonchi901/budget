@@ -223,9 +223,9 @@
 .view-archived > .ui-list {
   margin-top: var(--brand-space-2);
 }
-/* 설정's fields, a fieldset so they turn off together when only the owner may change them. It
-   lays them out as the Stack around it would. */
-.view-settings-fields {
+/* Fields that turn off together for someone who may only read (설정 for a member, a record for
+   a viewer). It lays them out as the Stack around it would. */
+.view-fieldset {
   display: flex;
   flex-direction: column;
   gap: var(--ui-gap);
@@ -234,7 +234,7 @@
   padding: 0;
   border: 0;
 }
-.view-settings-fields > * {
+.view-fieldset > * {
   min-width: 0;
 }
 /* Desktop pages: forms keep a readable width while 대화 spans the pane; 내역 추가 moves to the

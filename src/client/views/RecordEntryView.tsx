@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from 'react';
 import { LedgerPicker, RecordForm, type RecordDraft } from '../ledger';
 import { FullScreenSheet } from '../templates';
-import { Button, Field, SelectField, SelectOption, Stack, Switch, won } from '../ui';
+import { Button, CloseButton, Field, SelectField, SelectOption, Stack, Switch, won } from '../ui';
 import {
   ledgerForDate,
   recordProblems,
@@ -69,6 +69,7 @@ export function RecordEntryView({
   onLedgerChange,
   assetNameFor,
   repeatable,
+  readOnly = false,
   onClose,
 }: {
   /** Ledgers the record may go to: one in a ledger room, the group's in a group room. */
@@ -90,6 +91,8 @@ export function RecordEntryView({
   onLedgerChange?(ledger: Ledger): void;
   /** The asset a ledger's records go to, if one follows it; shows 자산에 반영. */
   assetNameFor?(ledgerId: Id): string | undefined;
+  /** A viewer's look at a record (§7): shown as it is, with nothing to save or delete. */
+  readOnly?: boolean;
   onClose(): void;
 }) {
   const [options, setOptions] = useState(ledgers);
@@ -190,12 +193,14 @@ export function RecordEntryView({
 
   return (
     <FullScreenSheet
-      title={record ? '내역 수정' : '내역 추가'}
+      title={readOnly ? '내역' : record ? '내역 수정' : '내역 추가'}
       subtitle={ledgers.length > 1 && !record ? undefined : ledger.name}
       dirty={dirty}
       onClose={onClose}
       footer={
-        record ? (
+        readOnly ? (
+          <CloseButton variant="primary">닫기</CloseButton>
+        ) : record ? (
           <>
             {onDelete && (
               <Button
@@ -219,98 +224,101 @@ export function RecordEntryView({
         )
       }
     >
-      <Stack gap={5}>
-        {!record && ledgers.length > 1 && (
-          <LedgerPicker
-            ledgers={options}
-            value={ledgerId}
-            date={draft.date}
-            onValueChange={(id) => {
-              const next = options.find((item) => item.id === id)!;
-              setLedgerId(id);
-              setDraft({
-                ...draftFor(next, withinPeriod(next, draft.date)),
-                title: draft.title,
-                amount: draft.amount,
-              });
-            }}
-          />
-        )}
-        {sent && (
-          <p className="view-meta" role="status">
-            저장했어요 · {sent.title} {won(sent.amount)}원
-          </p>
-        )}
-        {problems.length > 0 && (
-          <p className="view-error" role="alert">
-            확인해 주세요: {problems.join(', ')}
-          </p>
-        )}
-        <div ref={form}>
-          <RecordForm
-            ledger={ledger}
-            draft={draft}
-            onChange={setDraft}
-            onCreateOption={createOption}
-            suggestions={suggestions}
-            autoFocusAmount={!record}
-          />
-        </div>
-        {record?.recurringId && (
-          <p className="view-meta">
-            {record.unconfirmed
-              ? '금액이 달마다 다른 반복 내역이에요. 이번 금액을 확인하고 저장해 주세요.'
-              : '반복 내역이 미리 넣은 내역이에요.'}{' '}
-            반복은 설정 → 반복 내역에서 바꿔요.
-          </p>
-        )}
-        {!record && repeatable?.(ledgerId) && (
-          <Stack gap={2}>
-            <Field htmlFor={repeatId}>반복</Field>
-            <SelectField
-              id={repeatId}
-              value={repeat}
-              onValueChange={(value) => setRepeat(value as typeof repeat)}
-            >
-              <SelectOption value="">안 함</SelectOption>
-              {day < 31 && <SelectOption value="date">매달 {day}일</SelectOption>}
-              <SelectOption value="last">매달 마지막 날</SelectOption>
-            </SelectField>
-            {repeat ? (
-              <>
-                <Field>
-                  <Switch
-                    checked={variable}
-                    onChange={(event) => setVariable(event.target.checked)}
-                  />
-                  금액이 달마다 달라요
-                </Field>
-                <p className="small muted">
-                  이 가계부 기간의 다음 날짜에 예정으로 넣고, 복사해서 만드는 다음 가계부에도
-                  이어져요.
-                  {variable && ' 그날이 되면 금액을 확인해 달라고 표시해요.'}
-                </p>
-              </>
-            ) : (
-              looksMonthly(ledger, draft) && (
-                <Button
-                  variant="text"
-                  className="view-repeat-suggestion"
-                  onClick={() => setRepeat(day < 31 ? 'date' : 'last')}
-                >
-                  매달 {day < 31 ? `${day}일` : '마지막 날'}에 반복할까요?
-                </Button>
-              )
-            )}
-          </Stack>
-        )}
-        {assetName && (
-          <Field>
-            <Switch checked={inAsset} onChange={(event) => setInAsset(event.target.checked)} />
-            자산에 반영 · {assetName}
-          </Field>
-        )}
-      </Stack>
+      <fieldset className="view-fieldset" disabled={readOnly}>
+        <Stack gap={5}>
+          {readOnly && <p className="view-meta">보기 권한이라 내역을 바꿀 수 없어요.</p>}
+          {!record && ledgers.length > 1 && (
+            <LedgerPicker
+              ledgers={options}
+              value={ledgerId}
+              date={draft.date}
+              onValueChange={(id) => {
+                const next = options.find((item) => item.id === id)!;
+                setLedgerId(id);
+                setDraft({
+                  ...draftFor(next, withinPeriod(next, draft.date)),
+                  title: draft.title,
+                  amount: draft.amount,
+                });
+              }}
+            />
+          )}
+          {sent && (
+            <p className="view-meta" role="status">
+              저장했어요 · {sent.title} {won(sent.amount)}원
+            </p>
+          )}
+          {problems.length > 0 && (
+            <p className="view-error" role="alert">
+              확인해 주세요: {problems.join(', ')}
+            </p>
+          )}
+          <div ref={form}>
+            <RecordForm
+              ledger={ledger}
+              draft={draft}
+              onChange={setDraft}
+              onCreateOption={createOption}
+              suggestions={suggestions}
+              autoFocusAmount={!record}
+            />
+          </div>
+          {record?.recurringId && (
+            <p className="view-meta">
+              {record.unconfirmed
+                ? '금액이 달마다 다른 반복 내역이에요. 이번 금액을 확인하고 저장해 주세요.'
+                : '반복 내역이 미리 넣은 내역이에요.'}{' '}
+              반복은 설정 → 반복 내역에서 바꿔요.
+            </p>
+          )}
+          {!record && repeatable?.(ledgerId) && (
+            <Stack gap={2}>
+              <Field htmlFor={repeatId}>반복</Field>
+              <SelectField
+                id={repeatId}
+                value={repeat}
+                onValueChange={(value) => setRepeat(value as typeof repeat)}
+              >
+                <SelectOption value="">안 함</SelectOption>
+                {day < 31 && <SelectOption value="date">매달 {day}일</SelectOption>}
+                <SelectOption value="last">매달 마지막 날</SelectOption>
+              </SelectField>
+              {repeat ? (
+                <>
+                  <Field>
+                    <Switch
+                      checked={variable}
+                      onChange={(event) => setVariable(event.target.checked)}
+                    />
+                    금액이 달마다 달라요
+                  </Field>
+                  <p className="small muted">
+                    이 가계부 기간의 다음 날짜에 예정으로 넣고, 복사해서 만드는 다음 가계부에도
+                    이어져요.
+                    {variable && ' 그날이 되면 금액을 확인해 달라고 표시해요.'}
+                  </p>
+                </>
+              ) : (
+                looksMonthly(ledger, draft) && (
+                  <Button
+                    variant="text"
+                    className="view-repeat-suggestion"
+                    onClick={() => setRepeat(day < 31 ? 'date' : 'last')}
+                  >
+                    매달 {day < 31 ? `${day}일` : '마지막 날'}에 반복할까요?
+                  </Button>
+                )
+              )}
+            </Stack>
+          )}
+          {assetName && (
+            <Field>
+              <Switch checked={inAsset} onChange={(event) => setInAsset(event.target.checked)} />
+              자산에 반영 · {assetName}
+            </Field>
+          )}
+        </Stack>
+      </fieldset>
     </FullScreenSheet>
   );
 }

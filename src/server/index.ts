@@ -12,6 +12,7 @@ import {
   STAT_CHARTS,
   canNest,
   recordProblems,
+  withAddedOptions,
   type AppData,
   type FieldDef,
   type Id,
@@ -459,9 +460,12 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
   );
   if (ledger.id !== id || !unique(parentIds)) invalid('가계부');
   const before = data.ledgers.find((item) => item.id === id);
-  // shortcut: editors may also add tag options (§7). No one is an editor until sharing lands, so only owners change ledgers.
-  if (before && data.roles.get(id) !== 'owner')
-    fail(403, 'FORBIDDEN', '이 가계부를 바꿀 권한이 없어요.');
+  const role = data.roles.get(id);
+  // Editors add tag options while writing records (§7); the rest of a ledger is its owner's.
+  // Records come with a copy or a 반복 내역, both the owner's.
+  if (before && role === 'editor' && input.records === undefined)
+    return addTagOptions(db, before, ledger);
+  if (before && role !== 'owner') fail(403, 'FORBIDDEN', '이 가계부를 바꿀 권한이 없어요.');
   if (!before && (await db.prepare('SELECT 1 FROM ledgers WHERE id = ?').bind(id).first()))
     fail(409, 'ID_TAKEN', '이미 있는 가계부예요.');
 
@@ -594,6 +598,18 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
     change(db, { kind: 'ledger', id, ledgerId: id }),
     ...relinked.map((parentId) => change(db, { kind: 'ledger', id: parentId, ledgerId: parentId })),
     ...copied.map((record) => change(db, { kind: 'record', id: record.id, ledgerId: id })),
+  ]);
+}
+
+/** An editor's save of a ledger: only the tag options it adds are kept (withAddedOptions). */
+async function addTagOptions(db: D1Database, before: Ledger, sent: Ledger) {
+  const fields = withAddedOptions(before.fields, sent.fields);
+  if (fields.every((field, index) => field === before.fields[index])) return;
+  await db.batch([
+    db
+      .prepare('UPDATE ledgers SET fields = ?, updated_at = ? WHERE id = ?')
+      .bind(JSON.stringify(fields), new Date().toISOString(), before.id),
+    change(db, { kind: 'ledger', id: before.id, ledgerId: before.id }),
   ]);
 }
 

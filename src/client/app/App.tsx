@@ -574,6 +574,13 @@ export function App() {
         (member) => member.profile.id === data.user.id && member.role !== 'owner',
       ),
     );
+  /** Viewers only read a ledger's records (§7); one not synced yet is the user's own. */
+  const writes = (ledgerId: Id) =>
+    !data.ledgerMembers?.[ledgerId]?.some(
+      (member) => member.profile.id === data.user.id && member.role === 'viewer',
+    );
+  /** The ledgers the open room's new records may go to. */
+  const addTo = room ? leafLedgers(data.ledgers, room).filter((ledger) => writes(ledger.id)) : [];
   // 자산 count what has happened; 예정 records join once due.
   const dueRecords = data.records.filter((record) => !isScheduled(record, today));
   const friends = data.friends ?? [];
@@ -735,10 +742,9 @@ export function App() {
                 onDelete={(message) => setSheet({ type: 'deleteMessage', message })}
               />
             }
-            onAddRecord={(date) => {
-              const ledgers = leafLedgers(data.ledgers, room);
-              if (ledgers.length) setSheet({ type: 'entry', ledgers, date });
-            }}
+            onAddRecord={
+              addTo.length ? (date) => setSheet({ type: 'entry', ledgers: addTo, date }) : undefined
+            }
             reacting={{
               memberId: data.user.id,
               members: data.members,
@@ -906,6 +912,7 @@ export function App() {
         <RecordEntryView
           ledgers={sheet.ledgers}
           record={sheet.record}
+          readOnly={sheet.record ? !writes(sheet.record.ledgerId) : false}
           date={sheet.date}
           today={today}
           memberId={data.user.id}

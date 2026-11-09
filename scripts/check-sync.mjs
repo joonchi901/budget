@@ -1,7 +1,7 @@
 // Checks how the client applies the change feed and replays its outbox (docs/sync-plan.md §3.9,
 // §3.10, §4.2). Node 24 runs the shared TypeScript as is.
 import assert from 'node:assert/strict';
-import { unseenCounts } from '../src/shared/ledger.ts';
+import { unseenCounts, withAddedOptions } from '../src/shared/ledger.ts';
 import {
   ROOM_LATEST,
   applyChanges,
@@ -516,5 +516,22 @@ assert.deepEqual(
   { y2026: 2, nov: 1, trip: 1 },
 );
 assert.deepEqual(unseenCounts(base.ledgers, base.records, base.seenAt, 'b'), {});
+
+// An editor's ledger save keeps only the tag options it adds, after the ones there now.
+const tag = (id) => ({ id, name: id, color: '#AE393B' });
+const now = [
+  { id: 'pay', name: '결제', type: 'select', options: [tag('card'), tag('cash')] },
+  { id: 'memo', name: '비고', type: 'text' },
+];
+assert.deepEqual(
+  withAddedOptions(now, [
+    // Renamed, 'cash' dropped and a stale order: only 'bank' is taken.
+    { id: 'pay', name: '바뀐 이름', type: 'select', options: [tag('bank'), tag('card')] },
+    { id: 'extra', name: '새 필드', type: 'select', options: [tag('x')] },
+  ]),
+  [{ ...now[0], options: [tag('card'), tag('cash'), tag('bank')] }, now[1]],
+);
+// Nothing added: the same fields, so nothing is written.
+assert.ok(withAddedOptions(now, now).every((field, index) => field === now[index]));
 
 console.log('check-sync: ok');

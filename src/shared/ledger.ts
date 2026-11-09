@@ -291,6 +291,22 @@ export type AppData = {
 
 export type Totals = { income: number; expense: number; balance: number };
 
+/**
+ * A ledger as an editor saves it (§7: editors add tag options while writing records): the
+ * fields as they are, with the options `sent` adds appended. Whatever else `sent` changes or
+ * drops is the owner's to change and stays.
+ */
+export function withAddedOptions(fields: FieldDef[], sent: FieldDef[]): FieldDef[] {
+  return fields.map((field) => {
+    const theirs = sent.find((item) => item.id === field.id);
+    if (field.type === 'text' || !theirs || theirs.type === 'text') return field;
+    const added = theirs.options.filter(
+      (option) => !field.options.some((item) => item.id === option.id),
+    );
+    return added.length ? { ...field, options: [...field.options, ...added] } : field;
+  });
+}
+
 /** Reasons a record is invalid for its ledger; empty when valid. */
 export function recordProblems(ledger: Ledger, record: LedgerRecord): string[] {
   const problems: string[] = [];
