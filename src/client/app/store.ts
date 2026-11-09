@@ -80,14 +80,17 @@ export const stored = () =>
 
 /**
  * The stored copy, if a whole one of this SCHEMA is there (a broken one counts as none and is
- * written over next), with the last refusal not yet made good by a snapshot (§4.2).
+ * written over next), with the last refusal not yet made good by a snapshot (§4.2). The refusal
+ * comes alone after the screen failed to draw the copy (§4.1).
  */
 export const readState = () =>
   run('state', 'readonly', (store) => store.get('current'))
-    .then((value?: { schema: number; data: unknown; refused?: string }) =>
+    .then((value?: { schema?: number; data?: unknown; refused?: string }) =>
       value?.schema === SCHEMA && isSnapshot(value.data)
         ? { data: value.data, refused: value.refused }
-        : undefined,
+        : value?.refused
+          ? { refused: value.refused }
+          : undefined,
     )
     .catch(() => undefined);
 
@@ -141,9 +144,20 @@ export const removeOutbox = (key: number) => {
       );
 };
 
-/** Forgets the copy alone: after a 401 the outbox waits for the account to sign in again (§4.5). */
-export const clearCopy = () =>
-  run('state', 'readwrite', (store) => store.clear()).then(
+/**
+ * Forgets the copy alone: after a 401 the outbox waits for the account to sign in again (§4.5).
+ * With `keepRefusal` (the screen failed to draw it, §4.1) a refusal not yet told stays.
+ */
+export const clearCopy = (keepRefusal = false) =>
+  run('state', 'readwrite', (store) => {
+    const request = store.get('current');
+    request.onsuccess = () => {
+      const refused = keepRefusal && request.result?.refused;
+      if (refused) store.put({ refused }, 'current');
+      else store.delete('current');
+    };
+    return request;
+  }).then(
     () => {},
     () => {},
   );

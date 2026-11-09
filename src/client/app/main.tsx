@@ -19,7 +19,7 @@ class Recover extends Component<{ children: ReactNode }, { failed: boolean; trie
   }
   componentDidCatch() {
     if (this.state.tries) return;
-    Promise.all([clearCopy(), dropPatches()]).then(() => {
+    Promise.all([clearCopy(true), dropPatches()]).then(() => {
       if (typeof BroadcastChannel !== 'undefined') {
         const tabs = new BroadcastChannel('budget');
         tabs.postMessage({ type: 'reset' });
@@ -39,6 +39,15 @@ class Recover extends Component<{ children: ReactNode }, { failed: boolean; trie
     );
   }
 }
+
+// A PWA kept open finds a new build when it shows again, not only on a page load (§4.4).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  navigator.serviceWorker
+    ?.getRegistration()
+    .then((registration) => registration?.update())
+    .catch(() => {}); // offline: the next show tries again
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

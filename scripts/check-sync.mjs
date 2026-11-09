@@ -334,6 +334,7 @@ const run = async (queued, answer, held = () => true) => {
       return answer(item);
     },
     held,
+    foreign: async () => false,
     async remove(key) {
       queued = queued.filter((item) => item.key !== key);
     },
@@ -403,6 +404,7 @@ for (const thrown of [failure(401), Object.assign(failure(409), { code: 'ACCOUNT
         throw thrown;
       },
       held: () => true,
+      foreign: async () => false, // the copy is that account's too: the caller forgets it all
       remove: async (key) => removed.push(key),
       accept: async () => {},
       refused: () => {},
@@ -410,6 +412,36 @@ for (const thrown of [failure(401), Object.assign(failure(409), { code: 'ACCOUNT
     (error) => error === thrown,
   );
   assert.deepEqual(removed, [], `${thrown.status} keeps the change`);
+}
+// Another account's changes left before a 401, under this account's copy: the caller drops that
+// account's alone and the run goes on with this account's (§4.5).
+{
+  let queued = ['a', 'b', 'a'].map((userId, index) => ({
+    key: index + 1,
+    userId,
+    method: 'PUT',
+    path: `/api/records/${userId}${index}`,
+  }));
+  const sent = [];
+  const done = await replay({
+    read: async () => queued,
+    send: async (item) => {
+      sent.push(item.key);
+      if (item.userId === 'a') throw Object.assign(failure(409), { code: 'ACCOUNT_CHANGED' });
+      return { seq: 10, ledgerIds: all, changes: [] };
+    },
+    held: () => true,
+    foreign: async (item) => {
+      queued = queued.filter((other) => other.userId !== item.userId);
+      return true;
+    },
+    remove: async (key) => {
+      queued = queued.filter((item) => item.key !== key);
+    },
+    accept: async () => {},
+    refused: () => assert.fail('not a refusal'),
+  });
+  assert.deepEqual([done, sent, queued], [true, [1, 2], []]);
 }
 result = await run(outbox([['PUT', '/api/records/r1']]), async () => {
   throw Object.assign(failure(409), { code: 'CONFLICT' });

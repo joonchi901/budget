@@ -475,7 +475,6 @@ export async function inviteMembers(db: D1Database, data: Loaded, ledgerId: Id, 
   ]);
 }
 
-/** The owner changes a member's or invitee's role. */
 /** 404 unless the person is in the ledger or invited to it: the change logs rows to their feed. */
 async function findMember(db: D1Database, ledgerId: Id, userId: Id) {
   const found = await db
@@ -488,6 +487,7 @@ async function findMember(db: D1Database, ledgerId: Id, userId: Id) {
   if (!found) fail(404, 'NOT_FOUND', '없는 멤버예요.');
 }
 
+/** The owner changes a member's or invitee's role. */
 export async function setMemberRole(
   db: D1Database,
   data: Loaded,

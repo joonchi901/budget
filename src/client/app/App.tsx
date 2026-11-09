@@ -266,7 +266,7 @@ export function App() {
     const [copy, queued] = await Promise.all([readState(), readOutbox()]);
     const waiting = new Set(queued.map((item) => item.key));
     for (const key of locals.current.keys()) if (!waiting.has(key)) locals.current.delete(key);
-    if (copy) commit(unsent(copy.data, queued));
+    if (copy?.data) commit(unsent(copy.data, queued));
     return copy;
   };
   /**
@@ -315,6 +315,16 @@ export function App() {
         const sent = await replay({
           read: readOutbox,
           held: () => syncing.current,
+          // Left by another account before a 401 (§4.5): its changes alone go, said in every tab.
+          foreign: async (item) => {
+            if (!state.current || item.userId === state.current.user.id) return false;
+            const theirs = (await readOutbox()).filter((other) => other.userId === item.userId);
+            await Promise.all(theirs.map((other) => removeOutbox(other.key)));
+            const notice = `보내지 못한 변경 ${theirs.length}개를 지웠어요.`;
+            setError({ message: notice });
+            tell({ type: 'refused', message: notice });
+            return true;
+          },
           // As the account that made it, whatever this page holds now (§4.5).
           send: (item) =>
             api(item.method, item.path, item.body, {
@@ -361,15 +371,20 @@ export function App() {
   };
   /** A check for others' changes, unless a try waits after a failure: that one goes first (§4.3). */
   const poll = () => (retry.current.count ? Promise.resolve(false) : sync(true));
-  /** The data from the server whole, with `notice` said in every tab, then the outbox. */
-  const start = (notice?: string) =>
-    reload().then(() => {
+  /**
+   * The data from the server whole, then the outbox. `notice`, or a refusal kept when the screen
+   * failed to draw the copy (§4.1, §4.2), is said in every tab once the data is there.
+   */
+  const start = async (notice?: string) => {
+    notice ??= (await readState())?.refused;
+    return reload().then(() => {
       if (notice) {
         setError({ message: notice });
         tell({ type: 'refused', message: notice });
       }
       return sync();
     }, report);
+  };
   /** Starts again in every tab: the syncing one takes the snapshot, the others wait for it. */
   const again = () => {
     tell({ type: 'reset' });
@@ -385,15 +400,18 @@ export function App() {
   useEffect(() => {
     if (!leading) return;
     refresh().then((copy) => {
+      if (!copy?.data) return start();
       // A refusal stored before the snapshot made it good (§4.2): this run takes one and says it.
-      if (copy?.refused) refusal.current = copy.refused;
-      return copy ? sync(true) : start();
+      if (copy.refused) refusal.current = copy.refused;
+      return sync(true);
     });
   }, [leading]);
   // One tab holds the lock and alone sends, checks and stores (§4.3); when it goes, the next
-  // takes over. A tab that opens shown or comes to show takes it, so a holder the browser froze
-  // in the background holds up no one; the tab it was taken from stops at once and waits for it
-  // again. Without Web Locks or IndexedDB each tab does all of it for itself.
+  // takes over. A tab that comes to show, or opens shown with a copy to show, takes it, so a
+  // holder the browser froze in the background holds up no one; the tab it was taken from stops
+  // once it knows and waits for it again. Without a copy, windows opened at once wait in turn:
+  // each would take the snapshot again. Without Web Locks or IndexedDB each tab does all of it
+  // for itself.
   useEffect(() => {
     const stop = new AbortController();
     let mine: AbortController | undefined;
@@ -409,6 +427,7 @@ export function App() {
       window.clearTimeout(storing.current);
       window.clearTimeout(retry.current.timer);
       retry.current.count = 0;
+      refusal.current = undefined; // the new holder tells it from the stored copy (§4.2)
     };
     const ask = (steal: boolean) => {
       mine?.abort(); // a request of this tab still waiting gives way
@@ -430,11 +449,11 @@ export function App() {
     const shown = () => {
       if (document.visibilityState === 'visible' && !syncing.current) ask(true);
     };
-    stored().then((shared) => {
+    Promise.all([stored(), readState()]).then(([shared, copy]) => {
       if (stop.signal.aborted) return;
       if (!shared || !navigator.locks) return lead();
       document.addEventListener('visibilitychange', shown);
-      ask(document.visibilityState === 'visible');
+      ask(document.visibilityState === 'visible' && Boolean(copy?.data));
     });
     return () => {
       stop.abort();
