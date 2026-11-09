@@ -7,9 +7,10 @@ import { App } from './App';
 import { clearCopy } from './store';
 
 /**
- * A screen that fails to draw (a stored copy broken inside its lists, say) starts again once
- * without the copy: the outbox stays, every tab starts again and the server's data comes whole
- * (docs/sync-plan.md §4.1). A second failure on the page is shown, so it never loops.
+ * A screen that fails to draw (a stored copy or an outbox patch broken inside its lists, say)
+ * starts again once without the copy and the patches: the changes still go, every tab starts
+ * again and the server's data comes whole (docs/sync-plan.md §4.1). A second failure on the page
+ * is shown, so it never loops.
  */
 class Recover extends Component<{ children: ReactNode }, { failed: boolean; tries: number }> {
   state = { failed: false, tries: 0 };

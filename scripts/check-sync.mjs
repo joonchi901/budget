@@ -495,6 +495,8 @@ assert.deepEqual(
   ['again'],
   "the page's own change is made again, not its patch",
 );
+// One whose patch went with a copy the screen failed to draw is only sent (§4.1).
+assert.deepEqual(withUnsent(newer, [outgoing(1)], 1), newer, 'patch dropped');
 
 // A stored copy broken with its schema number unchanged counts as none (§4.1).
 assert.equal(isSnapshot(base), true);

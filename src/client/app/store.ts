@@ -6,7 +6,10 @@
  */
 import { isSnapshot, type Outgoing, type Snapshot } from '../../shared/sync';
 
-/** Raise it with any change to the stored data's shape: a device holding another starts afresh. */
+/**
+ * Raise it with any change to the stored data's shape or the outbox patch's: a device holding
+ * another starts afresh, and older patches are only sent (docs/sync-plan.md §4.1, §4.3).
+ */
 export const SCHEMA = 1;
 
 let opened: Promise<IDBDatabase> | undefined;
@@ -138,12 +141,30 @@ export const removeOutbox = (key: number) => {
       );
 };
 
-/** Forgets the copy alone, one the screen failed to draw; the outbox still goes (§4.1). */
-export const clearCopy = () =>
-  run('state', 'readwrite', (store) => store.clear()).then(
+/**
+ * Forgets the copy, one the screen failed to draw, and the outbox's patches, which may be what
+ * broke it: the changes themselves still go, only unshown until sent (§4.1).
+ */
+export const clearCopy = () => {
+  unstored = unstored.map(({ patch, ...item }) => item);
+  return Promise.all([
+    run('state', 'readwrite', (store) => store.clear()),
+    run('outbox', 'readwrite', (store) => {
+      const request = store.openCursor();
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        const { patch, ...item } = cursor.value as Outgoing;
+        cursor.update(item);
+        cursor.continue();
+      };
+      return request;
+    }),
+  ]).then(
     () => {},
     () => {},
   );
+};
 
 /** Forgets the copy and the outbox (docs/sync-plan.md §4.5, §8.16). */
 export const clearState = () => {

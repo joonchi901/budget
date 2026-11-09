@@ -251,9 +251,9 @@ export type Snapshot = AppData & { seq: number; seenAt: { [ledgerId: Id]: string
 - IndexedDB `budget` v1, 저장소 둘: `state`(키 `'current'` 하나: `{ schema, seq, data, refused? }`; `refused`는 4.2), `outbox`(autoIncrement, `keyPath: 'key'`라 읽을 때 순서 번호가 항목에 들어 있다).
 - 저장하는 상태는 **서버 상태에 이 기기의 아직 보내지 않은 변경을 얹은 것**이다. 오프라인에서 쓴 것이 새로고침 뒤에도 보인다. 답을 적용할 때 남은 outbox 대상을 `skip`하는 이유다(4.2).
 - **상태는 통째로 한 값**으로 저장한다(2년치 약 2MB, 직렬화 수 ms). 변경을 적용한 뒤 500ms 디바운스로 `put`. `shortcut: whole state as one value; split into stores once it passes ~10MB` 주석.
-- `schema` 상수가 다르면 무시하고 스냅숏부터 받는다. 데이터 형태를 바꾸는 PR은 이 상수를 올린다.
+- `schema` 상수가 다르면 무시하고 스냅숏부터 받는다. 데이터 형태를 바꾸는 PR은 이 상수를 올린다. outbox `patch`의 형식(4.3)을 바꾸는 PR도 올린다. 그래야 옛 형식의 patch를 새 코드가 얹지 않고 보내기만 한다.
   - `schema`가 같아도 최소 모양이 아니면(`seq` 숫자, `user.id`, `ledgers`·`records` 목록, `seenAt`, 있으면 목록인 나머지 목록들) 깨진 것으로 보고 똑같이 한다. 다음 저장이 덮어쓴다. 이 상수를 올리는 것을 잊은 PR이 매 시작을 빈 화면으로 만들지 않게 한다.
-  - 이 검사가 거르지 못하는 것(목록 안 항목이 깨진 복사본 등)은 화면이 그리다 실패할 때 잡는다(구현: `main.tsx`의 ErrorBoundary). 복사본(`state`)만 지우고 outbox는 두며, 모든 탭에 `{ type: 'reset' }`을 보낸 뒤 앱을 다시 띄운다. 다시 띄우기는 한 페이지에 한 번이다. 또 실패하면 "화면을 그리지 못했어요"와 새로고침 단추를 보인다(끝없이 다시 띄우지 않게).
+  - 이 검사가 거르지 못하는 것(목록 안 항목이 깨진 복사본 등)은 화면이 그리다 실패할 때 잡는다(구현: `main.tsx`의 ErrorBoundary). 복사본(`state`)과 outbox 항목의 `patch`를 지우고(깨진 patch가 다시 띄운 화면을 또 깨뜨리지 않게) 본문은 두며, 모든 탭에 `{ type: 'reset' }`을 보낸 뒤 앱을 다시 띄운다. patch를 잃은 변경은 그대로 보내지고, 보낼 때까지 화면에 보이지 않을 뿐이다. 다시 띄우기는 한 페이지에 한 번이다. 또 실패하면 "화면을 그리지 못했어요"와 새로고침 단추를 보인다(끝없이 다시 띄우지 않게).
 - 시작 순서: IndexedDB에서 읽어 **바로 그린다** → 백그라운드로 `sync?since=` → 적용. 저장된 것이 없으면 지금처럼 "불러오는 중" 뒤 스냅숏.
 - IndexedDB를 못 쓰면(사생활 보호 모드 등) 메모리만 쓴다(지금 동작). 모든 IndexedDB 호출은 try/catch. outbox에 넣기가 실패하면 그 항목은 메모리에 둔다(쓰기를 잃지 않게).
 - 연결(구현): 다른 탭이 DB 버전을 올리거나 지우려 하면(`versionchange`) 또는 연결이 끊기면(`close`, iOS의 "Connection to Indexed Database server lost") 연결을 닫고, 다음 호출이 다시 연다. 열기가 실패해도 다음 호출이 다시 연다. 요청이 실패해 연결을 버릴 때는 그 연결을 닫는다(쓰기가 계속 실패해도 실패마다 연결이 쌓이지 않게). 그래서 옛 탭이 새 버전의 `open()`을 막지 않는다. 버전을 올리는 PR은 `onupgradeneeded`에서 `oldVersion`으로 나눠 만든다.
