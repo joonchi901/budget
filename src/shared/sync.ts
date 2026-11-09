@@ -205,13 +205,15 @@ export function isSnapshot(value: unknown): value is Snapshot {
 
 /**
  * What a change did to the copy, as data, so that a tab other than the one that made it, or a
- * later page, makes it again (docs/sync-plan.md §4.3). Per part of the data: the list items put
- * and the ids gone, the keys set (to undefined: gone), or the new value.
+ * later page, makes it again (docs/sync-plan.md §4.3). Per part of the data: the list items new
+ * (whole), the keys changed in the others (`edit`) and the ids gone; the keys set; or the new
+ * value. A key set to undefined goes.
  */
 export type Patch = {
   [part: string]:
-    { put: { id: Id }[]; gone: Id[] } | { keys: [string, unknown][] } | { value: unknown };
+    { put: { id: Id }[]; edit: [Id, Keys][]; gone: Id[] } | { keys: Keys } | { value: unknown };
 };
+type Keys = [string, unknown][];
 
 type Parts = { [part: string]: unknown };
 const listed = (value: unknown): value is { id: Id }[] =>
@@ -220,6 +222,17 @@ const keyed = (value: unknown): value is Parts =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 // A change may copy what it does not change (a saved ledger maps every other one): equal is same.
 const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
+const changedKeys = (a: Parts, b: Parts): Keys =>
+  [...new Set([...Object.keys(a), ...Object.keys(b)])]
+    .filter((key) => !same(a[key], b[key]))
+    .map((key) => [key, b[key]]);
+const withKeys = (map: Parts, keys: Keys) => {
+  const next = { ...map };
+  for (const [key, value] of keys)
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+  return next;
+};
 
 /** The patch that takes `before` to `after`, a copy and that copy with a change made. */
 export function patchOf(before: Snapshot, after: Snapshot): Patch {
@@ -231,35 +244,39 @@ export function patchOf(before: Snapshot, after: Snapshot): Patch {
     if (listed(a) && listed(b)) {
       const old = new Map(a.map((item) => [item.id, item]));
       const ids = new Set(b.map((item) => item.id));
-      const changed = b.filter((item) => !same(old.get(item.id), item));
+      const fresh = b.filter((item) => !old.has(item.id));
+      // Only the keys changed: a newer copy keeps what others changed in the same item.
+      const edit = b.flatMap((item): [Id, Keys][] => {
+        const was = old.get(item.id);
+        const keys = was ? changedKeys(was, item) : [];
+        return keys.length ? [[item.id, keys]] : [];
+      });
       const gone = a.filter((item) => !ids.has(item.id)).map((item) => item.id);
-      if (changed.length || gone.length) patch[part] = { put: changed, gone };
+      if (fresh.length || edit.length || gone.length) patch[part] = { put: fresh, edit, gone };
     } else if (keyed(a) && keyed(b)) {
-      const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])]
-        .filter((key) => !same(a[key], b[key]))
-        .map((key): [string, unknown] => [key, b[key]]);
+      const keys = changedKeys(a, b);
       if (keys.length) patch[part] = { keys };
     } else patch[part] = { value: b };
   }
   return patch;
 }
 
-/** The copy with a patch made over it: list items keep their place, new ones go last. */
+/**
+ * The copy with a patch made over it: list items keep their place, new ones go last, and an edit
+ * of one no longer there is dropped.
+ */
 export function patched(data: Snapshot, patch: Patch = {}): Snapshot {
   const next: Parts = { ...data };
   for (const [part, change] of Object.entries(patch)) {
     if ('put' in change) {
       let list = (next[part] ?? []) as { id: Id }[];
       for (const item of change.put) list = put(list, item.id, item);
+      for (const [id, keys] of change.edit)
+        list = list.map((item) => (item.id === id ? (withKeys(item, keys) as { id: Id }) : item));
       for (const id of change.gone) list = put(list, id);
       next[part] = list;
-    } else if ('keys' in change) {
-      const map: Parts = { ...(next[part] as Parts) };
-      for (const [key, value] of change.keys)
-        if (value === undefined) delete map[key];
-        else map[key] = value;
-      next[part] = map;
-    } else next[part] = change.value;
+    } else if ('keys' in change) next[part] = withKeys(next[part] as Parts, change.keys);
+    else next[part] = change.value;
   }
   return next as unknown as Snapshot;
 }
@@ -267,7 +284,7 @@ export function patched(data: Snapshot, patch: Patch = {}): Snapshot {
 /**
  * A change waiting in the outbox (docs/sync-plan.md §4.2); `key` keeps the order it was made in,
  * `userId` the account it was made in, which it goes as (§4.5), `patch` what it did to the copy
- * (§4.3; none in items made before it was kept).
+ * and `schema` the copy's shape it did it to (§4.3; neither in items made before they were kept).
  */
 export type Outgoing = {
   key: number;
@@ -276,8 +293,28 @@ export type Outgoing = {
   path: string;
   body?: unknown;
   patch?: Patch;
+  schema?: number;
   createdAt: string;
 };
+
+/**
+ * The changes still in the outbox made over `data` (docs/sync-plan.md §4.3): the page's own
+ * (`own`) made again, others' (another tab's, an earlier page's) from their patch if made at this
+ * `schema`. Another account's are only sent (§4.5).
+ */
+export function withUnsent(
+  data: Snapshot,
+  queued: Outgoing[],
+  schema: number,
+  own: (key: number) => ((data: Snapshot) => Snapshot) | undefined = () => undefined,
+): Snapshot {
+  return queued.reduce((next, item) => {
+    if (item.userId !== data.user.id) return next;
+    const local = own(item.key);
+    if (local) return local(next);
+    return item.schema === schema ? patched(next, item.patch) : next;
+  }, data);
+}
 
 /**
  * The `skip` for a feed answer: the targets of the changes still in the outbox, read from their

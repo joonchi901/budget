@@ -6,7 +6,10 @@
  */
 import { isSnapshot, type Outgoing, type Snapshot } from '../../shared/sync';
 
-/** Raise it with any change to the stored data's shape: a device holding another starts afresh. */
+/**
+ * Raise it with any change to the stored data's shape or the outbox patch's: a device holding
+ * another starts afresh, and older patches are only sent (docs/sync-plan.md §4.1, §4.3).
+ */
 export const SCHEMA = 1;
 
 let opened: Promise<IDBDatabase> | undefined;
@@ -42,8 +45,9 @@ const run = <T>(
   name: 'state' | 'outbox',
   mode: IDBTransactionMode,
   work: (store: IDBObjectStore) => IDBRequest<T>,
-) =>
-  open()
+) => {
+  const connection = open();
+  return connection
     .then(
       (db) =>
         new Promise<T>((resolve, reject) => {
@@ -54,9 +58,18 @@ const run = <T>(
         }),
     )
     .catch((failure) => {
-      opened = undefined; // a connection lost without a close event opens afresh next time
+      // A connection lost without a close event opens afresh next time; this one is closed, so
+      // failing writes (storage full) do not leave one open each.
+      if (opened === connection) {
+        opened = undefined;
+        connection.then(
+          (db) => db.close(),
+          () => {},
+        );
+      }
       throw failure;
     });
+};
 
 /** Whether IndexedDB works here, for tabs to share the copy and the outbox. */
 export const stored = () =>
@@ -126,6 +139,31 @@ export const removeOutbox = (key: number) => {
         () => {},
         () => {},
       );
+};
+
+/**
+ * Forgets the copy, one the screen failed to draw, and the outbox's patches, which may be what
+ * broke it: the changes themselves still go, only unshown until sent (§4.1).
+ */
+export const clearCopy = () => {
+  unstored = unstored.map(({ patch, ...item }) => item);
+  return Promise.all([
+    run('state', 'readwrite', (store) => store.clear()),
+    run('outbox', 'readwrite', (store) => {
+      const request = store.openCursor();
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) return;
+        const { patch, ...item } = cursor.value as Outgoing;
+        cursor.update(item);
+        cursor.continue();
+      };
+      return request;
+    }),
+  ]).then(
+    () => {},
+    () => {},
+  );
 };
 
 /** Forgets the copy and the outbox (docs/sync-plan.md §4.5, §8.16). */

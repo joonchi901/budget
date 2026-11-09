@@ -12,6 +12,7 @@ import {
   pendingKeys,
   replay,
   withOlder,
+  withUnsent,
 } from '../src/shared/sync.ts';
 
 const ledger = (id, childIds = []) => ({
@@ -390,7 +391,7 @@ for (const status of [0, 503, 408, 425, 429]) {
 }
 
 // A change kept as data (§4.3): only what it changed, by id or key, though it copied the rest.
-// Made over a newer copy, it leaves others' changes there alone.
+// Made over a newer copy, it leaves others' changes there alone, in the same item too.
 const changed = {
   ...base,
   ledgers: [
@@ -406,17 +407,26 @@ const changed = {
 };
 const patch = patchOf(base, changed);
 assert.deepEqual(Object.keys(patch).sort(), ['ledgers', 'messages', 'records', 'seenAt']);
-assert.deepEqual(
-  patch.ledgers.put.map((item) => item.id),
-  ['y2026', 'new'],
-);
-assert.deepEqual(patch.records, { put: [record('r3', 'nov')], gone: ['r2'] });
+assert.deepEqual(patch.ledgers, {
+  put: [ledger('new')],
+  edit: [['y2026', [['childIds', [...base.ledgers[0].childIds, 'new']]]]],
+  gone: [],
+});
+assert.deepEqual(patch.records, { put: [record('r3', 'nov')], edit: [], gone: ['r2'] });
+assert.deepEqual(patch.messages.edit, [['m1', [['text', '고침']]]]);
 assert.deepEqual(patch.seenAt, { keys: [['nov', '2026-11-05T00:00:00.000Z']] });
 assert.deepEqual(patchOf(base, { ...base }), {}, 'a change that only shows nothing keeps nothing');
 const newer = {
   ...base,
   seq: 30,
-  ledgers: base.ledgers.map((item) => (item.id === 'trip' ? { ...item, name: '여행' } : item)),
+  // renamed on another device while the change waited: the parent the change added a child to
+  ledgers: base.ledgers.map((item) =>
+    item.id === 'trip'
+      ? { ...item, name: '여행' }
+      : item.id === 'y2026'
+        ? { ...item, name: '2026년' }
+        : item,
+  ),
   records: [record('r0', 'nov'), ...base.records],
   seenAt: { ...base.seenAt, trip: '2026-11-04T00:00:00.000Z' },
 };
@@ -425,7 +435,7 @@ assert.equal(next.seq, 30);
 assert.deepEqual(
   next.ledgers.map((item) => [item.id, item.name, item.childIds.length]),
   [
-    ['y2026', 'y2026', 3],
+    ['y2026', '2026년', 3],
     ['nov', 'nov', 0],
     ['trip', '여행', 0],
     ['new', 'new', 0],
@@ -441,11 +451,52 @@ assert.deepEqual(next.seenAt, {
   trip: '2026-11-04T00:00:00.000Z',
 });
 assert.deepEqual(patched(newer, undefined), newer, 'an item made before patches were kept');
+assert.deepEqual(patched({ ...newer, messages: [] }, patch).messages, [], 'an edit of one gone');
 // A key taken out of a map goes.
 const { trip: _, ...seenNov } = base.seenAt;
 assert.deepEqual(patched(newer, patchOf(base, { ...base, seenAt: seenNov })).seenAt, {
   nov: base.seenAt.nov,
 });
+
+// Over a copy read afresh: the page's own made again, others' from their patch, but only the
+// account's own (§4.5) and only at the copy's schema (§4.3).
+const outgoing = (key, extra) => ({
+  key,
+  userId: 'a',
+  method: 'PUT',
+  path: `/api/ledgers/${key}`,
+  schema: 1,
+  ...extra,
+});
+const adding = (id) => ({ patch: { ledgers: { put: [ledger(id)], edit: [], gone: [] } } });
+const unsentIds = (queued, own) =>
+  withUnsent(newer, queued, 1, own)
+    .ledgers.map((item) => item.id)
+    .slice(newer.ledgers.length);
+assert.deepEqual(unsentIds([outgoing(1, adding('mine')), outgoing(2, adding('also'))]), [
+  'mine',
+  'also',
+]);
+assert.deepEqual(
+  unsentIds([outgoing(1, { ...adding('theirs'), userId: 'b' })]),
+  [],
+  'another account',
+);
+assert.deepEqual(unsentIds([outgoing(1, { ...adding('old'), schema: 0 })]), [], 'another schema');
+assert.deepEqual(
+  unsentIds([outgoing(1, { ...adding('old'), schema: undefined })]),
+  [],
+  'no schema',
+);
+assert.deepEqual(
+  unsentIds([outgoing(1, adding('stored'))], (key) =>
+    key === 1 ? (data) => ({ ...data, ledgers: [...data.ledgers, ledger('again')] }) : undefined,
+  ),
+  ['again'],
+  "the page's own change is made again, not its patch",
+);
+// One whose patch went with a copy the screen failed to draw is only sent (§4.1).
+assert.deepEqual(withUnsent(newer, [outgoing(1)], 1), newer, 'patch dropped');
 
 // A stored copy broken with its schema number unchanged counts as none (§4.1).
 assert.equal(isSnapshot(base), true);
