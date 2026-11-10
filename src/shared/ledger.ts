@@ -285,11 +285,28 @@ export type AppData = {
   /** Ledger invitations waiting for this user's answer. */
   invites?: RoomInvite[];
   signupLink?: SignupLink;
-  /** Members (and pending invitees) of each ledger that holds records the user belongs to. */
+  /** Members (and pending invitees) of each ledger the user belongs to, parents included. */
   ledgerMembers?: { [ledgerId: Id]: LedgerMember[] };
 };
 
 export type Totals = { income: number; expense: number; balance: number };
+
+/**
+ * `fields` with the options `sent` has and they lack appended, field by field; nothing else of
+ * `sent` is taken. An editor's save (§7: editors add tag options while writing records) keeps
+ * the ledger's fields and adds its options; an owner's keeps its own and gets back the options
+ * editors added after its copy was made.
+ */
+export function withAddedOptions(fields: FieldDef[], sent: FieldDef[]): FieldDef[] {
+  return fields.map((field) => {
+    const theirs = sent.find((item) => item.id === field.id);
+    if (field.type === 'text' || !theirs || theirs.type === 'text') return field;
+    const added = theirs.options.filter(
+      (option) => !field.options.some((item) => item.id === option.id),
+    );
+    return added.length ? { ...field, options: [...field.options, ...added] } : field;
+  });
+}
 
 /** Reasons a record is invalid for its ledger; empty when valid. */
 export function recordProblems(ledger: Ledger, record: LedgerRecord): string[] {

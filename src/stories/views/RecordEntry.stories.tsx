@@ -101,6 +101,20 @@ export const Edit: Story = {
     await expect(page.getByRole('status')).toHaveTextContent('삭제: 코스트코');
   },
 };
+export const Viewer: Story = {
+  // A viewer opens a record to read it: no 저장 or 삭제, and every field is off.
+  args: { record: records.find((record) => record.title === '코스트코'), readOnly: true },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const sheet = within(page.getByRole('dialog', { name: '내역' }));
+    await expect(sheet.getByText('보기 권한이라 내역을 바꿀 수 없어요.')).toBeVisible();
+    await expect(sheet.queryByRole('button', { name: '저장' })).toBeNull();
+    await expect(sheet.queryByRole('button', { name: '삭제' })).toBeNull();
+    await expect(sheet.getByRole('textbox', { name: '금액' })).toBeDisabled();
+    // The bottom 닫기, beside the title bar's.
+    await userEvent.click(sheet.getAllByRole('button', { name: '닫기' }).at(-1)!);
+  },
+};
 export const InAsset: Story = {
   args: { assetNameFor: (ledgerId: string) => (ledgerId === 'nov' ? '생활비 통장' : undefined) },
   play: async ({ canvasElement }) => {

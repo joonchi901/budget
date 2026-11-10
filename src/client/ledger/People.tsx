@@ -301,7 +301,8 @@ export function MemberList({
   members: LedgerMember[];
   meId: Id;
   canManage: boolean;
-  onRoleChange(profile: Profile, role: InviteRole): void;
+  /** Omit where a role means nothing, such as those let into a parent before. */
+  onRoleChange?(profile: Profile, role: InviteRole): void;
   onRemove(profile: Profile): void;
 }) {
   return (
@@ -322,7 +323,7 @@ export function MemberList({
                   <RowMenu
                     name={profile.name}
                     items={[
-                      ...(invited
+                      ...(invited || !onRoleChange
                         ? []
                         : [
                             {
