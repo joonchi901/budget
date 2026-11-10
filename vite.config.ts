@@ -30,6 +30,8 @@ export default defineConfig({
           'manifest.webmanifest',
           'assets/**',
           'brand/*.svg',
+          // Home-screen icons (design/uga/system/source/render-app-icons.mjs).
+          'brand/uga-app-icon-{180,192,512,maskable-512}.png',
           'brand/reactions/manifest.json',
           'brand/reactions/stickers-96/*.png',
           'brand/reactions/decorations/*.png',

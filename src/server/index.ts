@@ -12,6 +12,7 @@ import {
   STAT_CHARTS,
   canNest,
   recordProblems,
+  withAddedOptions,
   type AppData,
   type FieldDef,
   type Id,
@@ -459,9 +460,15 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
   );
   if (ledger.id !== id || !unique(parentIds)) invalid('가계부');
   const before = data.ledgers.find((item) => item.id === id);
-  // shortcut: editors may also add tag options (§7). No one is an editor until sharing lands, so only owners change ledgers.
-  if (before && data.roles.get(id) !== 'owner')
-    fail(403, 'FORBIDDEN', '이 가계부를 바꿀 권한이 없어요.');
+  const role = data.roles.get(id);
+  // Editors add tag options while writing records (§7); the rest of a ledger is its owner's.
+  // Records come with a copy or a 반복 내역, both the owner's.
+  if (before && role === 'editor' && input.records === undefined)
+    return addTagOptions(db, id, ledger);
+  if (before && role !== 'owner') fail(403, 'FORBIDDEN', '이 가계부를 바꿀 권한이 없어요.');
+  // The owner's copy may predate options editors added since. No screen deletes an option (it is
+  // 보관), so one missing from the copy comes back; the owner's own changes win.
+  if (before) ledger.fields = withAddedOptions(ledger.fields, before.fields);
   if (!before && (await db.prepare('SELECT 1 FROM ledgers WHERE id = ?').bind(id).first()))
     fail(409, 'ID_TAKEN', '이미 있는 가계부예요.');
 
@@ -595,6 +602,28 @@ async function putLedger(db: D1Database, data: Loaded, id: Id, body: unknown) {
     ...relinked.map((parentId) => change(db, { kind: 'ledger', id: parentId, ledgerId: parentId })),
     ...copied.map((record) => change(db, { kind: 'record', id: record.id, ledgerId: id })),
   ]);
+}
+
+/** An editor's save of a ledger: only the tag options it adds are kept (withAddedOptions). */
+async function addTagOptions(db: D1Database, id: Id, sent: Ledger) {
+  // Written only over the fields it read, so two editors at once do not drop each other's options.
+  for (let tries = 0; tries < 3; tries++) {
+    const read = await db
+      .prepare('SELECT fields FROM ledgers WHERE id = ?')
+      .bind(id)
+      .first<{ fields: string }>();
+    const before: FieldDef[] = JSON.parse(read!.fields);
+    const fields = withAddedOptions(before, sent.fields);
+    if (fields.every((field, index) => field === before[index])) return;
+    const [written] = await db.batch([
+      db
+        .prepare('UPDATE ledgers SET fields = ?, updated_at = ? WHERE id = ? AND fields = ?')
+        .bind(JSON.stringify(fields), new Date().toISOString(), id, read!.fields),
+      change(db, { kind: 'ledger', id, ledgerId: id }),
+    ]);
+    if (written.meta.changes) return;
+  }
+  fail(409, 'BUSY', '다른 저장과 겹쳤어요. 잠시 후 다시 해 주세요.');
 }
 
 /** Where a record is now, read by id: it may be moving in from another ledger. */

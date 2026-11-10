@@ -164,13 +164,7 @@ export function LedgerMembersView({
                 <p className="muted">
                   예전에 이 상위 가계부로 초대된 사람이에요. 내보낼 수 있어요.
                 </p>
-                <MemberList
-                  members={leftover}
-                  meId={meId}
-                  canManage
-                  onRoleChange={onRoleChange}
-                  onRemove={onRemove}
-                />
+                <MemberList members={leftover} meId={meId} canManage onRemove={onRemove} />
               </>
             )}
           </Stack>

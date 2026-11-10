@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -57,8 +57,8 @@ type RoomActions = {
   today: IsoDate;
   /** Back to the room list (phones); left out where the list stays beside the room. */
   onBack?(): void;
-  /** Starts a new record, on a date when chosen from the calendar. */
-  onAddRecord(date?: IsoDate): void;
+  /** Starts a new record, on a date when chosen from the calendar; left out for a viewer. */
+  onAddRecord?(date?: IsoDate): void;
   onOpenRecord(record: LedgerRecord): void;
   /** Lets members react to records with Uga stickers. */
   reacting?: ReactionContext;
@@ -157,6 +157,7 @@ function Room({
   // empty parents themselves) has no records to show and nowhere to add one.
   const addable = ledgers.length > 0;
   const notice = useRef<HTMLDivElement>(null);
+  const noticeId = useId();
   const wasAddable = useRef(addable);
   useEffect(() => {
     // The last 하위 went while focus was on what it took away: keep focus in the room.
@@ -206,7 +207,8 @@ function Room({
             onBack={onBack}
             menuItems={menuItems}
             action={
-              addable && (
+              addable &&
+              onAddRecord && (
                 <Button variant="primary" onClick={() => onAddRecord()}>
                   <Plus size={18} />
                   내역 추가
@@ -242,8 +244,11 @@ function Room({
       }
     >
       {view === 'records' && !addable && (
-        <div ref={notice} tabIndex={-1}>
-          <Empty>{emptyNote}</Empty>
+        // Named by its words, so a screen reader says them when focus lands here.
+        <div ref={notice} tabIndex={-1} role="group" aria-labelledby={noticeId}>
+          <Empty>
+            <span id={noticeId}>{emptyNote}</span>
+          </Empty>
         </div>
       )}
       {view === 'records' && addable && (
@@ -276,20 +281,25 @@ function Room({
               )}
             </div>
           </div>
-          <Button variant="primary" className="view-add-record" onClick={() => onAddRecord()}>
-            <Plus size={18} />
-            내역 추가
-          </Button>
+          {onAddRecord && (
+            <Button variant="primary" className="view-add-record" onClick={() => onAddRecord()}>
+              <Plus size={18} />
+              내역 추가
+            </Button>
+          )}
           {day && (
             <BottomSheet title={dayLabel(day)} onClose={() => setDay(undefined)}>
               <DayRecords
                 date={day}
                 records={shown.filter((record) => record.date === day)}
                 {...context}
-                onAdd={(date) => {
-                  setDay(undefined);
-                  onAddRecord(date);
-                }}
+                onAdd={
+                  onAddRecord &&
+                  ((date) => {
+                    setDay(undefined);
+                    onAddRecord(date);
+                  })
+                }
               />
             </BottomSheet>
           )}
