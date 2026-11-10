@@ -152,9 +152,9 @@ export const clearCopy = (keepRefusal = false) =>
   run('state', 'readwrite', (store) => {
     const request = store.get('current');
     request.onsuccess = () => {
-      const { refused, data } = (keepRefusal && request.result) || {};
-      // With its account, for it to be told to that account only.
-      if (refused) store.put({ refused, userId: data?.user?.id }, 'current');
+      const { refused, data, userId } = (keepRefusal && request.result) || {};
+      // With its account, for it to be told to that account only; one kept before keeps its own.
+      if (refused) store.put({ refused, userId: data?.user?.id ?? userId }, 'current');
       else store.delete('current');
     };
     return request;

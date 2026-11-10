@@ -185,6 +185,8 @@ export function App() {
   const wake = useRef<() => void>(undefined);
   /** Takes the lock if this tab shows and lacks it (§4.3); set while Web Locks are used. */
   const takeLock = useRef<() => void>(undefined);
+  /** Whether this wait for data has had the lock here, taken or given: then it is not taken again. */
+  const waited = useRef(false);
   const today = localDate(new Date());
 
   /** Drops this page's copy; a request already out comes back to nothing. */
@@ -473,10 +475,17 @@ export function App() {
   }, []);
   // A tab with nothing to show waits its turn for the lock. If after a moment it has neither data
   // nor the login screen (the holder shows the login screen, froze, or is an older build storing
-  // another SCHEMA), it takes the lock rather than show 불러오는 중 for good (§4.3).
+  // another SCHEMA), it takes the lock rather than show 불러오는 중 for good (§4.3). Once per
+  // wait, and not by a tab that held it meanwhile (its snapshot is on the way), so windows
+  // waiting together on a slow snapshot do not keep taking it from each other.
   useEffect(() => {
-    if (data || error || leading) return;
-    const timer = window.setTimeout(() => takeLock.current?.(), 3000);
+    if (data) waited.current = false;
+    else if (leading) waited.current = true;
+    if (data || error || leading || waited.current) return;
+    const timer = window.setTimeout(() => {
+      waited.current = true;
+      takeLock.current?.();
+    }, 3000);
     return () => window.clearTimeout(timer);
   }, [data, error, leading]);
   useEffect(() => {
