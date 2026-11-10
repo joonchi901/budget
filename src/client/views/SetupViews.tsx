@@ -445,6 +445,9 @@ export function LedgerSettingsView({
     .map((item) => item.id);
   const [draft, setDraft] = useState(ledger);
   const [parentIds, setParentIds] = useState(initialParents);
+  // Read-only follows the ledger as it changes (synced in); there is nothing here to keep.
+  if (readOnly && draft !== ledger) setDraft(ledger);
+  if (readOnly && parentIds.join() !== initialParents.join()) setParentIds(initialParents);
   const selectFields = draft.fields.filter(
     (field): field is Extract<FieldDef, { type: 'select' | 'multiSelect' }> =>
       field.type !== 'text',
@@ -457,13 +460,13 @@ export function LedgerSettingsView({
   const withoutArchive = ({ archived: _, statCards: __, ...rest }: Ledger) => JSON.stringify(rest);
   const dirty =
     withoutArchive(draft) !== withoutArchive(ledger) || parentIds.join() !== initialParents.join();
-  useUnsavedGuard(dirty);
+  useUnsavedGuard(dirty && !readOnly);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [rule, setRule] = useState<RecurringRule>();
   return (
     <Stack gap={6} className="view-settings">
       {readOnly && <p className="view-meta">설정은 이 가계부를 만든 사람만 바꿀 수 있어요.</p>}
-      <fieldset className="view-fieldset" disabled={readOnly}>
+      <fieldset className="view-fieldset" disabled={readOnly} aria-label="가계부 설정">
         <LedgerBasics
           name={draft.name}
           onNameChange={(name) => setDraft({ ...draft, name })}

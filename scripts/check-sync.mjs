@@ -533,5 +533,15 @@ assert.deepEqual(
 );
 // Nothing added: the same fields, so nothing is written.
 assert.ok(withAddedOptions(now, now).every((field, index) => field === now[index]));
+// An owner's save from a copy made before an editor added 'bank': its own changes win (memo
+// deleted, a new field first, 'cash' archived) and only 'bank' comes back.
+const ownerCopy = [
+  { id: 'who', name: '누가', type: 'multiSelect', options: [] },
+  { ...now[0], options: [tag('card'), { ...tag('cash'), archived: true }] },
+];
+assert.deepEqual(
+  withAddedOptions(ownerCopy, [{ ...now[0], options: [...now[0].options, tag('bank')] }, now[1]]),
+  [ownerCopy[0], { ...ownerCopy[1], options: [...ownerCopy[1].options, tag('bank')] }],
+);
 
 console.log('check-sync: ok');

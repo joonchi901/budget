@@ -224,7 +224,7 @@ export function RecordEntryView({
         )
       }
     >
-      <fieldset className="view-fieldset" disabled={readOnly}>
+      <fieldset className="view-fieldset" disabled={readOnly} aria-label="내역">
         <Stack gap={5}>
           {readOnly && <p className="view-meta">보기 권한이라 내역을 바꿀 수 없어요.</p>}
           {!record && ledgers.length > 1 && (

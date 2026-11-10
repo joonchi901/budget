@@ -292,9 +292,10 @@ export type AppData = {
 export type Totals = { income: number; expense: number; balance: number };
 
 /**
- * A ledger as an editor saves it (§7: editors add tag options while writing records): the
- * fields as they are, with the options `sent` adds appended. Whatever else `sent` changes or
- * drops is the owner's to change and stays.
+ * `fields` with the options `sent` has and they lack appended, field by field; nothing else of
+ * `sent` is taken. An editor's save (§7: editors add tag options while writing records) keeps
+ * the ledger's fields and adds its options; an owner's keeps its own and gets back the options
+ * editors added after its copy was made.
  */
 export function withAddedOptions(fields: FieldDef[], sent: FieldDef[]): FieldDef[] {
   return fields.map((field) => {

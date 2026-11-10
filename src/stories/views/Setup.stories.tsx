@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
+import { guardLeave } from '../../client/templates';
+import { Button } from '../../client/ui';
 import { CreateLedgerView, LedgerSettingsView } from '../../client/views';
 import { FIXTURE_TODAY, ledgers, november, year2026 } from '../fixtures';
 
@@ -194,6 +196,36 @@ export const NotOwner: Story = {
     />
   ),
   play: readOnlyPlay,
+};
+export const NotOwnerSynced: Story = {
+  // The ledger changes (synced in) while a member looks: the view follows it, and leaving asks
+  // nothing, as nothing here could be saved.
+  render: function Synced() {
+    const [ledger, setLedger] = useState(november);
+    const [log, setLog] = useState('');
+    return (
+      <>
+        <Button onClick={() => setLedger({ ...ledger, name: '11월 생활비' })}>동기화</Button>
+        <Button onClick={() => guardLeave(() => setLog('떠남'))}>다른 탭</Button>
+        <LedgerSettingsView
+          ledger={ledger}
+          ledgers={ledgers}
+          onSave={() => {}}
+          onArchive={() => {}}
+          readOnly
+        />
+        <p role="status">{log}</p>
+      </>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(page.getByRole('button', { name: '동기화' }));
+    await expect(page.getByRole('textbox', { name: /^이름/ })).toHaveValue('11월 생활비');
+    await expect(page.getByRole('group', { name: '가계부 설정' })).toBeDisabled();
+    await userEvent.click(page.getByRole('button', { name: '다른 탭' }));
+    await expect(page.getByRole('status')).toHaveTextContent('떠남');
+  },
 };
 export const ParentNotOwner: Story = {
   render: () => (
