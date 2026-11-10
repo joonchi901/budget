@@ -183,6 +183,8 @@ export function App() {
   const epoch = useRef(0);
   /** Brings the next check for others' changes forward, while a shared room is open. */
   const wake = useRef<() => void>(undefined);
+  /** Takes the lock if this tab shows and lacks it (§4.3); set while Web Locks are used. */
+  const takeLock = useRef<() => void>(undefined);
   const today = localDate(new Date());
 
   /** Drops this page's copy; a request already out comes back to nothing. */
@@ -376,8 +378,11 @@ export function App() {
    * failed to draw the copy (§4.1, §4.2), is said in every tab once the data is there.
    */
   const start = async (notice?: string) => {
-    notice ??= (await readState())?.refused;
+    const kept = notice ? undefined : await readState();
     return reload().then(() => {
+      // Told to the account it was made in only: the copy may have been another's (§4.1).
+      if (kept?.refused && (kept.data?.user.id ?? kept.userId) === state.current?.user.id)
+        notice = kept.refused;
       if (notice) {
         setError({ message: notice });
         tell({ type: 'refused', message: notice });
@@ -453,6 +458,7 @@ export function App() {
       if (stop.signal.aborted) return;
       if (!shared || !navigator.locks) return lead();
       document.addEventListener('visibilitychange', shown);
+      takeLock.current = shown;
       ask(document.visibilityState === 'visible' && Boolean(copy?.data));
     });
     return () => {
@@ -460,10 +466,19 @@ export function App() {
       mine?.abort();
       release();
       document.removeEventListener('visibilitychange', shown);
+      takeLock.current = undefined;
       syncing.current = false;
       setLeading(false);
     };
   }, []);
+  // A tab with nothing to show waits its turn for the lock. If after a moment it has neither data
+  // nor the login screen (the holder shows the login screen, froze, or is an older build storing
+  // another SCHEMA), it takes the lock rather than show 불러오는 중 for good (§4.3).
+  useEffect(() => {
+    if (data || error || leading) return;
+    const timer = window.setTimeout(() => takeLock.current?.(), 3000);
+    return () => window.clearTimeout(timer);
+  }, [data, error, leading]);
   useEffect(() => {
     if (typeof BroadcastChannel === 'undefined') return;
     const tabs = new BroadcastChannel('budget');

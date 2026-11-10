@@ -85,11 +85,11 @@ export const stored = () =>
  */
 export const readState = () =>
   run('state', 'readonly', (store) => store.get('current'))
-    .then((value?: { schema?: number; data?: unknown; refused?: string }) =>
+    .then((value?: { schema?: number; data?: unknown; refused?: string; userId?: string }) =>
       value?.schema === SCHEMA && isSnapshot(value.data)
         ? { data: value.data, refused: value.refused }
         : value?.refused
-          ? { refused: value.refused }
+          ? { refused: value.refused, userId: value.userId }
           : undefined,
     )
     .catch(() => undefined);
@@ -152,8 +152,9 @@ export const clearCopy = (keepRefusal = false) =>
   run('state', 'readwrite', (store) => {
     const request = store.get('current');
     request.onsuccess = () => {
-      const refused = keepRefusal && request.result?.refused;
-      if (refused) store.put({ refused }, 'current');
+      const { refused, data } = (keepRefusal && request.result) || {};
+      // With its account, for it to be told to that account only.
+      if (refused) store.put({ refused, userId: data?.user?.id }, 'current');
       else store.delete('current');
     };
     return request;
