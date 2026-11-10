@@ -320,7 +320,7 @@ assert.deepEqual(
 // added meanwhile goes in the same run, a refused one goes with the caller told, and a DELETE of
 // something already gone counts as sent.
 const outbox = (paths) => paths.map(([method, path], index) => ({ key: index + 1, method, path }));
-const run = async (queued, answer) => {
+const run = async (queued, answer, held = () => true) => {
   const log = [];
   let added = false;
   const sent = await replay({
@@ -333,6 +333,8 @@ const run = async (queued, answer) => {
       }
       return answer(item);
     },
+    held,
+    foreign: async () => false,
     async remove(key) {
       queued = queued.filter((item) => item.key !== key);
     },
@@ -388,6 +390,83 @@ for (const status of [0, 503, 408, 425, 429]) {
   );
   assert.equal(result.sent, false);
   assert.deepEqual(result.left, [2, 9]);
+}
+
+// Signed out, or another account's session: it throws with the change still waiting, for the
+// account to sign in again or for the outbox to go with the copy (§4.5). Another 409 is refused.
+for (const thrown of [failure(401), Object.assign(failure(409), { code: 'ACCOUNT_CHANGED' })]) {
+  const queued = outbox([['PUT', '/api/records/r1']]);
+  const removed = [];
+  await assert.rejects(
+    replay({
+      read: async () => queued,
+      send: async () => {
+        throw thrown;
+      },
+      held: () => true,
+      foreign: async () => false, // the copy is that account's too: the caller forgets it all
+      remove: async (key) => removed.push(key),
+      accept: async () => {},
+      refused: () => {},
+    }),
+    (error) => error === thrown,
+  );
+  assert.deepEqual(removed, [], `${thrown.status} keeps the change`);
+}
+// Another account's changes left before a 401, under this account's copy: the caller drops that
+// account's alone and the run goes on with this account's (§4.5).
+{
+  let queued = ['a', 'b', 'a'].map((userId, index) => ({
+    key: index + 1,
+    userId,
+    method: 'PUT',
+    path: `/api/records/${userId}${index}`,
+  }));
+  const sent = [];
+  const done = await replay({
+    read: async () => queued,
+    send: async (item) => {
+      sent.push(item.key);
+      if (item.userId === 'a') throw Object.assign(failure(409), { code: 'ACCOUNT_CHANGED' });
+      return { seq: 10, ledgerIds: all, changes: [] };
+    },
+    held: () => true,
+    foreign: async (item) => {
+      queued = queued.filter((other) => other.userId !== item.userId);
+      return true;
+    },
+    remove: async (key) => {
+      queued = queued.filter((item) => item.key !== key);
+    },
+    accept: async () => {},
+    refused: () => assert.fail('not a refusal'),
+  });
+  assert.deepEqual([done, sent, queued], [true, [1, 2], []]);
+}
+result = await run(outbox([['PUT', '/api/records/r1']]), async () => {
+  throw Object.assign(failure(409), { code: 'CONFLICT' });
+});
+assert.deepEqual([result.sent, result.left, result.log[1]], [true, [], 'refused 409']);
+
+// The lock taken while a change was out (§4.3): its answer, a refusal too, is left to the tab
+// that took it, which sends the change again; nothing is removed or taken in here.
+for (const answered of [{ seq: 10, ledgerIds: all, changes: [] }, failure(403)]) {
+  let holding = true;
+  result = await run(
+    outbox([
+      ['PUT', '/api/records/r1'],
+      ['PUT', '/api/records/r2'],
+    ]),
+    async () => {
+      holding = false;
+      if (answered instanceof Error) throw answered;
+      return answered;
+    },
+    () => holding,
+  );
+  assert.equal(result.sent, false);
+  assert.deepEqual(result.left, [1, 2, 9]);
+  assert.deepEqual(result.log, ['send PUT /api/records/r1']);
 }
 
 // A change kept as data (§4.3): only what it changed, by id or key, though it copied the rest.

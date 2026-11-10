@@ -57,6 +57,7 @@ import { reencodePhoto } from './photo';
 import { useRoute } from './route';
 import {
   SCHEMA,
+  clearCopy,
   clearState,
   pushOutbox,
   readOutbox,
@@ -127,10 +128,13 @@ type TabMessage =
   | { type: 'outbox' | 'sync' }
   /** To the syncing tab: a room's 이전 글 another tab loaded, to keep in the copy. */
   | { type: 'older'; messages: ChatMessage[] }
-  /** From the syncing tab: the server refused a change, maybe one made in this tab (§4.2). */
+  /**
+   * From the syncing tab: the server refused a change, maybe one made in this tab (§4.2), or
+   * unsent changes of another account went (§4.5).
+   */
   | { type: 'refused'; message: string }
-  /** The copy is gone (§4.5): show the login screen, or start again. */
-  | { type: 'logout' | 'reset' };
+  /** The copy is gone (§4.5): show the login screen, or start again and say `notice` after. */
+  | { type: 'logout' | 'reset'; notice?: string };
 
 /**
  * The app layer: keeps the user's data on this device, opens rooms and sheets, and saves through
@@ -179,6 +183,10 @@ export function App() {
   const epoch = useRef(0);
   /** Brings the next check for others' changes forward, while a shared room is open. */
   const wake = useRef<() => void>(undefined);
+  /** Takes the lock if this tab shows and lacks it (§4.3); set while Web Locks are used. */
+  const takeLock = useRef<() => void>(undefined);
+  /** Whether this wait for data has had the lock here, taken or given: then it is not taken again. */
+  const waited = useRef(false);
   const today = localDate(new Date());
 
   /** Drops this page's copy; a request already out comes back to nothing. */
@@ -193,21 +201,33 @@ export function App() {
     setData(undefined);
     setFullChats(new Set());
   };
-  /** Once the copy is gone: the login screen, or after `reset` the syncing tab starts again. */
-  const after = (then: 'logout' | 'reset') => {
+  /**
+   * Once the copy is gone: the login screen, or after `reset` the syncing tab starts again and
+   * says `notice` once the data is there.
+   */
+  const after = (then: 'logout' | 'reset', notice?: string) => {
     setError(then === 'logout' ? { message: '', login: true } : undefined);
-    if (then === 'reset' && syncing.current) start();
+    if (then === 'reset' && syncing.current) start(notice);
   };
-  /** Forgets this device's copy and outbox in every tab (docs/sync-plan.md §4.5, §8.16). */
-  const forget = (then: 'logout' | 'reset') => {
+  /**
+   * Forgets this device's copy in every tab, and its outbox unless `keepOutbox` (docs/sync-plan.md
+   * §4.5, §8.16). After another account's session (`reset`) it says how many changes went.
+   */
+  const forget = async (then: 'logout' | 'reset', keepOutbox = false) => {
     drop();
-    tell({ type: then });
-    return clearState().then(() => after(then));
+    const lost = then === 'reset' ? (await readOutbox()).length : 0;
+    const notice = lost ? `보내지 못한 변경 ${lost}개를 지웠어요.` : undefined;
+    tell({ type: then, notice });
+    await (keepOutbox ? clearCopy() : clearState());
+    after(then, notice);
   };
-  /** A 401, or a session of another account: forgets the copy, and says so (§4.5). */
+  /**
+   * A 401: the copy goes and the outbox waits for the account to sign in again. A session of
+   * another account: both go, and the unsent changes are counted (§4.5).
+   */
   const leave = (failure: unknown) =>
     failure instanceof ApiFailure && failure.status === 401
-      ? forget('logout')
+      ? forget('logout', true)
       : failure instanceof ApiFailure && failure.code === 'ACCOUNT_CHANGED'
         ? forget('reset')
         : undefined;
@@ -250,7 +270,7 @@ export function App() {
     const [copy, queued] = await Promise.all([readState(), readOutbox()]);
     const waiting = new Set(queued.map((item) => item.key));
     for (const key of locals.current.keys()) if (!waiting.has(key)) locals.current.delete(key);
-    if (copy) commit(unsent(copy.data, queued));
+    if (copy?.data) commit(unsent(copy.data, queued));
     return copy;
   };
   /**
@@ -298,6 +318,17 @@ export function App() {
       try {
         const sent = await replay({
           read: readOutbox,
+          held: () => syncing.current,
+          // Left by another account before a 401 (§4.5): its changes alone go, said in every tab.
+          foreign: async (item) => {
+            if (!state.current || item.userId === state.current.user.id) return false;
+            const theirs = (await readOutbox()).filter((other) => other.userId === item.userId);
+            await Promise.all(theirs.map((other) => removeOutbox(other.key)));
+            const notice = `보내지 못한 변경 ${theirs.length}개를 지웠어요.`;
+            setError({ message: notice });
+            tell({ type: 'refused', message: notice });
+            return true;
+          },
           // As the account that made it, whatever this page holds now (§4.5).
           send: (item) =>
             api(item.method, item.path, item.body, {
@@ -310,14 +341,12 @@ export function App() {
           },
           accept,
           refused: (failure) => {
-            const left = leave(failure);
-            if (left) return left;
             refusal.current = (failure as Error).message;
             // Stored at once: the run may stop on the next change and the page close (§4.2).
-            if (state.current) return writeState(state.current, refusal.current);
+            if (state.current && syncing.current) return writeState(state.current, refusal.current);
           },
         });
-        if (!state.current) return false; // forgotten meanwhile
+        if (!state.current || !syncing.current) return false; // forgotten, or the lock taken
         if (!sent) throw new ApiFailure(0, '서버에 연결하지 못했어요.');
         if (refusal.current) {
           await reload(); // the copy it stores drops the refusal
@@ -334,7 +363,8 @@ export function App() {
         retry.current.count = 0;
         return Boolean(answer?.changes.length);
       } catch (failure) {
-        if (leave(failure) || !state.current) return false; // forgotten: nothing to try again
+        // Forgotten, or the lock taken (§4.3): nothing to try again here.
+        if (leave(failure) || !state.current || !syncing.current) return false;
         const wait = RETRY[Math.min(retry.current.count++, RETRY.length - 1)];
         retry.current.timer = window.setTimeout(() => sync(feed), wait);
         return false;
@@ -345,8 +375,23 @@ export function App() {
   };
   /** A check for others' changes, unless a try waits after a failure: that one goes first (§4.3). */
   const poll = () => (retry.current.count ? Promise.resolve(false) : sync(true));
-  /** The data from the server whole, then any changes left in the outbox. */
-  const start = () => reload().then(() => sync(), report);
+  /**
+   * The data from the server whole, then the outbox. `notice`, or a refusal kept when the screen
+   * failed to draw the copy (§4.1, §4.2), is said in every tab once the data is there.
+   */
+  const start = async (notice?: string) => {
+    const kept = notice ? undefined : await readState();
+    return reload().then(() => {
+      // Told to the account it was made in only: the copy may have been another's (§4.1).
+      if (kept?.refused && (kept.data?.user.id ?? kept.userId) === state.current?.user.id)
+        notice = kept.refused;
+      if (notice) {
+        setError({ message: notice });
+        tell({ type: 'refused', message: notice });
+      }
+      return sync();
+    }, report);
+  };
   /** Starts again in every tab: the syncing one takes the snapshot, the others wait for it. */
   const again = () => {
     tell({ type: 'reset' });
@@ -362,37 +407,87 @@ export function App() {
   useEffect(() => {
     if (!leading) return;
     refresh().then((copy) => {
+      if (!copy?.data) return start();
       // A refusal stored before the snapshot made it good (§4.2): this run takes one and says it.
-      if (copy?.refused) refusal.current = copy.refused;
-      return copy ? sync(true) : start();
+      if (copy.refused) refusal.current = copy.refused;
+      return sync(true);
     });
   }, [leading]);
-  // One tab holds the lock for its life and alone sends, checks and stores (§4.3); when it goes,
-  // the next takes over. Without Web Locks or IndexedDB each tab does all of it for itself.
+  // One tab holds the lock and alone sends, checks and stores (§4.3); when it goes, the next
+  // takes over. A tab that comes to show, or opens shown with a copy to show, takes it, so a
+  // holder the browser froze in the background holds up no one; the tab it was taken from stops
+  // once it knows and waits for it again. Without a copy, windows opened at once wait in turn:
+  // each would take the snapshot again. Without Web Locks or IndexedDB each tab does all of it
+  // for itself.
   useEffect(() => {
     const stop = new AbortController();
+    let mine: AbortController | undefined;
     let release = () => {};
     const lead = () => {
       syncing.current = true;
       setLeading(true);
     };
-    stored().then((shared) => {
-      if (stop.signal.aborted) return;
-      if (!shared || !navigator.locks) return lead();
+    /** Taken by another tab: nothing under way here is stored or tried again after. */
+    const follow = () => {
+      syncing.current = false;
+      setLeading(false);
+      window.clearTimeout(storing.current);
+      window.clearTimeout(retry.current.timer);
+      retry.current.count = 0;
+      refusal.current = undefined; // the new holder tells it from the stored copy (§4.2)
+    };
+    const ask = (steal: boolean) => {
+      mine?.abort(); // a request of this tab still waiting gives way
+      const asked = (mine = new AbortController());
       navigator.locks
-        .request('budget-sync', { signal: stop.signal }, () => {
+        // `steal` takes no signal: it is never kept waiting.
+        .request('budget-sync', steal ? { steal } : { signal: asked.signal }, () => {
+          if (asked.signal.aborted || stop.signal.aborted) return;
           lead();
           return new Promise<void>((resolve) => (release = resolve));
         })
-        .catch(() => {}); // the page went while waiting
+        .catch(() => {
+          if (asked.signal.aborted || stop.signal.aborted) return; // gave way, or the page went
+          follow();
+          ask(false);
+        });
+    };
+    // Only on coming to show, so two windows shown side by side do not keep taking it.
+    const shown = () => {
+      if (document.visibilityState === 'visible' && !syncing.current) ask(true);
+    };
+    Promise.all([stored(), readState()]).then(([shared, copy]) => {
+      if (stop.signal.aborted) return;
+      if (!shared || !navigator.locks) return lead();
+      document.addEventListener('visibilitychange', shown);
+      takeLock.current = shown;
+      ask(document.visibilityState === 'visible' && Boolean(copy?.data));
     });
     return () => {
       stop.abort();
+      mine?.abort();
       release();
+      document.removeEventListener('visibilitychange', shown);
+      takeLock.current = undefined;
       syncing.current = false;
       setLeading(false);
     };
   }, []);
+  // A tab with nothing to show waits its turn for the lock. If after a moment it has neither data
+  // nor the login screen (the holder shows the login screen, froze, or is an older build storing
+  // another SCHEMA), it takes the lock rather than show 불러오는 중 for good (§4.3). Once per
+  // wait, and not by a tab that held it meanwhile (its snapshot is on the way), so windows
+  // waiting together on a slow snapshot do not keep taking it from each other.
+  useEffect(() => {
+    if (data) waited.current = false;
+    else if (leading) waited.current = true;
+    if (data || error || leading || waited.current) return;
+    const timer = window.setTimeout(() => {
+      waited.current = true;
+      takeLock.current?.();
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [data, error, leading]);
   useEffect(() => {
     if (typeof BroadcastChannel === 'undefined') return;
     const tabs = new BroadcastChannel('budget');
@@ -400,7 +495,7 @@ export function App() {
     tabs.onmessage = ({ data: message }: MessageEvent<TabMessage>) => {
       if (message.type === 'logout' || message.type === 'reset') {
         drop();
-        after(message.type);
+        after(message.type, message.notice);
       } else if (!syncing.current) {
         if (message.type === 'state') refresh();
         else if (message.type === 'news') wake.current?.();

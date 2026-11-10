@@ -347,11 +347,16 @@ const LATER = [408, 425, 429];
  * still waiting. A refused change (4xx) goes and the caller hears of it, except a DELETE of
  * something already gone (404), which counts as sent. Without a connection, on a server error or
  * an answer to try again later (408, 425, 429) the run stops with the rest waiting, and resolves
- * false.
+ * false; so it does once the tab no longer `held` the lock (§4.3), leaving the answer to the tab
+ * that took it, which sends the change again. Signed out (401) or another account's (409
+ * ACCOUNT_CHANGED), it throws with the change still waiting: the caller forgets (§4.5). On the
+ * 409 the caller may first drop the `foreign` account's changes alone, and the run goes on.
  */
 export async function replay(io: {
   read(): Promise<Outgoing[]>;
   send(item: Outgoing): Promise<Sync>;
+  held(): boolean;
+  foreign(item: Outgoing): Promise<boolean>;
   remove(key: number): Promise<void>;
   accept(answer: Sync, skip: Set<string>): Promise<void>;
   refused(failure: unknown): unknown;
@@ -360,9 +365,14 @@ export async function replay(io: {
     const [item] = queued;
     const sent = await io.send(item).then(
       (answer) => ({ answer, status: 200 }),
-      (failure: { status?: number }) => ({ failure, status: failure?.status ?? 0 }),
+      (failure: { status?: number; code?: string }) => ({ failure, status: failure?.status ?? 0 }),
     );
-    if (!sent.status || sent.status >= 500 || LATER.includes(sent.status)) return false;
+    if (!io.held() || !sent.status || sent.status >= 500 || LATER.includes(sent.status))
+      return false;
+    if ('failure' in sent && (sent.status === 401 || sent.failure?.code === 'ACCOUNT_CHANGED')) {
+      if (sent.status === 409 && (await io.foreign(item))) continue;
+      throw sent.failure;
+    }
     await io.remove(item.key);
     if ('answer' in sent) await io.accept(sent.answer, pendingKeys(await io.read()));
     else if (sent.status !== 404 || item.method !== 'DELETE') await io.refused(sent.failure);

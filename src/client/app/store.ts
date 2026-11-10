@@ -80,14 +80,17 @@ export const stored = () =>
 
 /**
  * The stored copy, if a whole one of this SCHEMA is there (a broken one counts as none and is
- * written over next), with the last refusal not yet made good by a snapshot (§4.2).
+ * written over next), with the last refusal not yet made good by a snapshot (§4.2). The refusal
+ * comes alone after the screen failed to draw the copy (§4.1).
  */
 export const readState = () =>
   run('state', 'readonly', (store) => store.get('current'))
-    .then((value?: { schema: number; data: unknown; refused?: string }) =>
+    .then((value?: { schema?: number; data?: unknown; refused?: string; userId?: string }) =>
       value?.schema === SCHEMA && isSnapshot(value.data)
         ? { data: value.data, refused: value.refused }
-        : undefined,
+        : value?.refused
+          ? { refused: value.refused, userId: value.userId }
+          : undefined,
     )
     .catch(() => undefined);
 
@@ -142,25 +145,41 @@ export const removeOutbox = (key: number) => {
 };
 
 /**
- * Forgets the copy, one the screen failed to draw, and the outbox's patches, which may be what
- * broke it: the changes themselves still go, only unshown until sent (§4.1).
+ * Forgets the copy alone: after a 401 the outbox waits for the account to sign in again (§4.5).
+ * With `keepRefusal` (the screen failed to draw it, §4.1) a refusal not yet told stays.
  */
-export const clearCopy = () => {
+export const clearCopy = (keepRefusal = false) =>
+  run('state', 'readwrite', (store) => {
+    const request = store.get('current');
+    request.onsuccess = () => {
+      const { refused, data, userId } = (keepRefusal && request.result) || {};
+      // With its account, for it to be told to that account only; one kept before keeps its own.
+      if (refused) store.put({ refused, userId: data?.user?.id ?? userId }, 'current');
+      else store.delete('current');
+    };
+    return request;
+  }).then(
+    () => {},
+    () => {},
+  );
+
+/**
+ * Forgets what the outbox's changes did to the copy, with a copy the screen failed to draw, as
+ * they may be what broke it: the changes themselves still go, only unshown until sent (§4.1).
+ */
+export const dropPatches = () => {
   unstored = unstored.map(({ patch, ...item }) => item);
-  return Promise.all([
-    run('state', 'readwrite', (store) => store.clear()),
-    run('outbox', 'readwrite', (store) => {
-      const request = store.openCursor();
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (!cursor) return;
-        const { patch, ...item } = cursor.value as Outgoing;
-        cursor.update(item);
-        cursor.continue();
-      };
-      return request;
-    }),
-  ]).then(
+  return run('outbox', 'readwrite', (store) => {
+    const request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      const { patch, ...item } = cursor.value as Outgoing;
+      cursor.update(item);
+      cursor.continue();
+    };
+    return request;
+  }).then(
     () => {},
     () => {},
   );
