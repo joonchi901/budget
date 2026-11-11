@@ -943,7 +943,7 @@ export default {
         )
           .bind(id, user.id)
           .first();
-        if (!member) fail(404, 'NOT_FOUND', '없는 가계부예요.');
+        if (!member || !env.ROOMS) fail(404, 'NOT_FOUND', '없는 가계부예요.');
         // A request of the server's own: nothing the client sent reaches the room.
         return env.ROOMS.get(env.ROOMS.idFromName(id)).fetch('https://room/socket', {
           headers: { Upgrade: 'websocket', 'X-User': user.id },
@@ -1073,9 +1073,11 @@ export default {
         await renewSignupLink(env.DB, user.id);
       else fail(404, 'NOT_FOUND', '없는 주소예요.');
       // Every change answers with what changed since the client's cursor, its own change included.
+      const rooms = env.ROOMS;
       const [answer, touched] = await Promise.all([
         feed(env.DB, user.id, since),
-        touchedSince(env.DB, before),
+        // The change is saved: failing to find what it touched costs signals, not an error.
+        rooms ? touchedSince(env.DB, before).catch(() => []) : [],
       ]);
       // Each ledger the change touched tells its watching members to check, after closing the
       // sockets of a member who went (docs/sync-plan.md §5.3). Nothing waits for the rooms; a
@@ -1084,15 +1086,17 @@ export default {
         resource === 'ledgers' && extra === 'members' && request.method === 'DELETE'
           ? reaction
           : undefined;
-      for (const { ledger_id, seq } of touched)
-        ctx.waitUntil(
-          env.ROOMS.get(env.ROOMS.idFromName(ledger_id))
-            .fetch(`https://room/poke${kick && ledger_id === id ? `?kick=${kick}` : ''}`, {
-              method: 'POST',
-              body: JSON.stringify({ seq }),
-            })
-            .catch((error) => console.error(error)),
-        );
+      if (rooms)
+        for (const { ledger_id, seq } of touched)
+          ctx.waitUntil(
+            rooms
+              .get(rooms.idFromName(ledger_id))
+              .fetch(`https://room/poke${kick && ledger_id === id ? `?kick=${kick}` : ''}`, {
+                method: 'POST',
+                body: JSON.stringify({ seq }),
+              })
+              .catch((error) => console.error(error)),
+          );
       return json(answer);
     } catch (error) {
       if (error instanceof ApiError)

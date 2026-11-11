@@ -118,6 +118,8 @@ const STORE_AFTER = 500;
  * behind a try, so it is no longer than the longest between checks (§4.2).
  */
 const RETRY = [5000, 10000, 20000, POLL_LONGEST];
+/** How long a tab that passed a check on waits for the syncing tab's `held` (docs/sync-plan.md §5.4). */
+const HELD = 3000;
 
 /** What tabs tell each other on BroadcastChannel `budget` (docs/sync-plan.md §4.3). */
 type TabMessage =
@@ -132,6 +134,8 @@ type TabMessage =
    * the copy has it already (docs/sync-plan.md §5.4).
    */
   | { type: 'sync'; seq?: number }
+  /** From the syncing tab, at once on `sync`: it is not frozen, so the lock stays with it (§5.4). */
+  | { type: 'held' }
   /** To the syncing tab: a room's 이전 글 another tab loaded, to keep in the copy. */
   | { type: 'older'; messages: ChatMessage[] }
   /**
@@ -190,6 +194,8 @@ export function App() {
   const epoch = useRef(0);
   /** Brings the next check for others' changes forward, while a shared room is open. */
   const wake = useRef<() => void>(undefined);
+  /** The syncing tab answered a check passed on (`held`). */
+  const heard = useRef<() => void>(undefined);
   /** Takes the lock if this tab shows and lacks it (§4.3); set while Web Locks are used. */
   const takeLock = useRef<() => void>(undefined);
   /** Whether this wait for data has had the lock here, taken or given: then it is not taken again. */
@@ -523,14 +529,17 @@ export function App() {
         if (message.type === 'state') refresh();
         else if (message.type === 'news') wake.current?.();
         else if (message.type === 'refused') setError({ message: message.message });
+        else if (message.type === 'held') heard.current?.();
       } else if (message.type === 'outbox')
         // Another tab's change goes in this copy too, so it is stored before it is sent (§4.3).
         readOutbox().then((queued) => {
           if (state.current) commit(unsent(state.current, queued));
           sync();
         });
-      else if (message.type === 'sync') poll(message.seq);
-      else if (message.type === 'older' && state.current)
+      else if (message.type === 'sync') {
+        tell({ type: 'held' });
+        poll(message.seq);
+      } else if (message.type === 'older' && state.current)
         commit(withOlder(state.current, message.messages));
     };
     return () => {
@@ -564,6 +573,8 @@ export function App() {
   // again if a signal came meanwhile, or while it polls. A 메모 needs none. Another tab asks the
   // syncing one to check, which tells every tab when something came (§4.3).
   const watched = roomId && (data?.ledgerMembers?.[roomId]?.length ?? 0) > 1 ? roomId : undefined;
+  // A parent shows its children's records, whose signals go to their own rooms: it polls.
+  const live = !data?.ledgers.some((ledger) => ledger.id === watched && isParent(ledger));
   useEffect(() => {
     if (!watched) return;
     let delay = POLL_FIRST;
@@ -572,6 +583,8 @@ export function App() {
     let open = false;
     /** The latest signal that came while hidden; Infinity when anything may have come. */
     let missed = 0;
+    /** A check passed on to the syncing tab, waiting for its `held`. */
+    let passed: number | undefined;
     const later = () => {
       window.clearTimeout(timer);
       if (!open && document.visibilityState === 'visible') timer = window.setTimeout(check, delay);
@@ -579,13 +592,18 @@ export function App() {
     const check = (seq?: number) => {
       window.clearTimeout(timer);
       missed = 0;
-      const asked = syncing.current
-        ? poll(seq)
-        : (tell({ type: 'sync', seq }), Promise.resolve(false));
+      const asked = syncing.current ? poll(seq) : pass(seq);
       asked.then((news) => {
         delay = news ? POLL_FIRST : Math.min(delay * 2, POLL_LONGEST);
         if (wake.current === soon) later();
       });
+    };
+    // Unanswered, the syncing tab is frozen (§4.7): a shown tab takes the lock and checks itself.
+    const pass = (seq?: number) => {
+      tell({ type: 'sync', seq });
+      window.clearTimeout(passed);
+      passed = window.setTimeout(() => takeLock.current?.(), HELD);
+      return Promise.resolve(false);
     };
     const signal = (seq = Infinity) => {
       if (document.visibilityState === 'visible') check(seq);
@@ -599,28 +617,33 @@ export function App() {
       if (document.visibilityState !== 'visible') window.clearTimeout(timer);
       else if (missed || !open) check(missed || undefined);
     };
-    const close = watchRoom(watched, {
-      poke: signal,
-      // Up: one check for what came before it, then its signals. Down: poll until it is back.
-      open: (up) => {
-        if (up === open) return;
-        open = up;
-        if (up) signal();
-        else later();
-      },
-      // Gone from the ledger: the feed drops it, and this with it.
-      removed: () => signal(),
-    });
+    const close = !live
+      ? () => {}
+      : watchRoom(watched, {
+          poke: signal,
+          // Up: one check for what came before it, then its signals. Down: poll until it is back.
+          open: (up) => {
+            if (up === open) return;
+            open = up;
+            if (up) signal();
+            else later();
+          },
+          // Gone from the ledger: the feed drops it, and this with it.
+          removed: () => signal(),
+        });
     wake.current = soon;
+    heard.current = () => window.clearTimeout(passed);
     document.addEventListener('visibilitychange', shown);
     later();
     return () => {
       close();
       wake.current = undefined;
+      heard.current = undefined;
       window.clearTimeout(timer);
+      window.clearTimeout(passed);
       document.removeEventListener('visibilitychange', shown);
     };
-  }, [watched]);
+  }, [watched, live]);
 
   /**
    * A change: made on the device's copy at once, put in the outbox, then sent in turn (§4.2).
