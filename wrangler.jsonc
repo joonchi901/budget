@@ -14,4 +14,8 @@
       "migrations_dir": "migrations",
     },
   ],
+  // A room per ledger that signals its members' sockets (docs/sync-plan.md §5). The free plan
+  // takes SQLite-backed classes only; the room stores nothing.
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Room" }] },
+  "migrations": [{ "tag": "room-v1", "new_sqlite_classes": ["Room"] }],
 }

@@ -1,8 +1,14 @@
 /** Request plumbing shared by the API modules: errors, JSON answers and input checks. */
 import type { AppData, Id } from '../shared/ledger';
+import type { Room } from './room';
 
 export interface Env {
   DB: D1Database;
+  /**
+   * A Durable Object per ledger, to signal its watching members (docs/sync-plan.md §5). Without
+   * it changes still go through, with no signals, and clients poll.
+   */
+  ROOMS?: DurableObjectNamespace<Room>;
   /** "true" only in .dev.vars: loopback requests act as the dev account without signing in. */
   DEV_AUTH?: string;
 }

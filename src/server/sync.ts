@@ -169,6 +169,21 @@ export const latestSeq = (db: D1Database) =>
     .first<number>('seq')
     .then((seq) => seq ?? 0);
 
+/**
+ * The ledgers with log rows after `seq`, each with its last: the rooms a change signals
+ * (docs/sync-plan.md §5.3). NOT INDEXED keeps it to those rows by rowid (seq): left to itself,
+ * SQLite walks all of changes_ledger for the GROUP BY (40,000 rows for a 2-year log).
+ */
+export const touchedSince = (db: D1Database, seq: number) =>
+  db
+    .prepare(
+      `SELECT ledger_id, max(seq) AS seq FROM changes NOT INDEXED
+       WHERE seq > ? AND ledger_id IS NOT NULL GROUP BY ledger_id`,
+    )
+    .bind(seq)
+    .all<{ ledger_id: Id; seq: number }>()
+    .then((rows) => rows.results);
+
 const LIMIT = 1000;
 type LogRow = { seq: number; kind: Change['kind']; id: Id; ledger_id: Id | null };
 
