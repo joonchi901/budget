@@ -1,136 +1,474 @@
 [
   {
     "name": "색상·글자·간격·브랜드",
-    "layer": "기초 규칙",
+    "layer": "01 Foundations",
     "source": "src/client/brand/tokens.css",
     "story": "src/stories/foundations/Foundations.stories.tsx",
-    "status": "shared",
-    "usage": "앱과 Storybook이 같은 CSS 토큰 및 SVG 컴포넌트를 사용"
+    "status": "ready",
+    "usage": "Storybook과 이후 앱이 같은 CSS 토큰 및 SVG 컴포넌트를 사용"
   },
   {
     "name": "Button / IconButton",
-    "layer": "기본 컴포넌트",
+    "layer": "02 Atoms",
     "source": "src/client/ui/Button.tsx",
-    "story": "src/stories/patterns/Actions.stories.tsx",
-    "status": "partial",
-    "usage": "가계부 생성·추가·방 헤더에서 사용. 기존 페이지 버튼은 점진 전환"
+    "story": "src/stories/atoms/Button.stories.tsx",
+    "status": "ready",
+    "usage": "버튼·아이콘 버튼. 키보드·저장 중 동작을 공유"
+  },
+  {
+    "name": "Input / Textarea / Checkbox / Radio",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Fields.tsx",
+    "story": "src/stories/atoms/Inputs.stories.tsx",
+    "status": "ready",
+    "usage": "native props·ref·라벨·폼 검증을 유지하는 입력 요소"
+  },
+  {
+    "name": "Switch",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Fields.tsx",
+    "story": "src/stories/atoms/Switch.stories.tsx",
+    "status": "ready",
+    "usage": "바로 적용되는 켜기/끄기 설정. role=\"switch\"인 native checkbox"
+  },
+  {
+    "name": "Slider",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Fields.tsx",
+    "story": "src/stories/atoms/Slider.stories.tsx",
+    "status": "ready",
+    "usage": "native range를 토큰으로 다시 그린 슬라이더. 채워진 구간이 값을 따라감"
+  },
+  {
+    "name": "Tag",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Tag.tsx",
+    "story": "src/stories/atoms/Tag.stories.tsx",
+    "status": "ready",
+    "usage": "사용자 색상·보관 상태·해제 동작"
+  },
+  {
+    "name": "Tooltip / Popover",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Tooltip.tsx",
+    "story": "src/stories/atoms/Tooltip.stories.tsx",
+    "status": "ready",
+    "usage": "포커스·Escape 및 선택 필드 내부 팝오버"
+  },
+  {
+    "name": "Stack / Inline / Grid / Surface",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Layout.tsx",
+    "story": "src/stories/atoms/Layout.stories.tsx",
+    "status": "ready",
+    "usage": "세로·가로 흐름, 반응형 동일 너비 배치, 내용 경계로 화면을 조립"
+  },
+  {
+    "name": "Amount",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Amount.tsx",
+    "story": "src/stories/atoms/Amount.stories.tsx",
+    "status": "ready",
+    "usage": "원 단위 금액. 고정 폭 숫자, 수입·지출 색과 +/− 부호"
+  },
+  {
+    "name": "CountBadge",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/CountBadge.tsx",
+    "story": "src/stories/atoms/CountBadge.stories.tsx",
+    "status": "ready",
+    "usage": "방 목록의 새 내역 수. 스크린 리더에는 전체 문구 전달"
+  },
+  {
+    "name": "Bar",
+    "layer": "02 Atoms",
+    "source": "src/client/ui/Bar.tsx",
+    "story": "src/stories/atoms/Bar.stories.tsx",
+    "status": "ready",
+    "usage": "통계용 장식 막대. 태그 저장 색상 사용, 값은 글자로 함께 표시"
+  },
+  {
+    "name": "Field / TextField",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/Fields.tsx",
+    "story": "src/stories/molecules/Fields.stories.tsx",
+    "status": "ready",
+    "usage": "라벨·설명·오류를 입력과 연결"
   },
   {
     "name": "SelectField",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/SelectField.tsx",
-    "story": "src/stories/controls/SelectField.stories.tsx",
-    "status": "shared",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/SelectField.tsx",
+    "story": "src/stories/molecules/SelectField.stories.tsx",
+    "status": "ready",
     "usage": "옵션 그룹·검색·키보드·선택 상태"
   },
   {
     "name": "DateField / MonthField",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/DateFields.tsx",
-    "story": "src/stories/controls/DateField.stories.tsx",
-    "status": "shared",
-    "usage": "자체 날짜·월 선택, 범위 제한"
-  },
-  {
-    "name": "TagBadge",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/TagBadge.tsx",
-    "story": "src/stories/controls/TagBadge.stories.tsx",
-    "status": "shared",
-    "usage": "사용자 색상·보관 상태·해제 동작"
+    "layer": "03 Molecules",
+    "source": "src/client/ui/DateFields.tsx",
+    "story": "src/stories/molecules/DateField.stories.tsx",
+    "status": "ready",
+    "usage": "자체 날짜·월 선택, 범위 제한. MonthField는 현재 쓰는 화면 없음"
   },
   {
     "name": "ColorField / FileField",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/ColorField.tsx",
-    "story": "src/stories/controls/ColorField.stories.tsx",
-    "status": "shared",
-    "usage": "자체 색상 선택·파일 선택"
-  },
-  {
-    "name": "Tooltip / Popover",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/Tooltip.tsx",
-    "story": "src/stories/controls/Tooltip.stories.tsx",
-    "status": "shared",
-    "usage": "포커스·Escape 및 선택 필드 내부 팝오버"
-  },
-  {
-    "name": "Dialog / Empty / Stat",
-    "layer": "기본 컴포넌트",
-    "source": "src/client/components.tsx",
-    "story": "src/stories/controls/Dialog.stories.tsx",
-    "status": "shared",
-    "usage": "모달·빈 상태·금액 요약"
-  },
-  {
-    "name": "Grid",
-    "layer": "배치",
-    "source": "src/client/ui/Layout.tsx",
-    "story": "src/stories/layout/Composition.stories.tsx",
-    "status": "partial",
-    "usage": "실제 방의 요약·하위 가계부 배치. 기존 페이지 전환은 남아 있음"
-  },
-  {
-    "name": "Stack / Inline / Surface",
-    "layer": "배치",
-    "source": "src/client/ui/Layout.tsx",
-    "story": "src/stories/layout/Composition.stories.tsx",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/ColorField.tsx",
+    "story": "src/stories/molecules/ColorField.stories.tsx",
     "status": "ready",
-    "usage": "새 화면 조립용 공통 구성 요소. 기존 페이지 전체에는 미적용"
+    "usage": "자체 색상 선택(compact: 색 견본 버튼과 팔레트)·파일 선택. FileField는 현재 쓰는 화면 없음"
+  },
+  {
+    "name": "SegmentedControl / Tabs",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/ChoiceGroup.tsx",
+    "story": "src/stories/molecules/ChoiceGroup.stories.tsx",
+    "status": "ready",
+    "usage": "보기 전환·탭의 선택과 방향키 탐색"
+  },
+  {
+    "name": "Empty",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/Empty.tsx",
+    "story": "src/stories/molecules/Empty.stories.tsx",
+    "status": "ready",
+    "usage": "빈 기록·검색 결과 없음 안내"
+  },
+  {
+    "name": "Stat",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/Stat.tsx",
+    "story": "src/stories/molecules/Stat.stories.tsx",
+    "status": "ready",
+    "usage": "금액 요약"
+  },
+  {
+    "name": "AmountInput",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/AmountInput.tsx",
+    "story": "src/stories/molecules/AmountInput.stories.tsx",
+    "status": "ready",
+    "usage": "내역 입력의 큰 금액 입력. 숫자만, 입력 중 쉼표, 커서 유지"
+  },
+  {
+    "name": "SearchField",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/SearchField.tsx",
+    "story": "src/stories/molecules/SearchField.stories.tsx",
+    "status": "ready",
+    "usage": "검색 입력. 지우기 버튼과 Escape"
+  },
+  {
+    "name": "FilterChip",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/FilterChip.tsx",
+    "story": "src/stories/molecules/FilterChip.stories.tsx",
+    "status": "ready",
+    "usage": "적용한 조회 조건. 칩 전체가 해제 버튼"
+  },
+  {
+    "name": "ChipSelect",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/ChipSelect.tsx",
+    "story": "src/stories/molecules/ChipSelect.stories.tsx",
+    "status": "ready",
+    "usage": "Notion식 단일·다중 선택과 옵션 즉석 추가"
+  },
+  {
+    "name": "Menu",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/Menu.tsx",
+    "story": "src/stories/molecules/Menu.stories.tsx",
+    "status": "ready",
+    "usage": "드롭다운 메뉴. 방향키·Escape, 위험 동작 구분"
+  },
+  {
+    "name": "List / ListRow",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/List.tsx",
+    "story": "src/stories/molecules/List.stories.tsx",
+    "status": "ready",
+    "usage": "목록 표면과 한 줄(앞 그림·제목·보조 줄·오른쪽 값), 줄 전체 버튼"
+  },
+  {
+    "name": "StatBar",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/StatBar.tsx",
+    "story": "src/stories/molecules/StatBar.stories.tsx",
+    "status": "ready",
+    "usage": "통계 한 줄: 이름·금액·막대·비율"
+  },
+  {
+    "name": "FormBody / FormFooter / FormGrid / FormSection / CloseButton",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/Patterns.tsx",
+    "story": "src/stories/molecules/Fields.stories.tsx",
+    "status": "ready",
+    "usage": "편집창의 입력·행동 영역·반응형 폼. 미저장 취소는 Dialog 계약 사용"
+  },
+  {
+    "name": "Panel / SummaryGrid / Toolbar / TableScroll",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/Patterns.tsx",
+    "story": "src/stories/molecules/Patterns.stories.tsx",
+    "status": "ready",
+    "usage": "화면의 내용 경계·요약·도구모음·키보드 스크롤 영역"
+  },
+  {
+    "name": "Notice",
+    "layer": "03 Molecules",
+    "source": "src/client/ui/Notice.tsx",
+    "story": "src/stories/molecules/Notice.stories.tsx",
+    "status": "ready",
+    "usage": "페이지 위에 떠서 알리는 메시지. 저장 실패(alert)·복사 완료(status), 닫기"
+  },
+  {
+    "name": "RoomListItem",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Room.tsx",
+    "story": "src/stories/organisms/RoomListItem.stories.tsx",
+    "status": "ready",
+    "usage": "방 목록 한 줄: 하위는 상위 아래 들여쓰기, 마지막 내역(하위 포함)·시간·새 내역 수"
   },
   {
     "name": "RoomHeader",
-    "layer": "화면 패턴",
-    "source": "src/client/RoomHeader.tsx",
-    "story": "src/stories/patterns/RoomHeader.stories.tsx",
-    "status": "shared",
-    "usage": "실제 방 이름·계위·보기 전환·이동"
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Room.tsx",
+    "story": "src/stories/organisms/RoomHeader.stories.tsx",
+    "status": "ready",
+    "usage": "방 제목 막대: 가계부 목록(휴대폰), 상위 경로 › 이름·기간, ⋯ 메뉴"
   },
   {
-    "name": "LedgerRooms",
-    "layer": "도메인",
-    "source": "src/client/LedgerRooms.tsx",
-    "story": "src/stories/domain/LedgerRooms.stories.tsx",
-    "status": "shared",
-    "usage": "목록·검색·관리자/사용자·보관·빈 상태"
+    "name": "RoomTabBar",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Room.tsx",
+    "story": "src/stories/organisms/RoomTabBar.stories.tsx",
+    "status": "ready",
+    "usage": "방 하단 탭: 내역·통계·대화·설정"
   },
   {
-    "name": "LedgerCalendar",
-    "layer": "도메인",
-    "source": "src/client/LedgerCalendar.tsx",
-    "story": "src/stories/domain/LedgerCalendar.stories.tsx",
-    "status": "shared",
-    "usage": "월별 내역·날짜별 추가·상세 목록"
+    "name": "HomeTabBar",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Room.tsx",
+    "story": "src/stories/organisms/HomeTabBar.stories.tsx",
+    "status": "ready",
+    "usage": "앱 첫 화면 하단 탭: 친구(답할 요청·초대 배지)·가계부·프로필·설정"
   },
   {
-    "name": "LedgerTree",
-    "layer": "도메인",
-    "source": "src/client/LedgerTree.tsx",
-    "story": "src/stories/domain/LedgerTree.stories.tsx",
-    "status": "shared",
-    "usage": "중첩 경로·보관·사용자 권한별 이동"
+    "name": "SummaryStrip",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Room.tsx",
+    "story": "src/stories/organisms/SummaryStrip.stories.tsx",
+    "status": "ready",
+    "usage": "수입·지출·남은 금액 · 1억 이상이면 세 줄"
   },
   {
-    "name": "TagFields",
-    "layer": "도메인",
-    "source": "src/client/TagFields.tsx",
-    "story": "src/stories/domain/TagFields.stories.tsx",
-    "status": "partial",
-    "usage": "단일/복수·가계부 범위·상하위 옵션. 서버 옵션 생성은 E2E 검증"
+    "name": "AssetRow / NetWorthSummary / AssetAnalysis",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Assets.tsx",
+    "story": "src/stories/views/Assets.stories.tsx",
+    "status": "ready",
+    "usage": "자산 한 줄(종류 아이콘·이름·연동 가계부·현재 잔액), 순자산·자산·부채 요약, 연동 가계부 내역으로 본 자산 분석(흐름·월별·항목별)"
   },
   {
-    "name": "입력 필드 / Checkbox / SegmentedControl",
-    "layer": "전환 대기",
-    "source": "src/client/TransactionForm.tsx",
-    "status": "legacy",
-    "usage": "기존 JSX와 공통 CSS. 독립 컴포넌트 명세로 분리 필요"
+    "name": "RecordRow / RecordDayGroup / RecordList",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Records.tsx",
+    "story": "src/stories/organisms/RecordList.stories.tsx",
+    "status": "ready",
+    "usage": "날짜별 내역 목록, 날짜별 합계, 원본 가계부 표시"
   },
   {
-    "name": "자산·카드/통장·통계·계획·데이터 관리 전체 화면",
-    "layer": "전환 대기",
-    "source": "src/client/App.tsx",
-    "status": "legacy",
-    "usage": "서버·상태 결합 화면. 현재 E2E가 전체 동작을 검증하며 Storybook 전체 화면 명세는 아직 없음"
+    "name": "RecordTable",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Records.tsx",
+    "story": "src/stories/organisms/RecordTable.stories.tsx",
+    "status": "ready",
+    "usage": "Notion식 넓게 보기 표"
+  },
+  {
+    "name": "RecordFilterBar",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Records.tsx",
+    "story": "src/stories/organisms/RecordFilterBar.stories.tsx",
+    "status": "ready",
+    "usage": "검색·태그 조건(유형으로 수입/지출) · 방에서는 표/캘린더 아이콘 전환, 넓은 본문은 캘린더/테이블 토글"
+  },
+  {
+    "name": "RecordReactions",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Reactions.tsx",
+    "story": "src/stories/organisms/RecordReactions.stories.tsx",
+    "status": "ready",
+    "usage": "내역 아래 우가 스티커 반응: 스티커별 칩(누른 수·내 반응 강조), 고르기(대화 12·감정 18)"
+  },
+  {
+    "name": "ChatThread",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Chat.tsx",
+    "story": "src/stories/organisms/ChatThread.stories.tsx",
+    "status": "ready",
+    "usage": "가계부 방 대화: 프로필 사진·이름 아래 말풍선과 옆 시간(내 글 오른쪽), 말풍선 아래 스티커 반응, 호버 옵션(반응 추가·답장·⋯), 글 또는 우가 스티커 보내기"
+  },
+  {
+    "name": "PeriodCalendar / DayRecords",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Calendar.tsx",
+    "story": "src/stories/organisms/PeriodCalendar.stories.tsx",
+    "status": "ready",
+    "usage": "기간 맞춤 주 단위 달력과 날짜별 내역·이 날짜로 추가"
+  },
+  {
+    "name": "StatsBreakdown",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Stats.tsx",
+    "story": "src/stories/organisms/StatsBreakdown.stories.tsx",
+    "status": "ready",
+    "usage": "태그 단위 통계와 지출·수입·기준 선택(자산 분석), 묶음에서 같은 이름 합산"
+  },
+  {
+    "name": "RecurringList / RecurringRuleForm",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Recurring.tsx",
+    "story": "src/stories/organisms/Recurring.stories.tsx",
+    "status": "ready",
+    "usage": "설정의 반복 내역: 매달 며칠·다음 날짜·금액 변동, 고치기·그만하기"
+  },
+  {
+    "name": "StatCardView / StatCardForm",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Stats.tsx",
+    "story": "src/stories/organisms/StatCard.stories.tsx",
+    "status": "ready",
+    "usage": "통계 탭 차트(요약·순위·비율·추이), 기준 잠깐 바꾸기·기본으로 저장, 편집 중 차트 설정 폼"
+  },
+  {
+    "name": "DynamicField / RecordForm",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/RecordForm.tsx",
+    "story": "src/stories/organisms/RecordForm.stories.tsx",
+    "status": "ready",
+    "usage": "내역 입력 폼, 필드 형태별 입력과 옵션 즉석 추가"
+  },
+  {
+    "name": "FieldSchemaEditor / TagOptionEditor",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Settings.tsx",
+    "story": "src/stories/organisms/FieldSchemaEditor.stories.tsx",
+    "status": "ready",
+    "usage": "가계부 필드 구성과 태그 옵션 관리"
+  },
+  {
+    "name": "KindOptionEditor",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Settings.tsx",
+    "story": "src/stories/organisms/TagOptionEditor.stories.tsx",
+    "status": "ready",
+    "usage": "유형 태그 관리: 옵션마다 수입·지출, 기본 수입·지출은 이름 고정·보관 불가(색만 바꿈)"
+  },
+  {
+    "name": "ChildPicker / ParentPicker / LedgerPicker",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/Hierarchy.tsx",
+    "story": "src/stories/organisms/Hierarchy.stories.tsx",
+    "status": "ready",
+    "usage": "하위·상위 가계부 선택(순환 제외), 상위 방에서 저장할 가계부 선택"
+  },
+  {
+    "name": "PersonRow",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "사람 한 줄: 우가 그림, 표시 이름, @아이디"
+  },
+  {
+    "name": "ProfilePicture",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "프로필 사진, 없으면 우가 그림. 이 앱 경로의 사진만 그림"
+  },
+  {
+    "name": "AvatarPicker",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "프로필 사진 올리기(JPG·PNG·WebP, 5MB 이하)와 기본 우가 그림 4종"
+  },
+  {
+    "name": "FriendList",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "받은 요청·친구·보낸 요청·차단. 수락·거절·취소·삭제·차단"
+  },
+  {
+    "name": "MemberList",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "가계부 멤버와 권한. 소유자만 편집·보기 바꾸기와 내보내기"
+  },
+  {
+    "name": "FriendPicker",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "초대할 친구 여러 명 고르기"
+  },
+  {
+    "name": "RoomInviteRow",
+    "layer": "04 Organisms",
+    "source": "src/client/ledger/People.tsx",
+    "story": "src/stories/organisms/People.stories.tsx",
+    "status": "ready",
+    "usage": "받은 가계부 초대 한 줄: 가계부, 초대한 사람·권한, 시간"
+  },
+  {
+    "name": "Dialog",
+    "layer": "05 Templates",
+    "source": "src/client/templates/Dialog.tsx",
+    "story": "src/stories/templates/Dialog.stories.tsx",
+    "status": "ready",
+    "usage": "모달·미저장 내용 확인. FullScreenSheet의 바탕"
+  },
+  {
+    "name": "AppShell",
+    "layer": "05 Templates",
+    "source": "src/client/templates/AppShell.tsx",
+    "story": "src/stories/templates/AppShell.stories.tsx",
+    "status": "ready",
+    "usage": "데스크톱 틀: 접고 펼치는 왼쪽 앱 메뉴(접히면 마크가 펼치기 버튼으로), 목록 칸, 화면. 휴대폰은 화면만"
+  },
+  {
+    "name": "Screen",
+    "layer": "05 Templates",
+    "source": "src/client/templates/Screen.tsx",
+    "story": "src/stories/templates/Screen.stories.tsx",
+    "status": "ready",
+    "usage": "화면 틀: 고정 상단, 본문, 휴대폰 하단 탭(화면 탭 또는 앱 메뉴). AppShell 안 데스크톱에선 화면 탭이 제목 아래로"
+  },
+  {
+    "name": "FullScreenSheet / BottomSheet",
+    "layer": "05 Templates",
+    "source": "src/client/templates/Sheets.tsx",
+    "story": "src/stories/templates/Sheets.stories.tsx",
+    "status": "ready",
+    "usage": "입력·설정 전체 화면 시트와 짧은 내용용 하단 시트"
+  },
+  {
+    "name": "StatusScreen",
+    "layer": "05 Templates",
+    "source": "src/client/templates/Status.tsx",
+    "story": "src/stories/templates/StatusScreen.stories.tsx",
+    "status": "ready",
+    "usage": "앱 전체 불러오는 중·불러오기 실패(다시 시도)"
   }
 ]

@@ -1,236 +1,508 @@
-import type { Bootstrap, Ledger, Tag, TagGroup, Transaction, User } from '../shared/types';
+/**
+ * Synthetic household for stories. Structure and amounts follow the Notion "2026 가계부" sample
+ * (pay-period month, 수입·고정지출·지출, 결제방식·카테고리·누가·비고); names are generic.
+ */
+import {
+  recordProblems,
+  type FieldValue,
+  type Ledger,
+  type LedgerRecord,
+  type ChatMessage,
+  type Member,
+  type Reactions,
+  type TagOption,
+} from '../shared/ledger';
+import type { Asset } from '../shared/assets';
+import type { Friend, LedgerMember, Profile, RoomInvite, SignupLink } from '../shared/people';
+// Over 4KB on purpose: Vite inlines smaller images as data: URLs, which profile photos never are.
+import samplePhoto from './assets/sample-photo.png';
 
-/** Handwritten synthetic data only. Never derive Storybook fixtures from D1, Excel or sessions. */
-export const STORY_MONTH = '2026-06';
+export { samplePhoto };
 
-export const storyUsers: User[] = [
-  { id: 'u1', name: '구성원 A', color: '#64866f', role: 'admin' },
-  { id: 'u2', name: '구성원 B', color: '#9b78a8', role: 'user' },
+export const FIXTURE_TODAY = '2026-11-02';
+
+export const members: Member[] = [
+  { id: 'u1', name: '준상' },
+  { id: 'u2', name: '예디' },
 ];
 
-function ledger(overrides: Partial<Ledger> & Pick<Ledger, 'id' | 'name'>): Ledger {
+const option = (id: string, name: string, color: string): TagOption => ({ id, name, color });
+const people = (prefix: string) => [
+  option(`${prefix}-who-p1`, '준상', '#7CC7F2'),
+  option(`${prefix}-who-p2`, '예디', '#F08A5D'),
+  option(`${prefix}-who-p3`, '예미', '#A7D7C5'),
+];
+// Copying a ledger gives new ids but keeps names, so parent stats can merge options by name.
+const monthLedger = (id: string, name: string, start: string, end: string): Ledger => ({
+  id,
+  name,
+  icon: 'ledger',
+  period: { start, end },
+  kinds: [
+    { id: `${id}-k-in`, name: '수입', color: '#38735B', nature: 'income', base: true },
+    { id: `${id}-k-fixed`, name: '고정지출', color: '#9176A6', nature: 'expense' },
+    { id: `${id}-k-out`, name: '지출', color: '#AE393B', nature: 'expense', base: true },
+  ],
+  fields: [
+    {
+      id: `${id}-f-pay`,
+      name: '결제방식',
+      type: 'select',
+      options: [
+        option(`${id}-pay-kb`, '국민카드', '#B9A27A'),
+        option(`${id}-pay-kt`, 'KT카드', '#E8AD3F'),
+        option(`${id}-pay-hd`, '현대카드', '#4B4B4B'),
+        option(`${id}-pay-ss`, '삼성카드', '#286588'),
+        option(`${id}-pay-auto`, '자동이체', '#64866F'),
+      ],
+    },
+    {
+      id: `${id}-f-cat`,
+      name: '카테고리',
+      type: 'select',
+      options: [
+        option(`${id}-cat-salary`, '월급', '#38735B'),
+        option(`${id}-cat-food`, '외식/배달/간식', '#D28C70'),
+        option(`${id}-cat-grocery`, '장보기', '#64866F'),
+        option(`${id}-cat-health`, '병원/약국', '#6C89A4'),
+        option(`${id}-cat-insurance`, '보험', '#9176A6'),
+        option(`${id}-cat-phone`, '통신비', '#7CC7F2'),
+        option(`${id}-cat-house`, '관리비', '#B9A27A'),
+        option(`${id}-cat-car`, '자동차', '#4B4B4B'),
+        option(`${id}-cat-allowance`, '용돈', '#F08A5D'),
+        option(`${id}-cat-meetup`, '모임비', '#E8AD3F'),
+        option(`${id}-cat-saving`, '주택청약', '#286588'),
+      ],
+    },
+    {
+      id: `${id}-f-who`,
+      name: '누가',
+      type: 'multiSelect',
+      options: people(id),
+      emptyLabel: '공동',
+    },
+    { id: `${id}-f-note`, name: '비고', type: 'text' },
+  ],
+  childIds: [],
+});
+
+/** 11월 repeats its 고정지출: 관리비 and 도시가스 vary, 청약저축 and 통신비 do not. */
+export const november: Ledger = {
+  ...monthLedger('nov', '11월', '2026-10-23', '2026-11-22'),
+  recurring: [
+    {
+      id: 'rule-house',
+      title: '아파트 관리비',
+      kindId: 'nov-k-fixed',
+      amount: 263820,
+      values: { 'nov-f-pay': ['nov-pay-kb'], 'nov-f-cat': ['nov-cat-house'] },
+      day: 27,
+      variable: true,
+    },
+    {
+      id: 'rule-saving',
+      title: '청약저축',
+      kindId: 'nov-k-fixed',
+      amount: 20000,
+      values: { 'nov-f-pay': ['nov-pay-auto'], 'nov-f-cat': ['nov-cat-saving'] },
+      day: 1,
+    },
+    {
+      id: 'rule-phone',
+      title: '통신비',
+      kindId: 'nov-k-fixed',
+      amount: 55000,
+      values: { 'nov-f-pay': ['nov-pay-auto'], 'nov-f-cat': ['nov-cat-phone'] },
+      day: 15,
+    },
+    {
+      id: 'rule-gas',
+      title: '도시가스',
+      kindId: 'nov-k-fixed',
+      amount: 38000,
+      values: { 'nov-f-pay': ['nov-pay-auto'], 'nov-f-cat': ['nov-cat-house'] },
+      day: 1,
+      variable: true,
+    },
+  ],
+};
+export const december = monthLedger('dec', '12월', '2026-11-23', '2026-12-22');
+export const japanTrip: Ledger = {
+  id: 'trip',
+  name: '일본여행',
+  icon: 'sprout',
+  period: { start: '2026-10-09', end: '2026-10-12' },
+  kinds: [{ id: 'trip-k-out', name: '지출', color: '#AE393B', nature: 'expense', base: true }],
+  fields: [
+    {
+      id: 'trip-f-cat',
+      name: '카테고리',
+      type: 'select',
+      options: [
+        option('trip-cat-move', '교통', '#6C89A4'),
+        option('trip-cat-stay', '숙소', '#9176A6'),
+        option('trip-cat-food', '식비', '#D28C70'),
+        option('trip-cat-shop', '쇼핑', '#E8AD3F'),
+      ],
+    },
+    {
+      id: 'trip-f-pay',
+      name: '결제방식',
+      type: 'select',
+      options: [
+        option('trip-pay-kb', '국민카드', '#B9A27A'),
+        option('trip-pay-hd', '현대카드', '#4B4B4B'),
+        option('trip-pay-cash', '현금', '#64866F'),
+      ],
+    },
+    {
+      id: 'trip-f-who',
+      name: '누가',
+      type: 'multiSelect',
+      options: people('trip'),
+      emptyLabel: '공동',
+    },
+  ],
+  childIds: [],
+};
+
+// Parents gather records only through their children; nothing is recorded on them directly.
+const parent = (
+  id: string,
+  name: string,
+  icon: string,
+  start: string,
+  end: string,
+  childIds: string[],
+): Ledger => ({
+  id,
+  name,
+  icon,
+  period: { start, end },
+  kinds: [],
+  fields: [],
+  childIds,
+});
+/** 2026 › 하반기 › 11월·12월 and 2026 › 일본여행, while 일본여행 also sits under 여행. */
+export const secondHalf = parent('h2', '하반기', 'planning', '2026-07-01', '2026-12-31', [
+  'nov',
+  'dec',
+]);
+export const year2026 = parent('y2026', '2026', 'planning', '2026-01-01', '2026-12-31', [
+  'h2',
+  'trip',
+]);
+export const travel = parent('travel', '여행', 'sprout', '2026-10-09', '2026-10-12', ['trip']);
+export const ledgers = [november, december, japanTrip, secondHalf, year2026, travel];
+
+let sequence = 0;
+function record(
+  ledger: Ledger,
+  date: string,
+  kind: 'in' | 'fixed' | 'out',
+  title: string,
+  amount: number,
+  values: Record<string, string> = {},
+  createdBy = 'u1',
+): LedgerRecord {
+  sequence += 1;
+  // values: field suffix → option suffix(es), comma separated; 'note' is free text.
+  const mapped: { [fieldId: string]: FieldValue } = {};
+  for (const [field, value] of Object.entries(values))
+    mapped[`${ledger.id}-f-${field}`] =
+      field === 'note' ? value : value.split(',').map((item) => `${ledger.id}-${field}-${item}`);
   return {
-    icon: '📒',
-    kind: 'purpose',
-    parentId: null,
-    budget: 300000,
-    startDate: null,
-    endDate: null,
-    archived: false,
-    version: 1,
-    sortOrder: 0,
-    periodStartDay: 1,
-    ...overrides,
+    id: `r${sequence}`,
+    ledgerId: ledger.id,
+    date,
+    kindId: `${ledger.id}-k-${kind}`,
+    title,
+    amount,
+    values: mapped,
+    createdBy,
+    createdAt: `${date}T${String(8 + (sequence % 14)).padStart(2, '0')}:${String((sequence * 7) % 60).padStart(2, '0')}:00+09:00`,
   };
 }
 
-export const storyLedgers: Ledger[] = [
-  ledger({ id: 'sb-home', name: '우리의 일상', kind: 'main', icon: '🏠', budget: 1000000 }),
-  ledger({ id: 'sb-year', name: '2026 기록', parentId: 'sb-home' }),
-  ledger({
-    id: 'sb-june',
-    name: '6월 생활비',
-    parentId: 'sb-year',
-    startDate: '2026-06-01',
-    endDate: '2026-06-30',
+const n = november;
+const t = japanTrip;
+export const records: LedgerRecord[] = [
+  record(t, '2026-10-09', 'out', '항공권', 412000, { cat: 'move', pay: 'kb', who: 'p1,p2' }),
+  record(t, '2026-10-09', 'out', '숙소_교토', 280000, { cat: 'stay', pay: 'hd' }),
+  record(t, '2026-10-10', 'out', '라멘', 23400, { cat: 'food', pay: 'kb' }, 'u2'),
+  record(t, '2026-10-10', 'out', '지하철 패스', 18000, { cat: 'move', pay: 'cash' }),
+  record(t, '2026-10-11', 'out', '기념품', 46500, { cat: 'shop', pay: 'hd', who: 'p2' }, 'u2'),
+  record(t, '2026-10-12', 'out', '공항 리무진', 32000, { cat: 'move', pay: 'kb' }),
+
+  record(n, '2026-10-23', 'in', '정기급여', 2736060, { cat: 'salary', who: 'p1' }),
+  record(n, '2026-10-23', 'in', '일시/소급금', 3999830, { cat: 'salary', who: 'p1' }),
+  record(n, '2026-10-23', 'in', '복지 지원금', 1596280, { cat: 'salary', who: 'p1' }),
+  record(n, '2026-10-24', 'out', '고기집_시험 응원 파티', 115000, {
+    pay: 'kb',
+    cat: 'food',
+    who: 'p1,p2,p3',
   }),
-  ledger({
-    id: 'sb-july',
-    name: '7월 생활비',
-    parentId: 'sb-year',
-    sortOrder: 1,
-    startDate: '2026-07-01',
-    endDate: '2026-07-31',
+  record(
+    n,
+    '2026-10-24',
+    'out',
+    '장보기_쿠팡',
+    9550,
+    {
+      pay: 'kt',
+      cat: 'grocery',
+      note: '닭다리살, 감자, 당근',
+    },
+    'u2',
+  ),
+  record(n, '2026-10-25', 'out', '식빵_핀토', 14300, { pay: 'kb', cat: 'food' }),
+  record(n, '2026-10-25', 'out', '보리차_도서관', 2000, { pay: 'kb', cat: 'food' }),
+  record(n, '2026-10-25', 'out', '우리마트', 4700, { pay: 'kb', cat: 'grocery' }, 'u2'),
+  record(n, '2026-10-26', 'fixed', '보험_현대해상', 68990, {
+    pay: 'auto',
+    cat: 'insurance',
+    note: '기존 거, 해지예정',
   }),
-  ledger({ id: 'sb-trip', name: '여름 바다 여행', icon: '✈️', sortOrder: 1 }),
-  ledger({
-    id: 'sb-archived',
-    name: '지난 봄 소풍',
-    icon: '🍊',
-    archived: true,
-    sortOrder: 2,
+  record(n, '2026-10-26', 'fixed', '폰', 40000, { pay: 'auto', cat: 'phone', who: 'p2' }),
+  record(n, '2026-10-27', 'fixed', '아파트 관리비', 263820, { pay: 'kb', cat: 'house' }),
+  record(n, '2026-10-27', 'out', '요아정_쿠팡이츠', 21010, { pay: 'kt', cat: 'food' }, 'u2'),
+  record(n, '2026-10-29', 'out', '우리마트', 13460, {
+    pay: 'kb',
+    cat: 'grocery',
+    note: '우유, 브로콜리',
   }),
+  record(n, '2026-10-29', 'out', '코모레커피_집앞카페', 10600, { pay: 'kb', cat: 'food' }),
+  record(n, '2026-10-29', 'out', '코노미스시_평촌롯백', 63700, { pay: 'kb', cat: 'food' }),
+  record(n, '2026-10-29', 'fixed', '주유', 76292, { pay: 'kb', cat: 'car' }),
+  record(n, '2026-10-29', 'out', '편의점', 6000, { pay: 'kb', cat: 'food' }),
+  record(n, '2026-10-29', 'out', '생일케이크_쿠팡이츠', 20600, { pay: 'kt', cat: 'food' }, 'u2'),
+  record(
+    n,
+    '2026-10-29',
+    'out',
+    '영양제_쿠팡',
+    49900,
+    { pay: 'kt', cat: 'health', who: 'p2' },
+    'u2',
+  ),
+  record(n, '2026-10-29', 'out', '정기 검진_동네병원', 22900, { pay: 'ss', cat: 'health' }, 'u2'),
+  record(
+    n,
+    '2026-10-30',
+    'out',
+    '장보기_쿠팡',
+    37350,
+    {
+      pay: 'kt',
+      cat: 'grocery',
+      note: '샤브샤브 야채, 식빵 등등',
+    },
+    'u2',
+  ),
+  record(n, '2026-10-30', 'out', '우렁쌈밥_쿠팡이츠', 17000, { pay: 'kt', cat: 'food' }),
+  record(n, '2026-10-30', 'out', '코스트코', 135320, { pay: 'hd', cat: 'grocery' }),
+  record(n, '2026-10-31', 'fixed', '보험_현대해상', 109460, {
+    pay: 'auto',
+    cat: 'insurance',
+    note: '신규',
+  }),
+  record(n, '2026-10-31', 'out', '젤라또_잠실', 10800, { pay: 'kb', cat: 'food' }),
+  record(n, '2026-10-31', 'out', '햄버거_코엑스', 33000, { pay: 'kb', cat: 'food' }),
+  record(n, '2026-10-31', 'out', '블랙보리', 2500, { pay: 'kb', cat: 'food' }),
+  record(
+    n,
+    '2026-10-31',
+    'out',
+    '쫄면,만두,김밥_쿠팡이츠',
+    14000,
+    { pay: 'kt', cat: 'food' },
+    'u2',
+  ),
+  record(n, '2026-11-01', 'out', '스타벅스_쿠팡이츠', 13500, { pay: 'kt', cat: 'food' }, 'u2'),
+  record(n, '2026-11-01', 'fixed', '용돈', 250000, { pay: 'auto', cat: 'allowance', who: 'p1' }),
+  record(n, '2026-11-01', 'fixed', '용돈', 250000, { pay: 'auto', cat: 'allowance', who: 'p2' }),
+  record(n, '2026-11-01', 'fixed', '친구 모임', 100000, {
+    pay: 'auto',
+    cat: 'meetup',
+    who: 'p1,p2',
+  }),
+  record(n, '2026-11-01', 'fixed', '친구계', 30000, { pay: 'auto', cat: 'meetup', who: 'p2' }),
+  record(n, '2026-11-01', 'fixed', '청약저축', 20000, { pay: 'auto', cat: 'saving', who: 'p1' }),
+  record(n, '2026-11-01', 'fixed', '청약저축', 20000, { pay: 'auto', cat: 'saving', who: 'p2' }),
+  record(n, '2026-11-01', 'out', '프레드피자_쿠팡이츠', 29300, { pay: 'kt', cat: 'food' }, 'u2'),
 ];
 
-export const storyTagGroups: TagGroup[] = [
-  {
-    id: 'sb-category',
-    name: '분류',
-    selectionMode: 'single',
-    appliesTo: 'transaction',
-    role: 'category',
-    ledgerIds: null,
-    sortOrder: 0,
-    archived: false,
-    version: 1,
-  },
-  {
-    id: 'sb-context',
-    name: '내역',
-    selectionMode: 'multiple',
-    appliesTo: 'transaction',
-    role: 'regular',
-    ledgerIds: null,
-    sortOrder: 1,
-    archived: false,
-    version: 1,
-  },
-  {
-    id: 'sb-trip-category',
-    name: '여행 구분',
-    selectionMode: 'single',
-    appliesTo: 'transaction',
-    role: 'regular',
-    ledgerIds: ['sb-trip'],
-    sortOrder: 2,
-    archived: false,
-    version: 1,
-  },
-  {
-    id: 'sb-old-category',
-    name: '이전 분류',
-    selectionMode: 'single',
-    appliesTo: 'transaction',
-    role: 'regular',
-    ledgerIds: null,
-    sortOrder: 3,
-    archived: true,
-    version: 1,
-  },
-  {
-    id: 'sb-asset-purpose',
-    name: '자산 목적',
-    selectionMode: 'multiple',
-    appliesTo: 'asset',
-    role: 'regular',
-    ledgerIds: null,
-    sortOrder: 4,
-    archived: false,
-    version: 1,
-  },
-];
-
-function tag(overrides: Partial<Tag> & Pick<Tag, 'id' | 'groupId' | 'name'>): Tag {
-  return {
-    color: '#64866f',
-    sortOrder: 0,
-    archived: false,
-    version: 1,
-    parentId: null,
-    ...overrides,
-  };
+// Self-check: a broken fixture fails loudly in every story instead of rendering wrong numbers.
+for (const item of records) {
+  const ledger = ledgers.find((candidate) => candidate.id === item.ledgerId);
+  const problems = ledger ? recordProblems(ledger, item) : ['없는 가계부'];
+  if (problems.length) throw new Error(`fixture ${item.id} ${item.title}: ${problems.join(', ')}`);
 }
 
-export const storyTags: Tag[] = [
-  tag({ id: 'sb-food', groupId: 'sb-category', name: '식비' }),
-  tag({ id: 'sb-transport', groupId: 'sb-category', name: '교통', color: '#7b91b0', sortOrder: 1 }),
-  tag({ id: 'sb-salary', groupId: 'sb-category', name: '급여', color: '#9b78a8', sortOrder: 2 }),
-  tag({ id: 'sb-family', groupId: 'sb-context', name: '가족' }),
-  tag({ id: 'sb-weekend', groupId: 'sb-context', name: '주말', color: '#c1956e', sortOrder: 1 }),
-  tag({
-    id: 'sb-family-meal',
-    groupId: 'sb-context',
-    name: '가족 식사',
-    parentId: 'sb-family',
-    sortOrder: 2,
-  }),
-  tag({
-    id: 'sb-retired-option',
-    groupId: 'sb-context',
-    name: '지난 행사',
-    archived: true,
-    sortOrder: 3,
-  }),
-  tag({ id: 'sb-lodging', groupId: 'sb-trip-category', name: '숙박', color: '#9b78a8' }),
-  tag({ id: 'sb-legacy', groupId: 'sb-old-category', name: '기존 기록', color: '#8d8d8d' }),
-  tag({ id: 'sb-reserve', groupId: 'sb-asset-purpose', name: '예비금' }),
-  tag({ id: 'sb-investment', groupId: 'sb-asset-purpose', name: '투자금', color: '#7b91b0' }),
+// Reactions: 준상 burst out laughing at 예디's pizza order and both said thanks; 예디 is proud of
+// 준상's savings.
+const reactTo = (title: string, createdBy: string, reactions: Reactions) => {
+  records.find(
+    (item) => item.ledgerId === 'nov' && item.title === title && item.createdBy === createdBy,
+  )!.reactions = reactions;
+};
+reactTo('프레드피자_쿠팡이츠', 'u2', { 'cracking-up': ['u1'], thanks: ['u2', 'u1'] });
+reactTo('청약저축', 'u1', { proud: ['u2'] });
+
+// Assets. 생활비 통장 follows 하반기 (11월·12월); the others are kept by hand. The second 청약저축
+// (예디's) went to her own account, so it stays out.
+export const assets: Asset[] = [
+  {
+    id: 'living',
+    name: '생활비 통장',
+    kind: 'cash',
+    balance: 2000000,
+    since: '2026-10-23',
+    ledgerIds: ['h2'],
+  },
+  {
+    id: 'housing',
+    name: '주택청약',
+    kind: 'savings',
+    balance: 3400000,
+    since: '2026-11-01',
+    ledgerIds: [],
+  },
+  {
+    id: 'stocks',
+    name: '주식 계좌',
+    kind: 'investment',
+    balance: 5000000,
+    since: '2026-10-01',
+    ledgerIds: [],
+  },
+  {
+    id: 'jeonse',
+    name: '전세대출',
+    kind: 'debt',
+    balance: 50000000,
+    since: '2026-01-01',
+    ledgerIds: [],
+  },
+];
+records.filter((item) => item.ledgerId === 'nov' && item.title === '청약저축')[1].notInAsset = true;
+
+// 대화 in 11월 between 준상 (u1) and 예디 (u2); times are UTC (09:05 KST = 00:05Z).
+export const messages: ChatMessage[] = [
+  {
+    id: 'm1',
+    ledgerId: 'nov',
+    authorId: 'u2',
+    text: '11월 고정지출 다 넣었어',
+    createdAt: '2026-11-01T00:05:00.000Z',
+    reactions: { thanks: ['u1'] },
+  },
+  {
+    id: 'm2',
+    ledgerId: 'nov',
+    authorId: 'u1',
+    sticker: 'thanks',
+    createdAt: '2026-11-01T00:07:00.000Z',
+  },
+  {
+    id: 'm3',
+    ledgerId: 'nov',
+    authorId: 'u1',
+    text: '피자는 내가 낼게',
+    createdAt: '2026-11-01T11:10:00.000Z',
+  },
+  {
+    id: 'm4',
+    ledgerId: 'nov',
+    authorId: 'u2',
+    sticker: 'cracking-up',
+    createdAt: '2026-11-01T11:11:00.000Z',
+  },
+  {
+    id: 'm5',
+    ledgerId: 'nov',
+    authorId: 'u2',
+    text: '코스트코 영수증은 내일 올릴게',
+    createdAt: '2026-11-01T23:30:00.000Z',
+  },
+  {
+    id: 'm6',
+    ledgerId: 'nov',
+    authorId: 'u2',
+    text: '주말에 같이 정리하자',
+    createdAt: '2026-11-01T23:30:40.000Z',
+  },
+  {
+    id: 'm7',
+    ledgerId: 'nov',
+    authorId: 'u2',
+    text: '영수증 사진도 같이 올릴게',
+    createdAt: '2026-11-01T23:32:10.000Z',
+  },
 ];
 
-function transaction(
-  overrides: Partial<Transaction> & Pick<Transaction, 'id' | 'description'>,
-): Transaction {
-  return {
-    ledgerId: 'sb-june',
-    date: '2026-06-12',
-    amount: 12000,
-    type: 'expense',
-    ownerId: 'shared',
-    paymentMethodId: null,
-    tagIds: [],
-    allocations: [],
-    version: 1,
-    updatedAt: '2026-06-12T12:00:00.000Z',
-    updatedBy: 'u1',
-    ...overrides,
-  };
-}
+// People. `me` is 준상; 일본여행 is shared with 예디, and 예미 has invited me to her ledger.
+export const me: Profile = { id: 'u1', handle: 'junsang', name: '준상', avatar: 'happy' };
+export const yedi: Profile = {
+  id: 'u2',
+  handle: 'yedi_kim',
+  name: '예디',
+  avatar: 'calm',
+  photo: samplePhoto,
+};
+export const yemi: Profile = { id: 'u3', handle: 'yemi22', name: '예미', avatar: 'surprise' };
+export const minho: Profile = { id: 'u4', handle: 'minho_park', name: '민호', avatar: 'sleep' };
+export const seoyeon: Profile = { id: 'u5', handle: 'seoyeon', name: '서연', avatar: 'happy' };
 
-export const storyTransactions: Transaction[] = [
-  transaction({ id: 'sb-lunch', description: '함께 먹은 점심', tagIds: ['sb-food', 'sb-family'] }),
-  transaction({
-    id: 'sb-bus',
-    description: '버스 이용',
-    amount: 3000,
-    ownerId: 'u2',
-    tagIds: ['sb-transport'],
-  }),
-  transaction({
-    id: 'sb-grocery',
-    description: '주말 장보기',
-    amount: 45000,
-    paymentMethodId: 'sb-card',
-    tagIds: ['sb-food', 'sb-weekend'],
-    updatedAt: '2026-06-13T12:00:00.000Z',
-  }),
-  transaction({
-    id: 'sb-income',
-    description: '예시 급여',
-    date: '2026-06-25',
-    amount: 2000000,
-    type: 'income',
-    ownerId: 'u1',
-    tagIds: ['sb-salary'],
-    updatedAt: '2026-06-25T12:00:00.000Z',
-  }),
-  transaction({
-    id: 'sb-hotel',
-    ledgerId: 'sb-trip',
-    description: '바다 여행 숙소 예약',
-    date: '2026-06-20',
-    amount: 100000,
-    tagIds: ['sb-lodging'],
-    updatedAt: '2026-06-20T12:00:00.000Z',
-  }),
+export const friends: Friend[] = [
+  { profile: yedi, status: 'friend' },
+  { profile: minho, status: 'friend' },
+  { profile: yemi, status: 'incoming' },
+  { profile: seoyeon, status: 'outgoing' },
 ];
 
-/** Returns independent objects so play interactions cannot mutate another story's state. */
-export function makeStoryBootstrap(overrides: Partial<Bootstrap> = {}): Bootstrap {
-  return structuredClone({
-    householdId: 'storybook-synthetic-household',
-    user: storyUsers[0],
-    users: storyUsers,
-    ledgers: storyLedgers,
-    transactions: storyTransactions,
-    assets: [],
-    paymentMethods: [
-      {
-        id: 'sb-card',
-        name: '예시 가족 카드',
-        type: 'card',
-        ownerId: 'shared',
-        closingDay: 20,
-        paymentDay: 10,
-      },
-    ],
-    tagGroups: storyTagGroups,
-    tags: storyTags,
-    assetOperations: [],
-    assetMovements: [],
-    plans: [],
-    revision: 1,
-    hierarchyVersion: 1,
-    mode: 'demo',
-    ...overrides,
-  } satisfies Bootstrap);
-}
+export const tripMembers: LedgerMember[] = [
+  { profile: me, role: 'owner' },
+  { profile: yedi, role: 'editor' },
+  { profile: minho, role: 'viewer', invited: true },
+];
+
+export const invites: RoomInvite[] = [
+  {
+    id: 'invite-jeju',
+    ledger: {
+      id: 'jeju',
+      name: '제주 여행',
+      icon: 'sprout',
+      period: { start: '2026-12-20', end: '2026-12-23' },
+    },
+    from: yemi,
+    role: 'editor',
+    sentAt: '2026-11-02T09:10:00+09:00',
+  },
+];
+
+export const signupLink: SignupLink = {
+  url: 'https://uga.example/j/K7xQ2mP9vR4tW8yZ',
+  expiresAt: '2026-12-02',
+  joined: 1,
+  limit: 20,
+};
+
+/**
+ * Records 11월's 반복 내역 wrote ahead, kept out of `records` so other stories keep their numbers:
+ * 통신비 not yet due (예정) and 도시가스 due with its amount unchecked (금액 확인).
+ */
+export const upcoming: LedgerRecord[] = [
+  {
+    ...record(n, '2026-11-15', 'fixed', '통신비', 55000, { pay: 'auto', cat: 'phone' }),
+    id: 'up-phone',
+    recurringId: 'rule-phone',
+  },
+  {
+    ...record(n, '2026-11-01', 'fixed', '도시가스', 38000, { pay: 'auto', cat: 'house' }),
+    id: 'up-gas',
+    recurringId: 'rule-gas',
+    unconfirmed: true,
+  },
+];

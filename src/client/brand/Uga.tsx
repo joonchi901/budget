@@ -1,22 +1,50 @@
 /** Assets from the reviewed Uga board. These images never alter stored ledger values. */
+import { UGA_ICON_NAMES, UGA_MOODS, UGA_REACTIONS } from './icon-names';
+
 type AssetProps = { size?: number; className?: string; alt?: string };
 
-export type UgaIconName =
-  | 'home'
-  | 'ledger'
-  | 'assets'
-  | 'payments'
-  | 'analytics'
-  | 'planning'
-  | 'tags'
-  | 'data'
-  | 'bone'
-  | 'bones'
-  | 'heart'
-  | 'star'
-  | 'sprout'
-  | 'meat'
-  | 'moneybag';
+export { UGA_ICON_NAMES, UGA_MOODS, UGA_REACTIONS };
+export type UgaMood = (typeof UGA_MOODS)[number];
+export type UgaIconName = (typeof UGA_ICON_NAMES)[number];
+export type UgaReactionId = (typeof UGA_REACTIONS)[number]['id'];
+// Icons and moods are stored per ledger or profile and may come from another member; only a
+// known name becomes an image path, so a stored "/../../api/..." cannot redirect the request.
+const known = <T extends string>(names: readonly T[], value: string, fallback: T): T =>
+  names.includes(value as T) ? (value as T) : fallback;
+
+const reactionIds: readonly string[] = UGA_REACTIONS.map((item) => item.id);
+const decorationIds: readonly string[] = UGA_REACTIONS.filter((item) => item.group === '장식').map(
+  (item) => item.id,
+);
+
+/**
+ * A reaction: a sticker from the 96px copies, or a decoration (128px); an unknown stored id draws
+ * nothing.
+ */
+export function UgaReaction({
+  id,
+  size = 20,
+  className = '',
+  alt = '',
+}: AssetProps & { id: string }) {
+  if (!reactionIds.includes(id)) return null;
+  return (
+    <img
+      className={`uga-reaction ${className}`.trim()}
+      src={
+        decorationIds.includes(id)
+          ? `/brand/reactions/decorations/uga-decor-${id}.png`
+          : `/brand/reactions/stickers-96/uga-sticker-${id}.png`
+      }
+      width={size}
+      height={size}
+      alt={alt}
+      loading="eager"
+      decoding="async"
+      draggable={false}
+    />
+  );
+}
 
 export type UgaPose =
   | 'representative'
@@ -39,7 +67,7 @@ export function UgaIcon({
   return (
     <img
       className={`uga-icon ${className}`.trim()}
-      src={`/brand/uga-icon-${name}.svg`}
+      src={`/brand/uga-icon-${known(UGA_ICON_NAMES, name, 'ledger')}.svg`}
       width={size}
       height={size}
       alt={alt}
@@ -77,11 +105,11 @@ export function UgaAvatar({
   size = 36,
   className = '',
   alt = '',
-}: AssetProps & { mood?: 'happy' | 'calm' | 'surprise' | 'sleep' }) {
+}: AssetProps & { mood?: UgaMood | string }) {
   return (
     <img
       className={`uga-avatar ${className}`.trim()}
-      src={`/brand/uga-avatar-${mood}.svg`}
+      src={`/brand/uga-avatar-${known(UGA_MOODS, mood, 'happy')}.svg`}
       width={size}
       height={size}
       alt={alt}
@@ -97,13 +125,21 @@ export function UgaLogo({
   size = 170,
   className = '',
   alt = '',
-}: AssetProps & { variant?: 'primary' | 'horizontal' }) {
+}: AssetProps & { variant?: 'primary' | 'horizontal' | 'mark' }) {
+  // The mark is the square app icon (the money bag, also the web icon), for tight spots such as
+  // the folded desktop rail.
   return (
     <img
       className={`uga-logo uga-logo-${variant} ${className}`.trim()}
-      src={`/brand/uga-logo-${variant}.svg`}
+      src={
+        variant === 'mark'
+          ? `/brand/uga-app-icon-moneybag-imagegen.svg`
+          : `/brand/uga-logo-${variant}.svg`
+      }
       width={size}
-      height={Math.round(size * (variant === 'primary' ? 667 / 480 : 240 / 520))}
+      height={Math.round(
+        size * (variant === 'mark' ? 1 : variant === 'primary' ? 667 / 480 : 240 / 520),
+      )}
       alt={alt}
       loading="eager"
       decoding="async"

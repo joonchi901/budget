@@ -1,0 +1,4 @@
+/* The app page itself; screens and templates style themselves. */
+body {
+  background: var(--brand-canvas);
+}

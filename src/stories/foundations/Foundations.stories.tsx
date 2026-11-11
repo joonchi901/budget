@@ -1,6 +1,15 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import tokens from '../../client/brand/tokens.css?raw';
-import { UgaIcon, UgaLogo, UgaMascot, UgaAvatar, type UgaIconName } from '../../client/brand/Uga';
+import {
+  UGA_REACTIONS,
+  UgaIcon,
+  UgaLogo,
+  UgaMascot,
+  UgaAvatar,
+  UgaReaction,
+  type UgaIconName,
+} from '../../client/brand/Uga';
+import reactionAssets from '../../../public/brand/reactions/manifest.json';
 import { Grid, Inline, Stack, Surface } from '../../client/ui';
 
 const declarations = [...tokens.matchAll(/(--brand-[\w-]+):\s*([^;]+);/g)].map((match) => ({
@@ -41,7 +50,7 @@ function Foundations() {
   );
 }
 const meta = {
-  title: '01 Foundations/Tokens',
+  title: '01 Foundations · 기초/Tokens',
   component: Foundations,
   parameters: {
     docs: {
@@ -129,6 +138,44 @@ export const BrandAssets: Story = {
         ))}
       </Inline>
       <p>장식 이미지는 빈 alt, 정보가 있는 이미지는 의미 있는 alt를 제공합니다.</p>
+    </Stack>
+  ),
+};
+
+const decorations = reactionAssets.assets.filter((asset) => asset.kind === 'decoration');
+export const ReactionAssets: Story = {
+  render: () => (
+    <Stack gap={6}>
+      <h1>반응 스티커와 장식</h1>
+      <p>
+        내역에 다는 반응과 대화에 보내는 것은 우가 스티커 30종(대화 12 · 감정 18)과 장식 23종입니다.
+        스티커 원본은 256px이고 96px로 줄인 사본을, 장식은 128px 원본을 22px(칩)·44px(고르기)로
+        씁니다.
+      </p>
+      {(['대화', '감정'] as const).map((group) => (
+        <section key={group}>
+          <h2>{group} 스티커</h2>
+          <Grid columns={4} tabletColumns={4} mobileColumns={3} gap={3}>
+            {UGA_REACTIONS.filter((item) => item.group === group).map((item) => (
+              <Stack key={item.id} gap={1}>
+                <UgaReaction id={item.id} size={44} />
+                <span>{item.label}</span>
+              </Stack>
+            ))}
+          </Grid>
+        </section>
+      ))}
+      <section>
+        <h2>장식</h2>
+        <Grid columns={4} tabletColumns={4} mobileColumns={3} gap={3}>
+          {decorations.map((asset) => (
+            <Stack key={asset.id} gap={1}>
+              <img src={asset.file} width={24} height={24} alt="" />
+              <span>{asset.label}</span>
+            </Stack>
+          ))}
+        </Grid>
+      </section>
     </Stack>
   ),
 };

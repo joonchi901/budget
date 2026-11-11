@@ -53,7 +53,13 @@ try {
         ['--url', url, '--maxWorkers', '2', '--failOnConsole', ...process.argv.slice(2)],
         {
           stdio: 'inherit',
-          env: { ...process.env, UI_TEST_WIDTH: String(width), STORYBOOK_DISABLE_TELEMETRY: '1' },
+          // Stories group messages by local day (KST in the fixtures); pin it so CI in UTC agrees.
+          env: {
+            ...process.env,
+            TZ: 'Asia/Seoul',
+            UI_TEST_WIDTH: String(width),
+            STORYBOOK_DISABLE_TELEMETRY: '1',
+          },
         },
       );
       child.once('error', reject);

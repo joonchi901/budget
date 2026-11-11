@@ -1,0 +1,246 @@
+/* Templates: page and sheet frames. App and Storybook load this same file. */
+
+.ui-screen {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  min-height: 100dvh;
+  margin: 0 auto;
+}
+.ui-screen-top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-3) var(--brand-space-4);
+  background: var(--brand-canvas);
+  box-shadow: 0 1px 0 var(--brand-line);
+}
+/* Views lay out by the body's width (`@container screen`), so a pane and a page agree. It also
+   anchors hidden screen-reader content (`.sr-only`), which would otherwise stretch the page past a
+   pane that scrolls on its own. */
+.ui-screen-body {
+  position: relative;
+  container: screen / inline-size;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-4);
+  min-width: 0;
+  padding: var(--brand-space-4);
+}
+/* Room for the tallest bottom bar (a 52px tab bar) so the last content is never covered. */
+.ui-screen[data-has-bottom] .ui-screen-body {
+  padding-bottom: calc(
+    52px + var(--brand-space-3) * 2 + var(--brand-space-4) + env(safe-area-inset-bottom)
+  );
+}
+.ui-screen-bottom {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  padding: var(--brand-space-3) var(--brand-space-4)
+    calc(var(--brand-space-3) + env(safe-area-inset-bottom));
+  background: var(--brand-surface-glass);
+  box-shadow: 0 -1px 0 var(--brand-line);
+}
+.ui-screen-bottom > * {
+  width: 100%;
+  max-width: 528px;
+}
+
+/* AppShell: phones show only the screen; from 1024px a side rail, a list pane and the screen. */
+.ui-shell-nav,
+.ui-shell-aside {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .ui-shell {
+    --ui-rail: 232px;
+    --ui-aside: 320px;
+    display: grid;
+    grid-template-columns: var(--ui-rail) minmax(0, 1fr);
+    height: 100dvh;
+    transition: grid-template-columns var(--brand-motion-normal) var(--brand-ease);
+  }
+  .ui-shell[data-rail='folded'] {
+    --ui-rail: 76px;
+  }
+  .ui-shell[data-has-aside] {
+    grid-template-columns: var(--ui-rail) var(--ui-aside) minmax(0, 1fr);
+  }
+  .ui-shell-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--brand-space-6);
+    padding: var(--brand-space-5) var(--brand-space-3);
+    overflow-y: auto;
+    background: var(--brand-surface);
+    box-shadow: 1px 0 0 var(--brand-line);
+  }
+  /* The list pane and the screen share the canvas without a rule between them; the gutter of
+     their paddings (16 + 24px) sets them apart. */
+  .ui-shell-aside {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .ui-shell-main {
+    min-width: 0;
+    overflow: hidden;
+  }
+  /* A screen fills its column: top, then its tabs, then a body that scrolls on its own. */
+  .ui-shell .ui-screen {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    max-width: none;
+    height: 100dvh;
+    min-height: 0;
+  }
+  /* Bodies scroll under nothing here, so tops and tab rows need no rule beneath them. */
+  .ui-shell .ui-screen-top {
+    grid-row: 1;
+    position: static;
+    padding: var(--brand-space-4) var(--brand-space-6);
+    box-shadow: none;
+  }
+  .ui-shell .ui-screen-bottom {
+    grid-row: 2;
+    position: static;
+    justify-content: flex-start;
+    padding: 0 var(--brand-space-6);
+    background: var(--brand-canvas);
+    box-shadow: none;
+  }
+  .ui-shell .ui-screen-bottom[data-kind='nav'] {
+    display: none;
+  }
+  /* A size container here, so a view can fill or pin to the visible height (cqh). */
+  .ui-shell .ui-screen-body,
+  .ui-shell .ui-screen[data-has-bottom] .ui-screen-body {
+    grid-row: 3;
+    container-type: size;
+    overflow-y: auto;
+    padding: var(--brand-space-4) var(--brand-space-6) var(--brand-space-6);
+  }
+  .ui-shell-aside .ui-screen-top,
+  .ui-shell-aside .ui-screen-body,
+  .ui-shell-aside .ui-screen[data-has-bottom] .ui-screen-body {
+    padding-inline: var(--brand-space-4);
+  }
+  /* Without a rule under the list's top, the list follows its search by the top's own 16px. */
+  .ui-shell-aside .ui-screen-body,
+  .ui-shell-aside .ui-screen[data-has-bottom] .ui-screen-body {
+    padding-top: 0;
+  }
+}
+@media (min-width: 1440px) {
+  .ui-shell {
+    --ui-aside: 360px;
+  }
+}
+/* The rail's top: the logo with 접기 at its right; folded, the mark that becomes 펼치기 under the
+   pointer or keyboard focus. Folded, the tabs keep icons only and their labels stay for screen
+   readers. */
+.ui-shell-nav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-2);
+  min-height: 52px;
+}
+.ui-shell[data-rail='folded'] .ui-shell-nav {
+  align-items: center;
+  padding-inline: var(--brand-space-2);
+}
+.ui-shell[data-rail='folded'] .ui-shell-nav-head {
+  justify-content: center;
+}
+.ui-shell-rail-icon,
+.ui-shell-rail-toggle:hover .ui-shell-mark,
+.ui-shell-rail-toggle:focus-visible .ui-shell-mark {
+  display: none;
+}
+.ui-shell-mark {
+  display: inline-flex;
+}
+.ui-shell-rail-toggle:hover .ui-shell-rail-icon,
+.ui-shell-rail-toggle:focus-visible .ui-shell-rail-icon {
+  display: block;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-shell {
+    transition: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .dialog.ui-sheet-full {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    border-radius: 0;
+  }
+  .dialog.ui-sheet-full .form-footer {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+  .dialog.ui-sheet-bottom {
+    width: 100%;
+    max-width: none;
+    max-height: 85dvh;
+    margin: auto 0 0;
+    border-radius: var(--brand-radius-dialog) var(--brand-radius-dialog) 0 0;
+  }
+}
+/* A rounded sheet keeps its scrollbar off the corners. */
+.dialog::-webkit-scrollbar-track {
+  margin-block: var(--brand-space-5);
+}
+
+/* From 1024px an entry sheet slides in from the right, keeping the page beside it in view. */
+@media (min-width: 1024px) {
+  .dialog.ui-sheet-full {
+    width: min(480px, 100%);
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0 0 0 auto;
+    border-width: 0 0 0 1px;
+    border-radius: var(--brand-radius-dialog) 0 0 var(--brand-radius-dialog);
+    animation: ui-drawer-in 200ms ease-out;
+  }
+}
+@keyframes ui-drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog.ui-sheet-full {
+    animation: none;
+  }
+}
+.dialog.ui-sheet-full .form-footer > .ui-button {
+  flex: 1;
+}
+
+/* StatusScreen: loading or a failed load, centered on the page. */
+.ui-status-screen {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: var(--brand-space-6) var(--brand-space-4);
+  text-align: center;
+}
+.ui-status-screen-busy,
+.ui-status-screen-failed {
+  align-items: center;
+}

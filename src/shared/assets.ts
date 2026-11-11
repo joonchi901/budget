@@ -1,146 +1,103 @@
-import type { Asset, AssetMovement, Bootstrap, OwnerId } from './types';
+import {
+  leafLedgers,
+  totals,
+  type Id,
+  type IsoDate,
+  type Ledger,
+  type LedgerRecord,
+} from './ledger';
 
-export interface AssetDetails {
-  /** Initial proves the asset did not exist before the date; observation does not. */
-  openingKind?: 'initial' | 'observation';
-  ownerId?: OwnerId;
-  institution?: string;
-  notes?: string;
-  principal?: number | null;
-  rate?: number | null;
-  rateType?: string;
-  paymentDay?: number | null;
-  monthlyPayment?: number | null;
-  term?: string;
-  endDate?: string | null;
-  repaymentMethod?: string;
-  conditions?: string;
-  fees?: string;
-  benefits?: string;
+export type AssetKind = 'cash' | 'savings' | 'investment' | 'debt';
+export const ASSET_KINDS: { value: AssetKind; label: string }[] = [
+  { value: 'cash', label: '현금·통장' },
+  { value: 'savings', label: '저축·청약' },
+  { value: 'investment', label: '투자' },
+  { value: 'debt', label: '부채' },
+];
+
+/**
+ * Something the user owns or owes. `balance` is what it held on `since`; records from the linked
+ * ledgers (and their children) dated from then on move it, unless a record is kept out.
+ * A 부채 holds what is still owed, so a repayment (an expense) lowers it.
+ */
+export type Asset = {
+  id: Id;
+  name: string;
+  kind: AssetKind;
+  balance: number;
+  since: IsoDate;
+  ledgerIds: Id[];
+};
+
+/** Ledgers holding records whose money an asset follows: each linked ledger's leaves. */
+export function coveredLedgerIds(asset: Asset, ledgers: Ledger[]): Set<Id> {
+  return new Set(
+    asset.ledgerIds.flatMap((id) => {
+      const ledger = ledgers.find((item) => item.id === id);
+      return ledger ? leafLedgers(ledgers, ledger).map((leaf) => leaf.id) : [];
+    }),
+  );
 }
 
-export const assetDetailTextFields = [
-  'institution',
-  'notes',
-  'rateType',
-  'term',
-  'repaymentMethod',
-  'conditions',
-  'fees',
-  'benefits',
-] as const;
+/** The asset a ledger's records go to, if any. One ledger never feeds two assets. */
+export const assetFor = (assets: Asset[], ledgers: Ledger[], ledgerId: Id) =>
+  assets.find((asset) => coveredLedgerIds(asset, ledgers).has(ledgerId));
 
-/** Null means there is no confirmed baseline for the requested date. */
-export function assetBalanceAt(
+/** Records that move an asset: from its linked ledgers, dated from its 기준일, not kept out. */
+export function assetRecords(asset: Asset, ledgers: Ledger[], records: LedgerRecord[]) {
+  const covered = coveredLedgerIds(asset, ledgers);
+  return records.filter(
+    (record) => covered.has(record.ledgerId) && record.date >= asset.since && !record.notInAsset,
+  );
+}
+
+/** What the asset holds now: its starting balance plus income minus expense reflected since then. */
+export const assetBalance = (asset: Asset, ledgers: Ledger[], records: LedgerRecord[]) =>
+  asset.balance + totals(assetRecords(asset, ledgers, records), ledgers).balance;
+
+export type AssetMonth = { month: string; income: number; expense: number; balance: number };
+
+/** Each month the asset moved, newest first: what came in, what went out, the balance at its end. */
+export function assetMonths(
   asset: Asset,
-  movements: AssetMovement[],
-  asOf: string,
-): number | null {
-  if (!asset.openingDate) return null;
-  if (asOf < asset.openingDate) return asset.details?.openingKind === 'observation' ? null : 0;
-  const seen = new Set<string>();
-  return movements.reduce((balance, movement) => {
-    if (movement.assetId !== asset.id || movement.date > asOf || seen.has(movement.id))
-      return balance;
-    seen.add(movement.id);
-    return balance + movement.amount;
-  }, asset.openingBalance);
+  ledgers: Ledger[],
+  records: LedgerRecord[],
+): AssetMonth[] {
+  const moved = assetRecords(asset, ledgers, records);
+  let balance = asset.balance;
+  return [...new Set(moved.map((record) => record.date.slice(0, 7)))]
+    .sort()
+    .map((month) => {
+      const sum = totals(
+        moved.filter((record) => record.date.startsWith(month)),
+        ledgers,
+      );
+      balance += sum.balance;
+      return { month, income: sum.income, expense: sum.expense, balance };
+    })
+    .reverse();
 }
 
-export function monthEndDate(month: string): string {
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new RangeError('조회 월을 확인해 주세요.');
-  const [year, m] = month.split('-').map(Number);
-  const last =
-    m === 2
-      ? year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
-        ? 29
-        : 28
-      : [4, 6, 9, 11].includes(m)
-        ? 30
-        : 31;
-  return `${month}-${last}`;
-}
-
-function summarizeAssetRows<Row extends { asset: Asset; balance: number | null }>(rows: Row[]) {
-  const unknown = rows.filter((row) => row.balance === null).map((row) => row.asset.id);
-  const sum = (kind: Asset['kind']) =>
-    rows
-      .filter((row) => row.asset.kind === kind)
-      .reduce((amount, row) => amount + (row.balance ?? 0), 0);
-  const knownAssets = sum('asset');
-  const knownDebt = sum('liability');
-  return {
-    rows,
-    unknown,
-    knownCount: rows.length - unknown.length,
-    knownAssets,
-    knownDebt,
-    assets: rows.some((row) => row.asset.kind === 'asset' && row.balance === null)
-      ? null
-      : knownAssets,
-    debt: rows.some((row) => row.asset.kind === 'liability' && row.balance === null)
-      ? null
-      : knownDebt,
-    net: unknown.length ? null : knownAssets - knownDebt,
-  };
-}
-
-export function assetSummaryAt(data: Pick<Bootstrap, 'assets' | 'assetMovements'>, asOf: string) {
-  return summarizeAssetRows(
-    data.assets.map((asset) => ({
-      asset,
-      balance: assetBalanceAt(asset, data.assetMovements, asOf),
-    })),
+/** Assets minus debts. */
+export const netWorth = (assets: Asset[], ledgers: Ledger[], records: LedgerRecord[]) =>
+  assets.reduce(
+    (sum, asset) => sum + (asset.kind === 'debt' ? -1 : 1) * assetBalance(asset, ledgers, records),
+    0,
   );
-}
 
-/** Latest registered balances include all effects, independently of the selected month. */
-export function assetLatestSummary(data: Pick<Bootstrap, 'assets' | 'assetMovements'>) {
-  return summarizeAssetRows(
-    data.assets.map((asset) => ({
-      asset,
-      // Imported management-only entries have a zero placeholder, not a confirmed balance.
-      balance: asset.openingDate ? asset.balance : null,
-      latestDate: data.assetMovements.reduce<string | null>(
-        (latest, movement) =>
-          movement.assetId === asset.id && (!latest || movement.date > latest)
-            ? movement.date
-            : latest,
-        asset.openingDate ?? null,
-      ),
-    })),
-  );
-}
-
-export function assetYearHistory(data: Pick<Bootstrap, 'assets' | 'assetMovements'>, year: string) {
-  return Array.from({ length: 12 }, (_, i) => {
-    const month = `${year}-${String(i + 1).padStart(2, '0')}`;
-    return { month, ...assetSummaryAt(data, monthEndDate(month)) };
-  });
-}
-
-/** An asset with multiple options contributes to each option, not twice to the overall total. */
-export function assetTagSubtotals(data: Bootstrap, groupId: string, asOf: string) {
-  const options = data.tags.filter((tag) => tag.groupId === groupId);
-  const tagged = new Set(options.map((tag) => tag.id));
-  return [
-    ...options.map((tag) => ({
-      id: tag.id,
-      name: tag.name,
-      color: tag.color,
-      assets: data.assets.filter((asset) => asset.tagIds.includes(tag.id)),
-    })),
-    {
-      id: '',
-      name: '미분류',
-      color: '#92998c',
-      assets: data.assets.filter((asset) => !asset.tagIds.some((id) => tagged.has(id))),
-    },
-  ].map((row) => ({
-    ...row,
-    ...(asOf === 'latest'
-      ? assetLatestSummary({ assets: row.assets, assetMovements: data.assetMovements })
-      : assetSummaryAt({ assets: row.assets, assetMovements: data.assetMovements }, asOf)),
-    count: row.assets.length,
-  }));
+/** Reasons an asset cannot be saved next to the user's other assets; empty when valid. */
+export function assetProblems(asset: Asset, others: Asset[], ledgers: Ledger[]): string[] {
+  const problems: string[] = [];
+  if (!asset.name.trim()) problems.push('이름');
+  if (!Number.isSafeInteger(asset.balance)) problems.push('시작 잔액');
+  const covered = coveredLedgerIds(asset, ledgers);
+  if (
+    others.some(
+      (other) =>
+        other.id !== asset.id &&
+        [...coveredLedgerIds(other, ledgers)].some((id) => covered.has(id)),
+    )
+  )
+    problems.push('다른 자산에 이미 연동된 가계부');
+  return problems;
 }

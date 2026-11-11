@@ -19,7 +19,11 @@ function Guide() {
       <Surface padding={5}>
         <Stack gap={3}>
           <h2>구성 순서</h2>
-          <p>기초 규칙 → 기본 컴포넌트 → 배치 → 화면 패턴 → 도메인 → 앱의 데이터·라우팅 연결</p>
+          <p>
+            Foundations(기초) → Atoms(원자) → Molecules(분자) → Organisms(유기체) →
+            Templates(템플릿) → Views(화면) → 앱의 데이터·라우팅 연결. 아래 단계는 위 단계를
+            가져오지 않습니다.
+          </p>
           <p>
             세로 흐름은 Stack, 가로 흐름은 Inline, 같은 너비의 카드는 Grid로 조립합니다. 달력과
             데이터 표는 정보 구조에 맞는 전용 배치를 유지합니다.
@@ -59,12 +63,8 @@ function Guide() {
         <Stack gap={3}>
           <h2>데이터 경계</h2>
           <p>
-            여기에는 합성 예시만 있습니다. 로그인·실제 금융 데이터·운영 API 연결은 없습니다. 서버에
-            저장하는 동작과 공동 편집은 별도의 앱 E2E로 검증합니다.
-          </p>
-          <p>
-            모든 기존 화면이 공통 컴포넌트로 전환된 것은 아닙니다. 아래 적용 현황을 기준으로 실제
-            사용과 남은 작업을 구분합니다.
+            여기에는 합성 예시만 있습니다. 로그인·실제 금융 데이터·서버 API 연결은 없습니다. 앱
+            화면은 핵심 UX부터 다시 설계하며, 새 화면은 이 명세의 공통 요소로 조립합니다.
           </p>
         </Stack>
       </Surface>
@@ -94,13 +94,13 @@ function Guide() {
   );
 }
 const meta = {
-  title: '00 Guide/시작하기',
+  title: '00 Guide · 안내/시작하기',
   component: Guide,
   parameters: {
     docs: {
       description: {
         component:
-          'src/stories/catalog.json이 적용 현황의 기준입니다. 실제 공유 / 부분 적용 / 조립 준비 / 전환 대기를 분리해 관리합니다.',
+          'src/stories/catalog.json이 적용 현황의 기준입니다. 공통 요소를 등록하고, 새 화면의 원시 입력 요소 재도입을 CI에서 검사합니다.',
       },
     },
   },

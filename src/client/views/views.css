@@ -1,0 +1,346 @@
+/* Views: page-level arrangement only; components keep their own styles. */
+
+/* Anchored from the top, not centered, so Google로 계속하기 stays put when an error shows below it. */
+.view-login {
+  display: grid;
+  place-items: start center;
+  padding-top: clamp(48px, 16dvh, 160px);
+  min-height: 100dvh;
+  padding: var(--brand-space-6) var(--brand-space-4);
+  text-align: center;
+}
+.view-login-card {
+  align-items: center;
+  width: 100%;
+  max-width: 360px;
+}
+.view-login-card > .ui-button {
+  width: 100%;
+}
+/* Two lines either way, so the invited message does not move the button either. */
+.view-login-card > .muted {
+  min-height: calc(2 * 1.5em);
+}
+.view-login h1 {
+  line-height: 0;
+}
+.view-error {
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border-radius: var(--brand-radius-control);
+  background: var(--brand-danger-soft);
+  color: var(--brand-danger);
+  font-size: var(--brand-font-size-sm);
+}
+.view-home-title {
+  line-height: 0;
+}
+.view-home-label {
+  display: none;
+}
+.ui-shell-aside .view-home-title {
+  font-size: var(--brand-font-size-md);
+  line-height: var(--brand-line-height-tight);
+}
+.ui-shell-aside .view-home-title > :not(.view-home-label) {
+  display: none;
+}
+.ui-shell-aside .view-home-label {
+  display: inline;
+}
+/* Desktop's room pane before a room is picked. */
+.view-pane-empty {
+  justify-content: center;
+  align-items: center;
+}
+.view-month-title {
+  font-size: var(--brand-font-size-md);
+}
+.view-danger.ui-button {
+  color: var(--brand-danger);
+}
+.view-icon-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+/* People and account screens. */
+.view-signup {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: var(--brand-space-8) var(--brand-space-4) var(--brand-space-6);
+}
+.view-signup h1 {
+  font-size: var(--brand-font-size-title);
+}
+.view-signup > .ui-stack > .ui-button {
+  width: 100%;
+}
+.view-note {
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border-radius: var(--brand-radius-control);
+  background: var(--brand-success-soft);
+  color: var(--brand-success);
+  font-size: var(--brand-font-size-sm);
+}
+.view-meta {
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-sm);
+}
+.view-check {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+.view-page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+.view-page-header h1 {
+  font-size: var(--brand-font-size-section);
+}
+/* A text action (자산 추가) sits at the right; a back button stays before the title. */
+.view-page-header > .ui-button:not(.ui-icon-button) {
+  margin-inline-start: auto;
+}
+.view-find > .ui-text-field {
+  flex: 1;
+}
+.view-actions > .ui-button {
+  flex: 1;
+}
+
+/* The room's 내역: phones show 표 or 캘린더 as chosen, the calendar filling the screen. A wide
+   body chooses 캘린더 (the calendar pinned left of the records) or 테이블 (the table alone). */
+.view-records {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-4);
+  min-width: 0;
+}
+.view-records-list,
+.view-records-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+  min-width: 0;
+}
+.view-records-calendar {
+  flex: 1;
+}
+.view-records[data-display='list'] > .view-records-calendar,
+.view-records[data-display='calendar'] > .view-records-list {
+  display: none;
+}
+/* A desktop body shows both at once and gives them its whole height, the records scrolling on
+   their own and the calendar's days growing to fill it: side by side when the body is wide, the
+   calendar over the records when it is tall (a portrait monitor). Smaller bodies switch between
+   them as phones do. The desktop body is a size container, so these read its height too. */
+@container screen ((min-width: 720px) and (orientation: landscape)) or ((min-width: 480px) and (min-height: 800px) and (orientation: portrait)) {
+  .view-records {
+    display: grid;
+  }
+  .view-records[data-display] > .view-records-list,
+  .view-records[data-display] > .view-records-calendar {
+    display: flex;
+  }
+  .view-records-calendar .ledger-calendar-grid {
+    grid-auto-rows: minmax(48px, 1fr);
+  }
+  /* 테이블 (넓게 보기) gives the table the whole body, without the calendar. */
+  .view-records[data-wide] {
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  }
+  .view-records[data-wide] > .view-records-calendar {
+    display: none;
+  }
+  /* The 캘린더/테이블 toggle replaces the phone's icons and the panel's 넓게 보기 switch. */
+  .ledger-filter-row > .ledger-display-toggle,
+  .ledger-filter-panel > .ledger-wide-switch {
+    display: none;
+  }
+  .ledger-filter-row > .ledger-layout-toggle {
+    display: flex;
+  }
+  /* The toggle already shows 테이블; 조회 조건 lights up for conditions only. */
+  .ledger-filter-row > .ui-icon-button[data-wide]:not([data-active]) {
+    border-color: var(--brand-line);
+    color: var(--brand-muted);
+  }
+}
+@container screen (min-width: 720px) and (orientation: landscape) {
+  .view-records {
+    grid-template-columns: minmax(340px, 6fr) minmax(360px, 5fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+}
+@container screen (min-width: 480px) and (min-height: 800px) and (orientation: portrait) {
+  .view-records {
+    grid-template-rows: minmax(0, 9fr) minmax(0, 11fr);
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* On any desktop body only the records scroll: the search, the toggle and the calendar stay put,
+   whether the two show together or one at a time. */
+@media (min-width: 1024px) {
+  .ui-shell .view-records {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .ui-shell .view-records-list,
+  .ui-shell .view-records-calendar {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+/* The room's 내역 추가 and 설정's 저장: full width, kept just above the tab bar while the page
+   scrolls. */
+.view-add-record.ui-button,
+.view-sticky-action.ui-button {
+  position: sticky;
+  bottom: calc(52px + var(--brand-space-3) * 3 + env(safe-area-inset-bottom));
+  z-index: 4;
+  width: 100%;
+  box-shadow: var(--brand-shadow-raised);
+}
+/* 시작일·종료일 side by side while each shows its whole date, stacked on narrow phones. */
+.view-period.ui-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.view-archived > summary {
+  padding: var(--brand-space-2) 0;
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-sm);
+  font-weight: var(--brand-font-weight-semibold);
+  cursor: pointer;
+}
+.view-archived > .ui-list {
+  margin-top: var(--brand-space-2);
+}
+/* Fields that turn off together for someone who may only read (설정 for a member, a record for
+   a viewer). It lays them out as the Stack around it would. */
+.view-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.view-fieldset > * {
+  min-width: 0;
+}
+/* Desktop pages: forms keep a readable width while 대화 spans the pane; 내역 추가 moves to the
+   title bar and pinned buttons sit at the bottom edge, with no tab bar under them. */
+@media (min-width: 1024px) {
+  .ui-shell-main .view-form,
+  .ui-shell-main .view-settings {
+    width: 100%;
+    max-width: 720px;
+  }
+  .ui-shell .view-add-record.ui-button {
+    display: none;
+  }
+  .ui-shell .view-sticky-action.ui-button {
+    bottom: 0;
+  }
+  /* Without a tab bar under it, the composer is the pane's bottom edge. Sticky stops at the
+     pane's padding, so its offset takes that back too. */
+  .ui-shell .view-chat .ledger-chat-composer {
+    bottom: calc(-1 * var(--brand-space-6));
+    margin: 0 calc(-1 * var(--brand-space-6)) calc(-1 * var(--brand-space-6));
+    padding: var(--brand-space-3) var(--brand-space-6);
+  }
+  /* An empty state's action sits under it instead of spanning the page. */
+  .ui-shell-main .empty ~ .ui-button {
+    align-self: center;
+  }
+  /* The narrow list pane keeps each row to its title and one line. */
+  .ui-shell-aside .ui-list-row-description {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+/* 자산: overview and analysis side by side when there is room. */
+.view-assets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-6);
+}
+@container screen (min-width: 840px) {
+  .view-assets {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.view-section-title {
+  font-size: var(--brand-font-size-md);
+}
+
+/* 대화: the composer sits at the bottom even with few messages (the room's top and tab bar take
+   about 260px), and stays just above the tab bar while the messages scroll. */
+/* 대화 fills the screen; its composer is the screen's bottom edge, full width, just above the tab
+   bar (the body's padding for the bar is taken back), and stays there while messages scroll. */
+.view-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.view-chat > .ledger-chat {
+  flex: 1;
+}
+.view-chat .ledger-chat-composer {
+  position: sticky;
+  bottom: calc(52px + var(--brand-space-3) * 2 + env(safe-area-inset-bottom));
+  z-index: 4;
+  margin: 0 calc(-1 * var(--brand-space-4)) calc(-1 * var(--brand-space-4));
+  padding: var(--brand-space-2) var(--brand-space-4);
+  background: var(--brand-surface);
+  box-shadow: 0 -1px 0 var(--brand-line);
+}
+
+/* 통계: a toolbar over the charts (조건 summary, 내역 보기, 편집), then the charts, two to a row on
+   a wide body with 넓게 charts across both. */
+.view-stats-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--brand-space-2);
+}
+.view-stats-toolbar > .view-meta {
+  flex: 1 1 200px;
+  margin: 0;
+}
+.view-stat-board {
+  display: grid;
+  gap: var(--brand-space-4);
+}
+.view-stat-card-actions > .ui-icon-button {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+}
+.view-stat-add.ui-button {
+  width: 100%;
+  border-style: dashed;
+}
+@container screen (min-width: 720px) {
+  .view-stat-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .view-stat-board > [data-wide] {
+    grid-column: 1 / -1;
+  }
+}

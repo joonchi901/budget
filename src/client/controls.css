@@ -190,43 +190,6 @@ button.select-option:focus-visible {
 .form-body .ui-control-trigger {
   min-height: 50px;
 }
-.month-picker > label {
-  min-width: 0;
-}
-.month-picker .date-field {
-  width: 178px;
-}
-.month-picker .ui-control-trigger {
-  background: transparent;
-  border: 0;
-  min-height: 44px;
-  padding: 8px 6px;
-  justify-content: center;
-  white-space: nowrap;
-}
-.month-picker .ui-control-trigger[aria-expanded='true'] {
-  box-shadow: none;
-  color: var(--blue-strong);
-}
-.ledger-scope-select .ui-field {
-  width: min(100%, 255px);
-}
-.ledger-scope-select .ui-control-trigger {
-  min-height: 40px;
-  font-size: 0.8125rem;
-  padding-block: 8px;
-}
-.categories-panel .ui-field,
-.asset-history-toolbar .ui-field {
-  min-width: 0;
-}
-.panel-title > .ui-field {
-  width: min(240px, 100%);
-  flex-shrink: 0;
-}
-.panel-title:has(> .ui-field) > h2 {
-  word-break: keep-all;
-}
 .ui-field :disabled {
   cursor: not-allowed;
 }
@@ -367,10 +330,6 @@ details > summary:has(> svg.lucide-chevron-down)::after {
   min-width: 0;
 }
 @media (max-width: 760px) {
-  .panel-title:has(> .ui-field) {
-    flex-wrap: wrap;
-    gap: 12px;
-  }
   button.ui-control-trigger {
     font-size: 0.9375rem;
   }

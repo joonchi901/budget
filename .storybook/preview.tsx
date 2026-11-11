@@ -2,32 +2,19 @@ import type { Preview } from '@storybook/react-vite';
 import '../src/client/app-styles.css';
 import './preview.css';
 
-// Prevent accidental writes when exploring a component which can also call an API.
-// Storybook's own asset/module requests are unaffected; no production app is mounted.
-const originalFetch = globalThis.fetch.bind(globalThis);
-globalThis.fetch = (input, init) => {
-  const url = new URL(input instanceof Request ? input.url : String(input), location.href);
-  if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
-    return Promise.resolve(
-      new Response(
-        JSON.stringify({
-          error: { code: 'STORYBOOK_OFFLINE', message: 'UI 명세에서는 서버에 저장하지 않아요.' },
-        }),
-        { status: 503, headers: { 'Content-Type': 'application/json' } },
-      ),
-    );
-  }
-  return originalFetch(input, init);
-};
-
 const preview: Preview = {
   tags: ['autodocs'],
   decorators: [
-    (Story) => (
-      <main className="ui-spec-canvas">
-        <Story />
-      </main>
-    ),
+    (Story, context) =>
+      context.parameters.ownsMain ? (
+        <div className="ui-spec-canvas">
+          <Story />
+        </div>
+      ) : (
+        <main className="ui-spec-canvas">
+          <Story />
+        </main>
+      ),
   ],
   parameters: {
     layout: 'fullscreen',
@@ -60,12 +47,13 @@ const preview: Preview = {
     options: {
       storySort: {
         order: [
-          '00 Guide',
-          '01 Foundations',
-          '02 Components',
-          '03 Layout',
-          '04 Patterns',
-          '05 Domain',
+          '00 Guide · 안내',
+          '01 Foundations · 기초',
+          '02 Atoms · 원자',
+          '03 Molecules · 분자',
+          '04 Organisms · 유기체',
+          '05 Templates · 템플릿',
+          '06 Views · 화면',
         ],
       },
     },

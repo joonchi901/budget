@@ -1,43 +1,21 @@
+// Local development only: the API Worker and a local D1. Production config comes with Google login.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "our-budget",
   "main": "src/server/index.ts",
   "compatibility_date": "2026-09-16",
-  "compatibility_flags": ["nodejs_compat"],
-  "assets": {
-    "directory": "./dist",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"],
-  },
+  // Prunes the sync log daily at 03:17 KST (docs/sync-plan.md §3.8).
+  "triggers": { "crons": ["17 18 * * *"] },
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "budget-local",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_name": "budget-dev",
+      "database_id": "00000000-0000-0000-0000-000000000002",
       "migrations_dir": "migrations",
     },
   ],
-  "durable_objects": { "bindings": [{ "name": "COLLABORATION", "class_name": "HouseholdRoom" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HouseholdRoom"] }],
-  "env": {
-    "production": {
-      "name": "our-budget-production",
-      "account_id": "ea8edaa239f697f86347131b03db228b",
-      "workers_dev": true,
-      "preview_urls": false,
-      "vars": { "DEMO_MODE": "false" },
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "budget-production",
-          "database_id": "700713f0-f352-463f-aea1-a05336091a66",
-          "migrations_dir": "migrations",
-        },
-      ],
-      "durable_objects": {
-        "bindings": [{ "name": "COLLABORATION", "class_name": "HouseholdRoom" }],
-      },
-    },
-  },
+  // A room per ledger that signals its members' sockets (docs/sync-plan.md §5). The free plan
+  // takes SQLite-backed classes only; the room stores nothing.
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Room" }] },
+  "migrations": [{ "tag": "room-v1", "new_sqlite_classes": ["Room"] }],
 }

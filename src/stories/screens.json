@@ -1,0 +1,57 @@
+[
+  {
+    "name": "로그인",
+    "source": "src/client/views/LoginView.tsx",
+    "story": "src/stories/views/Login.stories.tsx"
+  },
+  {
+    "name": "방 목록",
+    "source": "src/client/views/RoomListView.tsx",
+    "story": "src/stories/views/RoomList.stories.tsx"
+  },
+  {
+    "name": "가계부 방",
+    "source": "src/client/views/RoomViews.tsx",
+    "story": "src/stories/views/LedgerRoom.stories.tsx"
+  },
+  {
+    "name": "내역 입력",
+    "source": "src/client/views/RecordEntryView.tsx",
+    "story": "src/stories/views/RecordEntry.stories.tsx"
+  },
+  {
+    "name": "가계부 만들기·설정",
+    "source": "src/client/views/SetupViews.tsx",
+    "story": "src/stories/views/Setup.stories.tsx"
+  },
+  {
+    "name": "가입",
+    "source": "src/client/views/SignupView.tsx",
+    "story": "src/stories/views/Signup.stories.tsx"
+  },
+  {
+    "name": "친구·가입 초대 링크",
+    "source": "src/client/views/FriendsView.tsx",
+    "story": "src/stories/views/Friends.stories.tsx"
+  },
+  {
+    "name": "멤버·받은 초대",
+    "source": "src/client/views/SharingViews.tsx",
+    "story": "src/stories/views/Sharing.stories.tsx"
+  },
+  {
+    "name": "프로필·탈퇴",
+    "source": "src/client/views/AccountViews.tsx",
+    "story": "src/stories/views/Account.stories.tsx"
+  },
+  {
+    "name": "앱 설정",
+    "source": "src/client/views/AppSettingsView.tsx",
+    "story": "src/stories/views/AppSettings.stories.tsx"
+  },
+  {
+    "name": "자산·자산 관리",
+    "source": "src/client/views/AssetsView.tsx",
+    "story": "src/stories/views/Assets.stories.tsx"
+  }
+]

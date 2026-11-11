@@ -1,0 +1,313 @@
+/* Molecules: compositions of atoms. App and Storybook load this same file. */
+
+.ui-amount-input {
+  display: flex;
+  align-items: baseline;
+  gap: var(--brand-space-1);
+  min-width: 0;
+  padding: var(--brand-space-2) var(--brand-space-4);
+  border: 1px solid var(--brand-line);
+  border-radius: var(--brand-radius-control);
+  background: var(--brand-surface-subtle);
+}
+/* :focus too, so form-wide focus fills never paint a box inside the rounded field. */
+.ui-amount-input > input,
+.ui-amount-input > input:focus {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand-text);
+  font-size: var(--brand-font-size-amount);
+  font-weight: var(--brand-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--brand-line-height-tight);
+  text-align: right;
+}
+/* The ring goes on the rounded box, like every other field, not on the bare input inside. */
+.ui-amount-input:focus-within {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+.ui-amount-input > input:focus-visible {
+  outline: none;
+}
+.ui-amount-input-unit {
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-section);
+  font-weight: var(--brand-font-weight-medium);
+}
+
+.ui-search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.ui-search-field > svg {
+  position: absolute;
+  left: 14px;
+  color: var(--brand-muted);
+  pointer-events: none;
+}
+.ui-search-field > .ui-input {
+  width: 100%;
+  min-height: var(--brand-field-size);
+  padding-left: 42px;
+  padding-right: 48px;
+}
+.ui-search-field > .ui-icon-button {
+  position: absolute;
+  right: 2px;
+}
+
+.ui-filter-chip.ui-button,
+.ui-chip.ui-button {
+  min-height: 40px;
+  padding: 0 var(--brand-space-3);
+  gap: 6px;
+  border: 1px solid var(--brand-line-strong);
+  border-radius: var(--brand-radius-pill);
+  background: var(--brand-surface);
+  color: var(--brand-text);
+  font-size: var(--brand-font-size-sm);
+  font-weight: var(--brand-font-weight-medium);
+}
+.ui-filter-chip.ui-button {
+  padding-right: var(--brand-space-2);
+}
+.ui-filter-chip.ui-button:hover,
+.ui-chip.ui-button:not([aria-pressed='true']):hover:not(:disabled) {
+  background: var(--brand-surface-hover);
+}
+
+.ui-chip-select {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ui-chip-select > legend {
+  margin-bottom: var(--brand-space-2);
+  padding: 0;
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-sm);
+  font-weight: var(--brand-font-weight-semibold);
+}
+.ui-chip-select-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2);
+}
+.ui-chip.ui-button {
+  border-color: var(--brand-line);
+}
+.ui-chip.ui-button[aria-pressed='true'] {
+  border-color: transparent;
+  font-weight: var(--brand-font-weight-semibold);
+}
+.ui-chip.ui-button > small {
+  font-size: var(--brand-font-size-xs);
+  font-weight: var(--brand-font-weight-regular);
+}
+.ui-chip-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ui-chip-color);
+  box-shadow: inset 0 0 0 1px #382b231a;
+}
+.ui-chip-add.ui-button {
+  border-style: dashed;
+  border-color: var(--brand-line-strong);
+  color: var(--brand-text-secondary);
+}
+.ui-chip-new {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+.ui-chip-new .color-field-trigger {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--brand-radius-pill);
+}
+.ui-chip-select .ui-chip-input {
+  width: 10em;
+  min-height: 40px;
+  padding: 0 var(--brand-space-3);
+  border-radius: var(--brand-radius-pill);
+}
+
+.ui-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ui-menu-item.ui-button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: var(--brand-control-size);
+  padding: 10px 12px;
+  gap: var(--brand-space-3);
+  border-radius: var(--brand-radius-sm);
+  color: var(--brand-text);
+  font-size: var(--brand-font-size-body);
+  text-align: left;
+}
+.ui-menu-item.ui-button:hover:not(:disabled),
+.ui-menu-item.ui-button:focus-visible {
+  background: var(--brand-surface-muted);
+}
+.ui-menu-item.ui-button:focus-visible {
+  outline-width: 2px;
+  outline-offset: -2px;
+}
+.ui-menu-item.ui-button[data-tone='danger'] {
+  color: var(--brand-danger);
+}
+
+.ui-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--brand-radius-card);
+  background: var(--brand-surface);
+  overflow: hidden;
+}
+.ui-list-item {
+  position: relative;
+}
+.ui-list-item + .ui-list-item {
+  border-top: 1px solid var(--brand-line);
+}
+.ui-list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  color: var(--brand-text);
+  text-align: left;
+}
+.ui-list-row.ui-button {
+  justify-content: flex-start;
+  border-radius: 0;
+}
+/* A row lights up as one, footer (reactions, a ledger link) included, wherever the pointer is. */
+.ui-list-row.ui-button:hover,
+.ui-list-item:has(> .ui-list-row.ui-button):hover {
+  background: var(--brand-surface-hover);
+}
+/* The whole item is the row: its focus ring and selection cover the footer too. */
+.ui-list-row.ui-button:focus-visible {
+  outline: none;
+}
+.ui-list-item:has(> .ui-list-row.ui-button:focus-visible) {
+  outline: var(--brand-focus-width) solid var(--focus-ring);
+  outline-offset: calc(var(--brand-focus-width) * -1);
+}
+.ui-list-row[aria-current],
+.ui-list-item:has(> .ui-list-row[aria-current]) {
+  background: var(--brand-surface-subtle);
+}
+.ui-list-row-leading {
+  display: inline-flex;
+  flex: none;
+}
+.ui-list-row-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+/* A footer (reactions, a ledger link) belongs to the row: the row's button stretches over the
+   whole item, so a tap anywhere opens it, and the footer's own buttons sit on top. */
+.ui-list-row-footer {
+  margin-top: calc(-1 * var(--brand-space-2));
+  padding: 0 var(--brand-space-4) var(--brand-space-3);
+}
+.ui-list-item:has(> .ui-list-row-footer) > .ui-list-row.ui-button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+/* A pressed button dims with a filter, which would anchor the stretched area to the button
+   mid-click; the item dims instead. */
+.ui-list-item:has(> .ui-list-row-footer) > .ui-list-row.ui-button:active {
+  filter: none;
+}
+.ui-list-item:has(> .ui-list-row-footer):has(> .ui-list-row.ui-button:active) {
+  filter: brightness(0.97);
+}
+.ui-list-row-footer .ui-button {
+  position: relative;
+  z-index: 1;
+}
+.ui-list-row-title {
+  font-weight: var(--brand-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+.ui-list-row-description {
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-sm);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.ui-list-row-trailing {
+  display: inline-flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--brand-space-1);
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-caption);
+}
+
+.ui-stat-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px var(--brand-space-3);
+}
+.ui-stat-bar-label {
+  min-width: 0;
+  font-weight: var(--brand-font-weight-medium);
+  overflow-wrap: anywhere;
+}
+.ui-stat-bar > .ui-bar {
+  grid-column: 1 / -1;
+}
+.ui-stat-bar-percent {
+  margin-left: var(--brand-space-1);
+  color: var(--brand-text-secondary);
+  font-size: var(--brand-font-size-caption);
+  font-weight: var(--brand-font-weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Notice: floating message at the top of the page. */
+.ui-notice {
+  position: fixed;
+  inset: var(--brand-space-3) var(--brand-space-3) auto;
+  z-index: 100;
+  display: flex;
+  gap: var(--brand-space-2);
+  align-items: center;
+  justify-content: space-between;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--brand-space-2) var(--brand-space-2) var(--brand-space-2) var(--brand-space-4);
+  border-radius: var(--brand-radius-card);
+  background: var(--brand-surface);
+  box-shadow: var(--brand-shadow-popover);
+  color: var(--brand-danger);
+}
+.ui-notice[data-tone='success'] {
+  color: var(--brand-success);
+}
