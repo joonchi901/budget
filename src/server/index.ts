@@ -67,11 +67,14 @@ import {
   toLedger,
   toMessage,
   toRecord,
+  touchedSince,
   type Edge,
   type LedgerRow,
   type MessageRow,
   type RecordRow,
 } from './sync';
+
+export { Room } from './room';
 
 const LOOPBACK = ['localhost', '127.0.0.1', '[::1]'];
 const DEV_USER = { id: 'dev', handle: 'dev', name: '개발자', email: 'dev@localhost' };
@@ -917,7 +920,7 @@ async function setReaction(db: D1Database, data: Loaded, id: Id, reaction: strin
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     try {
       const url = new URL(request.url);
       const [, api, resource, id, extra, reaction, rest] = url.pathname.split('/');
@@ -929,6 +932,23 @@ export default {
       if (cached !== null && cached !== user.id)
         fail(409, 'ACCOUNT_CHANGED', '다른 계정으로 로그인했어요.');
       if (request.method !== 'GET') checkOrigin(request, env);
+      // A shared ledger's signals (docs/sync-plan.md §5.3), for its members only. From this app's
+      // page only too: a browser opens a socket from any site with the user's cookies.
+      if (request.method === 'GET' && resource === 'ledgers' && isId(id) && extra === 'socket') {
+        checkOrigin(request, env);
+        if (reaction !== undefined || request.headers.get('Upgrade')?.toLowerCase() !== 'websocket')
+          fail(404, 'NOT_FOUND', '없는 주소예요.');
+        const member = await env.DB.prepare(
+          'SELECT 1 FROM ledger_members WHERE ledger_id = ? AND user_id = ?',
+        )
+          .bind(id, user.id)
+          .first();
+        if (!member) fail(404, 'NOT_FOUND', '없는 가계부예요.');
+        // A request of the server's own: nothing the client sent reaches the room.
+        return env.ROOMS.get(env.ROOMS.idFromName(id)).fetch('https://room/socket', {
+          headers: { Upgrade: 'websocket', 'X-User': user.id },
+        });
+      }
       // Reads: a photo, an exact ID lookup, the snapshot, the feed and a room's older messages.
       if (request.method === 'GET' && resource === 'photos' && isId(id) && extra && !reaction)
         return getPhoto(env.DB, id);
@@ -955,13 +975,17 @@ export default {
       // the people lists for invitations, and otherwise no records at all.
       const target = isId(id) && extra === undefined ? id : undefined;
       const inviting = (resource === 'ledgers' && extra === 'invites') || resource === 'invites';
-      const data = await load(
-        env.DB,
-        user,
-        resource === 'ledgers' && request.method === 'PUT' && target
-          ? { records: [target] }
-          : { records: false, ...(inviting ? { people: true as const } : {}) },
-      );
+      const [data, before] = await Promise.all([
+        load(
+          env.DB,
+          user,
+          resource === 'ledgers' && request.method === 'PUT' && target
+            ? { records: [target] }
+            : { records: false, ...(inviting ? { people: true as const } : {}) },
+        ),
+        // The log's end before the change, to find the ledgers it touched (§5.3).
+        request.method === 'GET' ? 0 : latestSeq(env.DB),
+      ]);
       if (request.method === 'GET') fail(404, 'NOT_FOUND', '없는 주소예요.');
       else if (resource === 'ledgers' && request.method === 'PUT' && target)
         await putLedger(env.DB, data, target, await request.json());
@@ -1049,7 +1073,27 @@ export default {
         await renewSignupLink(env.DB, user.id);
       else fail(404, 'NOT_FOUND', '없는 주소예요.');
       // Every change answers with what changed since the client's cursor, its own change included.
-      return json(await feed(env.DB, user.id, since));
+      const [answer, touched] = await Promise.all([
+        feed(env.DB, user.id, since),
+        touchedSince(env.DB, before),
+      ]);
+      // Each ledger the change touched tells its watching members to check, after closing the
+      // sockets of a member who went (docs/sync-plan.md §5.3). Nothing waits for the rooms; a
+      // change of another's in between only adds a signal.
+      const kick =
+        resource === 'ledgers' && extra === 'members' && request.method === 'DELETE'
+          ? reaction
+          : undefined;
+      for (const { ledger_id, seq } of touched)
+        ctx.waitUntil(
+          env.ROOMS.get(env.ROOMS.idFromName(ledger_id))
+            .fetch(`https://room/poke${kick && ledger_id === id ? `?kick=${kick}` : ''}`, {
+              method: 'POST',
+              body: JSON.stringify({ seq }),
+            })
+            .catch((error) => console.error(error)),
+        );
+      return json(answer);
     } catch (error) {
       if (error instanceof ApiError)
         return json({ code: error.code, message: error.message }, error.status);

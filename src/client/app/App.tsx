@@ -55,6 +55,7 @@ import {
 import { ApiFailure, api } from './api';
 import { reencodePhoto } from './photo';
 import { useRoute } from './route';
+import { watchRoom } from './socket';
 import {
   SCHEMA,
   clearCopy,
@@ -124,8 +125,13 @@ type TabMessage =
   | { type: 'state' }
   /** The syncing tab's check found others' changes: a shared room open elsewhere checks soon. */
   | { type: 'news' }
-  /** To the syncing tab: send the outbox, and with `sync` ask the feed too. */
-  | { type: 'outbox' | 'sync' }
+  /** To the syncing tab: send the outbox. */
+  | { type: 'outbox' }
+  /**
+   * To the syncing tab: send the outbox and ask the feed too; with `seq`, a room's signal, unless
+   * the copy has it already (docs/sync-plan.md §5.4).
+   */
+  | { type: 'sync'; seq?: number }
   /** To the syncing tab: a room's 이전 글 another tab loaded, to keep in the copy. */
   | { type: 'older'; messages: ChatMessage[] }
   /**
@@ -173,7 +179,8 @@ export function App() {
   const channel = useRef<BroadcastChannel>(undefined);
   const tell = (message: TabMessage) => channel.current?.postMessage(message);
   const storing = useRef<number>(undefined);
-  const retry = useRef({ timer: 0, count: 0 });
+  /** `feed`: a check was asked for while a try waited; it goes with the try (§5.4). */
+  const retry = useRef({ timer: 0, count: 0, feed: false });
   /**
    * What the server last refused in the outbox, told once the data is taken whole again; stored
    * with the copy until then, so a start after this page closed makes it good (§4.2).
@@ -195,6 +202,7 @@ export function App() {
     window.clearTimeout(storing.current);
     window.clearTimeout(retry.current.timer);
     retry.current.count = 0;
+    retry.current.feed = false;
     state.current = undefined;
     refusal.current = undefined;
     locals.current.clear();
@@ -309,12 +317,16 @@ export function App() {
    * The way to the server for changes and checks: sends the outbox in order, then with `feed`
    * asks what changed; resolves whether anything came. After changes the server refused, the data
    * is taken whole once and the last refusal told. While the server cannot be reached it tries
-   * again after RETRY, and when the device is online or the page shows again.
+   * again after RETRY, and when the device is online or the page shows again. With `seq`, a room's
+   * signal, it asks the feed only if the copy is behind it: tabs passing on the same signal cost
+   * one check (docs/sync-plan.md §5.4).
    */
-  const sync = (feed = false) => {
+  const sync = (feed = false, seq?: number) => {
     window.clearTimeout(retry.current.timer);
     const run = queue.current.then(async () => {
       if (!syncing.current || !state.current) return false;
+      // A check put off while a try waited (`poll`) goes now, whatever its signal said.
+      if (retry.current.feed) [feed, seq] = [true, undefined];
       try {
         const sent = await replay({
           read: readOutbox,
@@ -357,24 +369,34 @@ export function App() {
           }
           refusal.current = undefined;
         }
-        const answer = feed ? await api('GET', '/api/sync', undefined, state.current) : undefined;
+        const behind = feed && !(seq && state.current.seq >= seq);
+        const answer = behind ? await api('GET', '/api/sync', undefined, state.current) : undefined;
         if (answer) await accept(answer);
         if (answer?.changes.length) tell({ type: 'news' });
         retry.current.count = 0;
+        retry.current.feed = false;
         return Boolean(answer?.changes.length);
       } catch (failure) {
         // Forgotten, or the lock taken (§4.3): nothing to try again here.
         if (leave(failure) || !state.current || !syncing.current) return false;
         const wait = RETRY[Math.min(retry.current.count++, RETRY.length - 1)];
-        retry.current.timer = window.setTimeout(() => sync(feed), wait);
+        retry.current.timer = window.setTimeout(() => sync(feed, seq), wait);
         return false;
       }
     });
     queue.current = run.then(() => {});
     return run;
   };
-  /** A check for others' changes, unless a try waits after a failure: that one goes first (§4.3). */
-  const poll = () => (retry.current.count ? Promise.resolve(false) : sync(true));
+  /**
+   * A check for others' changes, up to `seq` for a room's signal. While a try waits after a
+   * failure, it goes with that try (§4.3): no checks pile on a server that refused, and no signal
+   * is lost meanwhile (§5.4).
+   */
+  const poll = (seq?: number) => {
+    if (!retry.current.count) return sync(true, seq);
+    retry.current.feed = true;
+    return Promise.resolve(false);
+  };
   /**
    * The data from the server whole, then the outbox. `notice`, or a refusal kept when the screen
    * failed to draw the copy (§4.1, §4.2), is said in every tab once the data is there.
@@ -434,6 +456,7 @@ export function App() {
       window.clearTimeout(storing.current);
       window.clearTimeout(retry.current.timer);
       retry.current.count = 0;
+      retry.current.feed = false;
       refusal.current = undefined; // the new holder tells it from the stored copy (§4.2)
     };
     const ask = (steal: boolean) => {
@@ -506,7 +529,7 @@ export function App() {
           if (state.current) commit(unsent(state.current, queued));
           sync();
         });
-      else if (message.type === 'sync') poll();
+      else if (message.type === 'sync') poll(message.seq);
       else if (message.type === 'older' && state.current)
         commit(withOlder(state.current, message.messages));
     };
@@ -533,42 +556,71 @@ export function App() {
   // Each room opens on 내역.
   useEffect(() => setRoomView('records'), [roomId]);
   // A shared ledger's room can change under the person: while it shows, check for others'
-  // changes, after the outbox is empty. Each check that finds nothing waits longer, up to
-  // POLL_LONGEST; something new, or the person's own change, starts again from POLL_FIRST. A
-  // hidden page does not check, and checks at once when it shows again. A 메모 needs none.
-  // Another tab asks the syncing one to check, which tells every tab when something came (§4.3).
-  const watching = Boolean(roomId) && (data?.ledgerMembers?.[roomId!]?.length ?? 0) > 1;
+  // changes, after the outbox is empty. The ledger's room says when (docs/sync-plan.md §5.4):
+  // each tab showing it keeps a socket open, whichever tab holds the lock, and the syncing tab
+  // checks once per signal however many tabs pass it on. While the socket is down, poll: each
+  // check that finds nothing waits longer, up to POLL_LONGEST; something new, or the person's own
+  // change, starts again from POLL_FIRST. A hidden page does not check; it checks when it shows
+  // again if a signal came meanwhile, or while it polls. A 메모 needs none. Another tab asks the
+  // syncing one to check, which tells every tab when something came (§4.3).
+  const watched = roomId && (data?.ledgerMembers?.[roomId]?.length ?? 0) > 1 ? roomId : undefined;
   useEffect(() => {
-    if (!watching) return;
+    if (!watched) return;
     let delay = POLL_FIRST;
     let timer: number | undefined;
+    /** The socket is open: its signals say when to check, and nothing polls. */
+    let open = false;
+    /** The latest signal that came while hidden; Infinity when anything may have come. */
+    let missed = 0;
     const later = () => {
       window.clearTimeout(timer);
-      if (document.visibilityState === 'visible') timer = window.setTimeout(check, delay);
+      if (!open && document.visibilityState === 'visible') timer = window.setTimeout(check, delay);
     };
-    const check = () => {
+    const check = (seq?: number) => {
       window.clearTimeout(timer);
-      const asked = syncing.current ? poll() : (tell({ type: 'sync' }), Promise.resolve(false));
+      missed = 0;
+      const asked = syncing.current
+        ? poll(seq)
+        : (tell({ type: 'sync', seq }), Promise.resolve(false));
       asked.then((news) => {
         delay = news ? POLL_FIRST : Math.min(delay * 2, POLL_LONGEST);
         if (wake.current === soon) later();
       });
     };
+    const signal = (seq = Infinity) => {
+      if (document.visibilityState === 'visible') check(seq);
+      else missed = Math.max(missed, seq);
+    };
     const soon = () => {
       delay = POLL_FIRST;
       later();
     };
-    const shown = () =>
-      document.visibilityState === 'visible' ? check() : window.clearTimeout(timer);
+    const shown = () => {
+      if (document.visibilityState !== 'visible') window.clearTimeout(timer);
+      else if (missed || !open) check(missed || undefined);
+    };
+    const close = watchRoom(watched, {
+      poke: signal,
+      // Up: one check for what came before it, then its signals. Down: poll until it is back.
+      open: (up) => {
+        if (up === open) return;
+        open = up;
+        if (up) signal();
+        else later();
+      },
+      // Gone from the ledger: the feed drops it, and this with it.
+      removed: () => signal(),
+    });
     wake.current = soon;
     document.addEventListener('visibilitychange', shown);
     later();
     return () => {
+      close();
       wake.current = undefined;
       window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', shown);
     };
-  }, [watching]);
+  }, [watched]);
 
   /**
    * A change: made on the device's copy at once, put in the outbox, then sent in turn (§4.2).
